@@ -1,0 +1,9 @@
+name: VOD;
+assetLibraryPath: VOD.zal;
+[ActorPaths] {
+actorPathCount: 4;
+actorPath0: C:\Users\Jan\source\repos\Jaykreativ\Void of Dreams\Actors\Light2.zac;
+actorPath1: C:\Users\Jan\source\repos\Jaykreativ\Void of Dreams\Actors\Light.zac;
+actorPath2: C:\Users\Jan\source\repos\Jaykreativ\Void of Dreams\Actors\Player.zac;
+actorPath3: C:\Users\Jan\source\repos\Jaykreativ\Void of Dreams\Actors\Cube.zac;
+}

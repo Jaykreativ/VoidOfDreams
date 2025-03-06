@@ -1,0 +1,57 @@
+meshCount: 3;
+[Mesh0] {
+handle: 1350689233431339116;
+filepath: C:\Users\Jan\source\repos\Jaykreativ\Void of Dreams\Models\Player.glb;
+index: 0;
+transform: mat4x4((1.000000, 0.000000, 0.000000, 0.000000), (0.000000, 1.000000, 0.000000, 0.000000), (0.000000, 0.000000, 1.000000, 0.000000), (0.000000, 0.000000, 0.000000, 1.000000));
+}
+[Mesh1] {
+handle: 15688062647189668350;
+filepath: C:\Users\Jan\source\repos\Jaykreativ\Void of Dreams\Models\Player.glb;
+index: 1;
+transform: mat4x4((1.000000, 0.000000, 0.000000, 0.000000), (0.000000, 1.000000, 0.000000, 0.000000), (0.000000, 0.000000, 1.000000, 0.000000), (0.000000, 0.000000, 0.000000, 1.000000));
+}
+[Mesh2] {
+handle: 8680218850382325513;
+filepath: C:\Users\Jan\source\repos\Jaykreativ\Void of Dreams\Models\Cube.obj;
+index: 0;
+transform: mat4x4((1.000000, 0.000000, 0.000000, 0.000000), (0.000000, 1.000000, 0.000000, 0.000000), (0.000000, 0.000000, 1.000000, 0.000000), (0.000000, 0.000000, 0.000000, 1.000000));
+}
+materialCount: 4;
+[Material0] {
+handle: 929570886215177272;
+albedo: vec4(0.800000, 0.800000, 0.800000, 1.000000);
+metallic: 0.000000;
+roughness: 0.500000;
+emissive: vec4(0.000000, 0.000000, 0.000000, 0.000000);
+filepath: C:\Users\Jan\source\repos\Jaykreativ\Void of Dreams\Cube.obj;
+index: 1;
+}
+[Material1] {
+handle: 7844012079266452979;
+albedo: vec4(0.800000, 0.800000, 0.800000, 1.000000);
+metallic: 0.000000;
+roughness: 0.500000;
+emissive: vec4(0.000000, 0.000000, 0.000000, 0.000000);
+filepath: C:\Users\Jan\source\repos\Jaykreativ\Void of Dreams\Models\Player.glb;
+index: 0;
+}
+[Material2] {
+handle: 18175043211158779682;
+albedo: vec4(1.000000, 1.000000, 1.000000, 1.000000);
+metallic: 0.000000;
+roughness: 0.500000;
+emissive: vec4(1.000000, 1.000000, 1.000000, 10.000000);
+filepath: C:\Users\Jan\source\repos\Jaykreativ\Void of Dreams\Models\Player.glb;
+index: 1;
+}
+[Material3] {
+handle: 5213729442923833747;
+albedo: vec4(0.800000, 0.800000, 0.800000, 1.000000);
+metallic: 0.000000;
+roughness: 0.500000;
+emissive: vec4(0.000000, 0.000000, 0.000000, 0.000000);
+filepath: C:\Users\Jan\source\repos\Jaykreativ\Void of Dreams\Models\Cube.obj;
+index: 1;
+}
+textureCount: 0;
