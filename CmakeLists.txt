@@ -3,7 +3,7 @@ cmake_minimum_required(VERSION 3.10)
 project(VOD)
 
 file(GLOB VOD_SRC
-    "Application.cpp"
+    "./src/*"
 )
 
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/lib)
@@ -15,7 +15,7 @@ add_executable(VOD ${VOD_SRC})
 set_property(TARGET VOD PROPERTY CXX_STANDARD 17)
 set_property(TARGET VOD PROPERTY VS_DEBUGGER_WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}")
 
-set(Zap_DIR "${PROJECT_SOURCE_DIR}/../Zap")
+set(Zap_DIR "${PROJECT_SOURCE_DIR}/Zap")
 
 add_subdirectory(${Zap_DIR} "${Zap_DIR}/${CMAKE_BUILD_TYPE}")
 

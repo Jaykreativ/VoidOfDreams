@@ -23,10 +23,10 @@ void resize(Zap::ResizeEvent& eventParams, void* customParams) {
 
 void setupActors() {
 	Zap::ActorLoader loader;
-	app::actor = loader.load((std::string)"Actors/Player.glb.zac", app::scene); // Loading actor from file, they can be changed using the editor
+	app::actor = loader.load((std::string)"Actors/Player.zac", app::scene); // Loading actor from file, they can be changed using the editor
 	loader.load((std::string)"Actors/Light.zac", app::scene);                   // All actors can be changed at runtime
 	loader.load((std::string)"Actors/Light2.zac", app::scene);
-	loader.load((std::string)"Actors/Cube.obj.zac", app::scene);
+	loader.load((std::string)"Actors/Cube.zac", app::scene);
 
 	app::camera = Zap::Actor(); // Creating new actor at runtime, this cannot be used by the editor
 	app::scene->attachActor(app::camera);
