@@ -1,11 +1,7 @@
 #include "Log.h"
 
-#include <string>
-#include <vector>
-#include <stack>
-
-namespace log {
-	std::stack<std::string, std::vector<std::string>> _regionStack;
+namespace logger {
+	std::vector<std::string> _regionStack;
 	
 	void initLog() {
 		_regionStack = {};
@@ -14,39 +10,45 @@ namespace log {
 	void terminateLog() {}
 
 	void beginRegion(std::string name) {
-		_regionStack.push(name);
+		_regionStack.push_back(name);
 	}
 
 	void endRegion() {
-		_regionStack.pop();
+		_regionStack.pop_back();
 	}
 
 	void error(std::string msg) {
-		fprintf(stderr, "%s", msg.c_str());
+		for (std::string region : _regionStack)
+			printf("%s -> ", region.c_str());
+		fprintf(stderr, ":\nERROR: %s\n", msg.c_str());
 	}
 	void errorRaw(std::string msg) {
-		fprintf(stderr, "%s", msg.c_str());
+		fprintf(stderr, "%s\n", msg.c_str());
 	}
 
 	void warning(std::string msg) {
-		printf("%s", msg.c_str());
+		for (std::string region : _regionStack)
+			printf("%s -> ", region.c_str());
+		printf(":\nWARNING: %s\n", msg.c_str());
 	}
 	void warningRaw(std::string msg) {
-		printf("%s", msg.c_str());
+		printf("%s\n", msg.c_str());
 	}
 
 	void info(std::string msg) {
-		printf("%s", msg.c_str());
+		for (std::string region : _regionStack)
+			printf("%s -> ", region.c_str());
+		printf(":\n%s\n", msg.c_str());
 	}
 	void infoRaw(std::string msg) {
-		printf("%s", msg.c_str());
+		printf("%s\n", msg.c_str());
 	}
 
 	std::string getCurrentRegion() {
-
+		return _regionStack.back();
 	}
 
-	const std::stack<std::string, std::vector<std::string>>& getRegionStack() {
-
+	const std::vector<std::string>& getRegionStack() {
+		return _regionStack;
 	}
 }

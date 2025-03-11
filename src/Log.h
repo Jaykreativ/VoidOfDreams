@@ -1,6 +1,9 @@
 #pragma once
 
-namespace log {
+#include <string>
+#include <vector>
+
+namespace logger {
 	void initLog();
 
 	void terminateLog();
@@ -20,5 +23,5 @@ namespace log {
 
 	std::string getCurrentRegion();
 
-	const std::stack<std::string, std::vector<std::string>>& getRegionStack();
+	const std::vector<std::string>& getRegionStack();
 }

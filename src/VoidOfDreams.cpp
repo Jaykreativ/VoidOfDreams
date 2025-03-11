@@ -1,3 +1,5 @@
+#include "Log.h"
+
 #include "Zap/Zap.h"
 #include "Zap/Rendering/Window.h"
 #include "Zap/Rendering/Renderer.h"
@@ -37,6 +39,8 @@ void setupActors() {
 }
 
 void main() {
+	logger::beginRegion("main");
+
 	auto base = Zap::Base::createBase("Void of Dreams", "VOD.zal"); // you need to give the engine access to your asset library
 	base->init();
 	
@@ -66,6 +70,8 @@ void main() {
 	app::window->show();
 	float deltaTime = 0;
 	while (!app::window->shouldClose()) {
+		logger::beginRegion("mainLoop");
+
 		auto startFrame = std::chrono::high_resolution_clock::now();
 
 		app::actor.cmpTransform_rotate(25 * deltaTime, {1, 1, 1});
@@ -79,6 +85,9 @@ void main() {
 
 		auto endFrame = std::chrono::high_resolution_clock::now();
 		deltaTime = std::chrono::duration_cast<std::chrono::duration<float>>(endFrame - startFrame).count();
+
+		logger::info("dTime: " + std::to_string(deltaTime));
+		logger::endRegion();
 	}
 
 	app::renderer->destroy();
@@ -90,6 +99,8 @@ void main() {
 
 	base->terminate();
 	Zap::Base::releaseBase();
+
+	logger::endRegion();
 
 	system("pause");
 }
