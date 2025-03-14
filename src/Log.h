@@ -8,6 +8,7 @@ namespace logger {
 
 	void terminateLog();
 
+
 	void beginRegion(std::string name);
 
 	void endRegion();
@@ -21,9 +22,17 @@ namespace logger {
 	void info(std::string msg);
 	void infoRaw(std::string msg);
 
+
 	std::string getCurrentRegion();
 
 	const std::vector<std::string>& getRegionStack();
+
+	// delete old profiles
+	// this has to be called from time to time to not run out of memory
+	// duration in seconds
+	void setTimelineDuration(float duration);
+
+	void cleanTimeline();
 
 	void drawTimelineImGui();
 }

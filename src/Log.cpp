@@ -3,14 +3,17 @@
 #include "imgui.h"
 
 #include <chrono>
+#include <thread>
 
 namespace logger {
+	typedef std::chrono::duration<float> RegionDurationS;
+	typedef std::chrono::duration<float, std::milli> RegionDurationMS;
 	typedef std::chrono::time_point<std::chrono::steady_clock, std::chrono::duration<float>> RegionTimePointS;
 	typedef std::chrono::time_point<std::chrono::steady_clock, std::chrono::duration<float, std::milli>> RegionTimePointMS;
 
 	struct RegionTime {
-		RegionTimePointMS beginTime = RegionTimePointMS(std::chrono::duration<float>(-1));
-		RegionTimePointMS endTime = RegionTimePointMS(std::chrono::duration<float>(-1));
+		RegionTimePointMS beginTime = RegionTimePointMS(RegionDurationMS(-1));
+		RegionTimePointMS endTime = RegionTimePointMS(RegionDurationMS(-1));
 	};
 
 	struct RegionTimeProfile {
@@ -23,9 +26,13 @@ namespace logger {
 
 	std::vector<std::string> _regionStack;
 
+	// time storage
 	RegionTimePointMS _programStartTime = std::chrono::high_resolution_clock::now();
 	RegionTimeProfile _rootTimeProfile = {};
 	RegionTimeProfile* _pCurrentTimeProfile = &_rootTimeProfile;
+
+	// time gui
+	RegionDurationS _timelineValidDuration = RegionDurationS(10); // default to ten seconds to view
 
 	void initLog() {
 		_rootTimeProfile.region = "root";
@@ -85,6 +92,14 @@ namespace logger {
 
 	const std::vector<std::string>& getRegionStack() {
 		return _regionStack;
+	}
+
+	void setTimelineValidDuration(float duration) {
+		_timelineValidDuration = RegionDurationS(duration);
+	}
+
+	void cleanCache() {
+		printf("cleaned cache!\n");
 	}
 
 	void drawRegionProfile(const RegionTimeProfile& profile) {
