@@ -24,4 +24,6 @@ namespace logger {
 	std::string getCurrentRegion();
 
 	const std::vector<std::string>& getRegionStack();
+
+	void drawTimelineImGui();
 }
