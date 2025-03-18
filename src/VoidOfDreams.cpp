@@ -8,6 +8,8 @@
 #include "Zap/Scene/Material.h"
 #include "Zap/FileLoader.h"
 
+#include "VulkanFramework.h"
+
 namespace app {
 	Zap::Window* window;
 	Zap::Scene* scene;
@@ -57,6 +59,12 @@ void main() {
 	app::renderer->addRenderTask(app::pbRender);
 	app::pbRender->setViewport(app::window->getWidth(), app::window->getHeight(), 0, 0);
 	app::pbRender->clearColor = {.1, .1, .1, 1};
+
+	static bool areShadersCompiled = false;
+	if (!areShadersCompiled) {
+		vk::Shader::compile("Zap/Shader/src/", { "PBRShader.vert", "PBRShader.frag" }, { "./" });
+		areShadersCompiled = true;
+	}
 
 	app::renderer->init();
 	app::renderer->beginRecord();
