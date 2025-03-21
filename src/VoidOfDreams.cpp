@@ -97,6 +97,12 @@ void main() {
 	app::pbRender->clearColor = {.1, .1, .1, 1};
 	app::pGui->initImGui(app::window);
 
+	static bool areShadersCompiled = false;
+	if (!areShadersCompiled) {
+		vk::Shader::compile("Zap/Shader/src/", { "PBRShader.vert", "PBRShader.frag" }, { "./" });
+		areShadersCompiled = true;
+	}
+
 	app::renderer->init();
 	app::renderer->beginRecord();
 	app::renderer->recRenderTemplate(app::pbRender);
