@@ -30,7 +30,7 @@ namespace logger {
 	// delete old profiles
 	// this has to be called from time to time to not run out of memory
 	// duration in seconds
-	void setTimelineDuration(float duration);
+	void setTimelineValidDuration(float duration);
 
 	void cleanTimeline();
 

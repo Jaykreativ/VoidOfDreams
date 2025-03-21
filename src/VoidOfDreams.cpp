@@ -65,6 +65,7 @@ void mainLoop() {
 		auto endFrame = std::chrono::high_resolution_clock::now();
 		deltaTime = std::chrono::duration_cast<std::chrono::duration<float>>(endFrame - startFrame).count();
 		logger::endRegion();
+		logger::cleanTimeline();
 	}
 }
 
