@@ -43,10 +43,9 @@ void setupActors() {
 }
 
 void mainLoop() {
-
 	float deltaTime = 0;
 	while (!app::window->shouldClose()) {
-		logger::beginRegion("loop");
+		logger::beginRegion("loop"); // define regions for profiling
 		auto startFrame = std::chrono::high_resolution_clock::now();
 
 		app::actor.cmpTransform_rotate(25 * deltaTime, { 1, 1, 1 });
@@ -73,7 +72,7 @@ void main() {
 	logger::initLog();
 	logger::beginRegion("main");
 
-	auto base = Zap::Base::createBase("Void of Dreams", "VOD.zal"); // you need to give the engine access to your asset library
+	auto base = Zap::Base::createBase("Void of Dreams", "VOD.zal"); // give the engine access to the asset library
 	base->init();
 	
 	app::window = new Zap::Window(1000, 600, "Void of Dreams");

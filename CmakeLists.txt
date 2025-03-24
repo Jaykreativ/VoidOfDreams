@@ -3,14 +3,29 @@ cmake_minimum_required(VERSION 3.10)
 project(VOD)
 
 file(GLOB VOD_SRC
-    "./src/*"
+    "./src/*.cpp"
+    "./src/*.h"
 )
+
+file(GLOB VOD_Layers
+    "./src/Layers/*.cpp"
+    "./src/Layers/*.h"
+)
+
+file(GLOB VOD_Shares
+    "./src/Shares/*.cpp"
+    "./src/Shares/*.h"
+)
+
+source_group("Source" FILES ${VOD_SRC})
+source_group("Source/Layers" FILES  ${VOD_Layers})
+source_group("Source/Shares" FILES  ${VOD_Shares})
 
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/lib)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/lib)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/bin)
 
-add_executable(VOD ${VOD_SRC})
+add_executable(VOD ${VOD_SRC} ${VOD_Shares} ${VOD_Layers})
 
 set_property(TARGET VOD PROPERTY CXX_STANDARD 17)
 set_property(TARGET VOD PROPERTY VS_DEBUGGER_WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}")
