@@ -1,4 +1,6 @@
-#include "Shares/Keybinds.h"
+#pragma once
+
+#include "Shares/Controls.h"
 
 #include "Zap/Zap.h"
 #include "Zap/FileLoader.h"
@@ -12,13 +14,20 @@ public:
 
 	void updateAnimations(float dt);
 
-	void updateInputs(Keybinds& keybinds, float dt);
+	void updateInputs(Controls& controls, float dt);
+
+	void update(Controls& controls);
 
 	Zap::Actor getCamera();
 
 private:
-	Zap::Actor m_actor;
+	Zap::Actor m_base; // this is the actual transform of the player
+	Zap::Actor m_core; // the bright core in the centre
+	Zap::Actor m_hull; // the rotating hull
 	Zap::Actor m_camera;
 
-	void updateCamera();
+	// rotation
+	glm::vec2 m_lastMousePos = {};
+
+	void updateCamera(Controls& controls);
 };

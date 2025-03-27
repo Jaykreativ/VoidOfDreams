@@ -11,14 +11,36 @@
 
 #include <chrono>
 
-void gameLoop(RenderData& render, WorldData& world) {
+void update(WorldData& world, Controls& controls, float dt, Zap::Window& window) {
+	static bool captured = false;
+	if (ImGui::Button("Capture")) { // use imgui to capture mouse because there is no menu implemented yet
+		glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+		captured = true;
+	}
+	if (captured && ImGui::IsKeyPressed(ImGuiKey_Escape)) {
+		glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
+		captured = false;
+	}
+
+	if (ImGui::Button("First Person"))
+		controls.cameraMode = Controls::eFIRST_PERSON;
+	ImGui::SameLine();
+	if (ImGui::Button("Third Person"))
+		controls.cameraMode = Controls::eTHIRD_PERSON;
+
+	world.pPlayer->updateAnimations(dt);
+	if(captured)
+		world.pPlayer->updateInputs(controls, dt);
+	world.pPlayer->update(controls);
+}
+
+void gameLoop(RenderData& render, WorldData& world, Controls& controls) {
 	float deltaTime = 0;
 	while (!render.window->shouldClose()) {
 		//logger::beginRegion("loop"); // define regions for profiling
 		auto startFrame = std::chrono::high_resolution_clock::now();
 
-		world.pPlayer->updateAnimations(deltaTime);
-		world.pPlayer->updateInputs(Keybinds{}, deltaTime);
+		update(world, controls, deltaTime, *render.window);
 
 		render.pbRender->updateCamera(world.pPlayer->getCamera());
 		world.scene->update();
@@ -51,6 +73,7 @@ void resize(Zap::ResizeEvent& eventParams, void* customParams) {
 void runGame() {
 	RenderData render = {};
 	WorldData world = {};
+	Controls controls = {};
 
 	render.window = new Zap::Window(1000, 600, "Void of Dreams");
 	render.window->init();
@@ -88,7 +111,7 @@ void runGame() {
 
 	render.window->show();
 
-	gameLoop(render, world);
+	gameLoop(render, world, controls);
 
 	render.renderer->destroy();
 	delete render.renderer;

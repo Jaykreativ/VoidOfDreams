@@ -1,3 +1,5 @@
+#pragma once
+
 #include "Objects/Player.h"
 
 #include "Zap/Zap.h"
