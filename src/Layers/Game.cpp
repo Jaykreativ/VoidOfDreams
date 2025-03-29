@@ -1,6 +1,8 @@
 #include "Game.h"
 
 #include "Log.h"
+#include "Layers/Network.h"
+#include "Shares/NetworkData.h"
 #include "Shares/Render.h"
 #include "Shares/World.h"
 
@@ -74,10 +76,13 @@ void runGame() {
 	RenderData render = {};
 	WorldData world = {};
 	Controls controls = {};
+	NetworkData network = {};
+
+	runServer(network);
+	runClient(network);
 
 	render.window = new Zap::Window(1000, 600, "Void of Dreams");
 	render.window->init();
-
 
 	world.scene = new Zap::Scene();
 
@@ -122,4 +127,7 @@ void runGame() {
 	delete world.scene;
 	render.window->getResizeEventHandler()->removeCallback(resize, render.pbRender);
 	delete render.window;
+
+	terminateServer();
+	terminateClient();
 }
