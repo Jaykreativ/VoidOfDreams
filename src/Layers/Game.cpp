@@ -36,11 +36,58 @@ void update(WorldData& world, Controls& controls, float dt, Zap::Window& window)
 	world.pPlayer->update(controls);
 }
 
-void gameLoop(RenderData& render, WorldData& world, Controls& controls) {
+void drawNetworkInterface(NetworkData& network) {
+	static bool isServerRunning = false;
+	static bool isClientRunning = false;
+	
+	if (isServerRunning || isClientRunning)
+		ImGui::BeginDisabled();
+	static char ipBuf[16] = "";
+	memcpy(ipBuf, network.ip.data(), std::min<int>(16, network.ip.size()));
+	ImGui::InputText("IP", ipBuf, 16);
+	network.ip = ipBuf;
+
+	static char portBuf[6] = "";
+	memcpy(portBuf, network.port.data(), std::min<int>(6, network.port.size()));
+	ImGui::InputText("port", portBuf, 6);
+	network.port = portBuf;
+	if (isServerRunning || isClientRunning)
+		ImGui::EndDisabled();
+
+	if (isServerRunning) {
+		if (ImGui::Button("Stop Server")) {
+			isServerRunning = false;
+			terminateServer();
+		}
+	}
+	else {
+		if (ImGui::Button("Start Server")) {
+			isServerRunning = true;
+			runServer(network);
+		}
+	}
+	
+	if (isClientRunning) {
+		if (ImGui::Button("Stop Client")) {
+			isClientRunning = false;
+			terminateClient();
+		}
+	}
+	else {
+		if (ImGui::Button("Start Client")) {
+			isClientRunning = true;
+			runClient(network);
+		}
+	}
+}
+
+void gameLoop(RenderData& render, WorldData& world, NetworkData& network, Controls& controls) {
 	float deltaTime = 0;
 	while (!render.window->shouldClose()) {
 		//logger::beginRegion("loop"); // define regions for profiling
 		auto startFrame = std::chrono::high_resolution_clock::now();
+
+		drawNetworkInterface(network);
 
 		update(world, controls, deltaTime, *render.window);
 
@@ -75,11 +122,8 @@ void resize(Zap::ResizeEvent& eventParams, void* customParams) {
 void runGame() {
 	RenderData render = {};
 	WorldData world = {};
-	Controls controls = {};
 	NetworkData network = {};
-
-	runServer(network);
-	runClient(network);
+	Controls controls = {};
 
 	render.window = new Zap::Window(1000, 600, "Void of Dreams");
 	render.window->init();
@@ -116,7 +160,7 @@ void runGame() {
 
 	render.window->show();
 
-	gameLoop(render, world, controls);
+	gameLoop(render, world, network, controls);
 
 	render.renderer->destroy();
 	delete render.renderer;
@@ -127,7 +171,4 @@ void runGame() {
 	delete world.scene;
 	render.window->getResizeEventHandler()->removeCallback(resize, render.pbRender);
 	delete render.window;
-
-	terminateServer();
-	terminateClient();
 }

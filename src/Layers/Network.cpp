@@ -5,6 +5,7 @@
 #include "glm.hpp"
 
 #include <thread>
+#include <mutex>
 #include <iostream>
 #include <string>
 #include <cstring>
@@ -173,20 +174,21 @@ private:
 		int bytesRead = recv(socket, buf, sizeof(uint32_t), 0); // get just header
 		if (bytesRead == -1) {
 			sock::printLastError("Packet::recv header");
-			delete buf;
+			delete[] buf;
 			return;
 		}
 		uint32_t dataSize = unpackHeader(buf);
-		delete buf;
+		delete[] buf;
 
 		buf = new char[dataSize];
 		bytesRead = recv(socket, buf, dataSize, 0); // get just data
 		if (bytesRead == -1) {
 			sock::printLastError("Packet::recv data");
-			delete buf;
+			delete[] buf;
 			return;
 		}
 		unpackData(buf, dataSize);
+		delete[] buf;
 	}
 
 	// takes just the header
@@ -203,6 +205,8 @@ private:
 };
 
 namespace client {
+	std::mutex mTerminate; // controls access to variables for terminating the client
+	volatile bool shouldStop = false;
 	std::thread thread;
 
 	void loop(NetworkData network) {
@@ -243,9 +247,14 @@ namespace client {
 			Packet packet;
 			printf(">> ");
 			getline(std::cin, packet.msg);
+
+			{ // stop
+				std::lock_guard<std::mutex> lk(mTerminate);
+				if (shouldStop)
+					break;
+			}
+
 			packet.sendTo(serverSocket);
-			if (packet.msg.compare("esc") == 0)
-				break;
 		}
 
 		sock::close(serverSocket);
@@ -259,15 +268,102 @@ void runClient(NetworkData network) {
 }
 
 void terminateClient() {
+	{
+		std::lock_guard<std::mutex> lk(client::mTerminate);
+		client::shouldStop = true;
+	}
 	client::thread.join();
+	client::shouldStop = false;
 }
 
 namespace server {
+	std::mutex mTerminate; // controls access to variables for terminating the server
+	volatile bool shouldStop = false;
 	std::thread thread;
 
 	struct Player {
 		float transform[16] = {0};
 	};
+
+	std::vector<int> clientSockets;
+
+	// the file descriptors used in the poll command
+	// (#0:server)
+	std::vector<pollfd> pollfds;
+	int pollTimeout = -1; // no timeout
+
+	enum PollResult {
+		eSUCCESS
+	};
+
+	void acceptClient(int serverSocket, std::vector<int>& clientSockets, std::vector<pollfd>& pollfds) {
+		sockaddr_storage clientAddr;
+		socklen_t addrSize = sizeof clientAddr;
+		int clientSocket;
+		if ((clientSocket = accept(serverSocket, reinterpret_cast<sockaddr*>(&clientAddr), &addrSize)) < 0) {
+			sock::printLastError("accept");
+			exit(sock::lastError());
+		}
+		clientSockets.push_back(clientSocket); // add socket
+		pollfd clientPollfd;
+		clientPollfd.fd = clientSocket;
+		clientPollfd.events = POLLIN;
+		clientPollfd.revents = 0;
+		pollfds.push_back(clientPollfd); // add pollfd
+
+		printf("Client connected: %s\n", sock::addrToPresentation(reinterpret_cast<sockaddr*>(&clientAddr)).c_str());
+	}
+
+	void recvClient(int socket) {
+		Packet packet = Packet::receiveFrom(socket);
+		printf("message received: %s\n", packet.msg.c_str());
+	}
+
+	void disconnectClient(int socket, int index, std::vector<int>& clientSockets, std::vector<pollfd>& pollfds) {
+		sockaddr clientAddr; // find address to print
+		socklen_t addrSize = sizeof clientAddr;
+		getpeername(socket, &clientAddr, &addrSize);
+		printf("Client disconnected: %s", sock::addrToPresentation(&clientAddr).c_str());
+
+		if (sock::close(socket) < 0) {
+			sock::printLastError("close");
+			exit(sock::lastError());
+		}
+		clientSockets.erase(clientSockets.begin()+index); // delete the client from the vector
+		pollfds.erase(pollfds.begin()+index+1); // delete the clients pollfd, +1 for the server pollfd
+	}
+
+	PollResult handlePoll(std::vector<pollfd>& pollfds, int pollCount, std::vector<int>& clientSockets) {
+		if (pollCount == 0) // return if there are no polls
+			return eSUCCESS;
+
+		int checkedPollCount = 0;
+
+		pollfd serverPollfd = pollfds[0];
+		if (serverPollfd.revents & POLLIN) { // accept client
+			acceptClient(serverPollfd.fd, clientSockets, pollfds);
+			checkedPollCount++;
+		}
+
+		// go through all clients
+		// i is the index of the client in clientSockets
+		int eraseOffset = 0; // offset the index by the times erase was used as erase shifts all remaining indices by -1
+		for (int i = 0; i < pollfds.size()-1; i++) {
+			pollfd poll = pollfds[i+1];
+			if (poll.revents & POLLIN) {
+				recvClient(poll.fd);
+			}
+			if (poll.revents & POLLHUP) {
+				disconnectClient(poll.fd, i-eraseOffset, clientSockets, pollfds);
+				eraseOffset++;
+			}
+
+			if (poll.revents & (POLLIN | POLLHUP)) // add checked if poll had events
+				checkedPollCount++;
+			if (checkedPollCount >= pollCount) // return when all polls are checked
+				return eSUCCESS;
+		}
+	}
 
 	int getServerSocket(NetworkData& network) {
 		addrinfo hints;
@@ -281,25 +377,32 @@ namespace server {
 		int status;
 		if ((status = getaddrinfo(NULL, network.port.c_str(), &hints, &serverInfo)) != 0) { // turn the port into a full address, ip is null because its a server
 			fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(status));
-			exit(1);
+			exit(sock::lastError());
 		}
 
 		// creating the socket
 		int serverSocket;
 		if ((serverSocket = socket(serverInfo->ai_family, serverInfo->ai_socktype, serverInfo->ai_protocol)) < 0) {
 			sock::printLastError("socket");
-			exit(2);
+			exit(sock::lastError());
+		}
+
+		// enable port reuse
+		const char yes = 1;
+		if (setsockopt(serverSocket, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof yes) == -1) {
+			sock::printLastError("setsockopt");
+			exit(sock::lastError());
 		}
 
 		// bind to port
 		if (bind(serverSocket, serverInfo->ai_addr, serverInfo->ai_addrlen) < 0) {
 			sock::printLastError("bind");
-			exit(4);
+			exit(sock::lastError());
 		}
 
 		if (listen(serverSocket, network.backlog) < 0) {
 			sock::printLastError("listen");
-			exit(5);
+			exit(sock::lastError());
 		}
 
 		freeaddrinfo(serverInfo);
@@ -309,23 +412,34 @@ namespace server {
 
 	void loop(NetworkData network) {
 		int serverSocket = getServerSocket(network);
-
-		sockaddr_storage clientAddr; // accept client
-		socklen_t addrSize = sizeof clientAddr;
-		int clientSocket;
-		if ((clientSocket = accept(serverSocket, reinterpret_cast<sockaddr*>(&clientAddr), &addrSize)) < 0) {
-			sock::printLastError("accept");
-			exit(errno);
-		}
-		printf("Client connected: %s\n", sock::addrToPresentation(reinterpret_cast<sockaddr*>(&clientAddr)).c_str());
+		pollfd serverPollfd; // make a poll fd for the server socket, gets an event when a new client connects
+		serverPollfd.fd = serverSocket;
+		serverPollfd.events = POLLIN;
+		serverPollfd.revents = 0;
+		pollfds.push_back(serverPollfd);
+		printf("server running\n");
 
 		while (true) {
-			Packet packet = Packet::receiveFrom(clientSocket);
-			if (packet.msg.compare("esc") == 0)
-				break;
-			printf("message received: %s\n", packet.msg.c_str());
+			{
+				std::lock_guard<std::mutex> lk(mTerminate);
+				if (shouldStop)
+					break;
+			}
+
+			int pollCount = sock::pollState(pollfds.data(), pollfds.size(), pollTimeout);// fetch events of the given pollfds
+			if (pollCount == -1) {
+				sock::printLastError("poll");
+				exit(sock::lastError());
+			}
+
+			if (handlePoll(pollfds, pollCount, clientSockets) != eSUCCESS)
+				printf("handlePoll failed\n");
 		}
 
+		if (sock::close(serverSocket) < 0) {
+			sock::printLastError("close");
+			exit(sock::lastError());
+		}
 		printf("server done\n");
 	}
 }
@@ -335,5 +449,10 @@ void runServer(NetworkData network) {
 }
 
 void terminateServer() {
+	{
+		std::lock_guard<std::mutex> lk(server::mTerminate);
+		server::shouldStop = true;
+	}
 	server::thread.join();
+	server::shouldStop = false;
 }
