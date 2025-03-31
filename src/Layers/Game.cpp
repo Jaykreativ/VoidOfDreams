@@ -30,10 +30,13 @@ void update(WorldData& world, Controls& controls, float dt, Zap::Window& window)
 	if (ImGui::Button("Third Person"))
 		controls.cameraMode = Controls::eTHIRD_PERSON;
 
-	world.pPlayer->updateAnimations(dt);
-	if(captured)
-		world.pPlayer->updateInputs(controls, dt);
-	world.pPlayer->update(controls);
+	if(captured) if (std::shared_ptr<Player> spPlayer = world.pPlayer.lock()) {
+		spPlayer->updateInputs(controls, dt);
+	}
+	for (auto spPlayerPair : world.players) {
+		spPlayerPair.second->updateAnimations(dt);
+		spPlayerPair.second->update(controls);
+	}
 }
 
 void drawNetworkInterface(NetworkData& network) {
@@ -42,9 +45,14 @@ void drawNetworkInterface(NetworkData& network) {
 	
 	if (isServerRunning || isClientRunning)
 		ImGui::BeginDisabled();
+	static char usernameBuf[50] = "";
+	memcpy(usernameBuf, network.username.data(), std::min<int>(50, network.username.size()));
+	ImGui::InputText("username", usernameBuf, 50);
+	network.username = usernameBuf;
+	
 	static char ipBuf[16] = "";
 	memcpy(ipBuf, network.ip.data(), std::min<int>(16, network.ip.size()));
-	ImGui::InputText("IP", ipBuf, 16);
+	ImGui::InputText("ip", ipBuf, 16);
 	network.ip = ipBuf;
 
 	static char portBuf[6] = "";
@@ -91,8 +99,14 @@ void gameLoop(RenderData& render, WorldData& world, NetworkData& network, Contro
 
 		update(world, controls, deltaTime, *render.window);
 
-		render.pbRender->updateCamera(world.pPlayer->getCamera());
-		world.scene->update();
+		if (std::shared_ptr<Player> spPlayer = world.pPlayer.lock()) { // enable rendering only if player is selected
+			render.pbRender->updateCamera(spPlayer->getCamera());
+			render.pbRender->enable();
+			world.scene->update();
+		}
+		else {
+			render.pbRender->disable();
+		}
 		render.renderer->render();
 
 		render.window->present();
@@ -109,10 +123,7 @@ void setupWorld(WorldData& world) {
 	Zap::ActorLoader loader;
 	loader.load((std::string)"Actors/Light.zac", world.scene);  // Loading actor from file, they can be changed using the editor
 	loader.load((std::string)"Actors/Light2.zac", world.scene); // All actors can be changed at runtime
-	loader.load((std::string)"Actors/Cube.zac", world.scene);
-
-	world.pPlayer = std::make_unique<Player>(*world.scene, loader); // create player, will be deleted when world exits scope
-}
+	loader.load((std::string)"Actors/Cube.zac", world.scene);}
 
 void resize(Zap::ResizeEvent& eventParams, void* customParams) {
 	Zap::PBRenderer* pbRender = reinterpret_cast<Zap::PBRenderer*>(customParams);

@@ -122,97 +122,167 @@ void ntohMat4(const void* nData, glm::mat4& mat4) {
 	}
 }
 
+/* Packets */
+
+enum PacketType {
+	eMESSAGE = 1
+};
+
 class Packet {
 public:
-	// data
-	std::string msg = "";
+	void sendTo(int socket, int flags = 0);
 
-	void sendTo(int socket, int flags = 0) {
-		uint32_t len = fullSize();
-		char* buf = new char[len];
-		pack(buf);
+	static std::shared_ptr<Packet> receiveFrom(int& type, int socket, int flags = 0);
 
-		uint32_t offset = 0;
-		while (offset < len) {
-			int bytesSent = send(socket, buf+offset, len-offset, 0);
-			if (bytesSent == -1) {
-				sock::printLastError("Packet::send");
-				delete buf;
-				return;
-			}
-			offset += bytesSent;
-		}
-	}
+protected:
+	uint32_t fullSize();
 
-	static Packet receiveFrom(int socket, int flags = 0) {
-		Packet packet;
-		packet.receive(socket, flags);
-		return packet;
-	}
+	static uint32_t headerSize();
 
-private:
-	uint32_t fullSize() {
-		return sizeof(uint32_t) + msg.size();
-	}
+	virtual uint32_t dataSize() = 0;
 
-	uint32_t size() {
-		return msg.size();
-	}
-
-	// packs the data into the given buffer, buffer needs to have the same size as packet.size()
-	void pack(char* buf) {
-		uint32_t offset = 0;
-		uint32_t nsize = htonl(size()); // the header of the packet
-		/* header */
-		memcpy(buf + offset, &nsize, sizeof(uint32_t)); offset += sizeof(uint32_t);
-		/* data */
-		memcpy(buf + offset, msg.data(), msg.size());   offset += msg.size();
-	}
-
-	void receive(int socket, int flags) {
-		char* buf = new char[sizeof(uint32_t)];
-		int bytesRead = recv(socket, buf, sizeof(uint32_t), 0); // get just header
-		if (bytesRead == -1) {
-			sock::printLastError("Packet::recv header");
-			delete[] buf;
-			return;
-		}
-		uint32_t dataSize = unpackHeader(buf);
-		delete[] buf;
-
-		buf = new char[dataSize];
-		bytesRead = recv(socket, buf, dataSize, 0); // get just data
-		if (bytesRead == -1) {
-			sock::printLastError("Packet::recv data");
-			delete[] buf;
-			return;
-		}
-		unpackData(buf, dataSize);
-		delete[] buf;
-	}
+	// packs just the header
+	// takes the buffer which contains the network package
+	void packHeader(char* buf, const int type);
 
 	// takes just the header
 	// returns the size of the data stored in the packet
-	uint32_t unpackHeader(const char* buf) {
-		const uint32_t* uintBuf = reinterpret_cast<const uint32_t*>(buf);
-		return ntohl(uintBuf[0]);
-	}
+	static void unpackHeader(const char* buf, uint32_t& size, int& type);
+
+	// takes the pointer to the data part and fills it with the packed data of the package
+	// should use packHeader
+	virtual void pack(char* buf) = 0;
+
+	// takes the pointer to the data part and fills the package with data
+	virtual void unpackData(const char* buf, uint32_t size) = 0;
+};
+
+class MessagePacket : public Packet {
+	friend class Packet;
+public:
+	// data
+	std::string id = "";
+	std::string msg = "";
+
+protected:
+	uint32_t dataSize();
+
+	// packs the data into the given buffer, buffer needs to have the same size as packet.fullSize()
+	void pack(char* buf);
 
 	// takes just the data part
-	void unpackData(const char* buf, uint32_t size) {
-		msg = std::string(buf, size);
-	}
+	void unpackData(const char* buf, uint32_t size);
 };
+
+// Packet
+void Packet::sendTo(int socket, int flags) {
+	uint32_t len = fullSize();
+	char* buf = new char[len];
+	pack(buf);
+
+	uint32_t offset = 0;
+	while (offset < len) {
+		int bytesSent = send(socket, buf + offset, len - offset, 0);
+		if (bytesSent == -1) {
+			sock::printLastError("Packet::send");
+			delete[] buf;
+			return;
+		}
+		offset += bytesSent;
+	}
+	delete[] buf;
+}
+
+std::shared_ptr<Packet> Packet::receiveFrom(int& type, int socket, int flags) {
+	char* buf = new char[headerSize()];
+	int bytesRead = recv(socket, buf, headerSize(), 0); // get just header
+	if (bytesRead == -1) {
+		sock::printLastError("Packet::recv header");
+		delete[] buf;
+		return nullptr;
+	}
+	uint32_t dataSize;
+	unpackHeader(buf, dataSize, type);
+	delete[] buf;
+
+	buf = new char[dataSize];
+	bytesRead = recv(socket, buf, dataSize, 0); // get just data
+	if (bytesRead == -1) {
+		sock::printLastError("Packet::recv data");
+		delete[] buf;
+		return nullptr;
+	}
+
+	std::shared_ptr<Packet> spPacket;
+	switch (type)
+	{
+	case eMESSAGE: {
+		spPacket = std::make_shared<MessagePacket>();
+		spPacket->unpackData(buf, dataSize);
+		break;
+	}
+	default:
+		break;
+	}
+	delete[] buf;
+
+	return spPacket;
+}
+
+uint32_t Packet::fullSize() {
+		return headerSize() + dataSize();
+	}
+
+uint32_t Packet::headerSize() {
+		return 2 * sizeof(uint32_t);
+	}
+
+void Packet::packHeader(char* buf, const int type) {
+		uint32_t* uintBuf = reinterpret_cast<uint32_t*>(buf);
+		uintBuf[0] = htonl(dataSize());
+		uintBuf[1] = htonl(type);
+	}
+
+void Packet::unpackHeader(const char* buf, uint32_t& size, int& type) {
+		const uint32_t* uintBuf = reinterpret_cast<const uint32_t*>(buf);
+		size = ntohl(uintBuf[0]);
+		type = ntohl(uintBuf[1]);
+	}
+
+// MessagePacket
+uint32_t MessagePacket::dataSize() {
+		return sizeof(uint32_t) + id.size() + sizeof(uint32_t) + msg.size();
+	}
+
+void MessagePacket::pack(char* buf) {
+		packHeader(buf, eMESSAGE); buf += headerSize();
+		/* data */
+		uint32_t idSize = htonl(id.size());
+		memcpy(buf, &idSize, sizeof(uint32_t));    buf += sizeof(uint32_t);
+		memcpy(buf, id.data(), id.size());         buf += id.size();
+		uint32_t msgSize = htonl(msg.size());
+		memcpy(buf, &msgSize, sizeof(uint32_t));   buf += sizeof(uint32_t);
+		memcpy(buf, msg.data(), msg.size());       buf += msg.size();
+	}
+
+void MessagePacket::unpackData(const char* buf, uint32_t size) {
+		uint32_t idSize = ntohl(reinterpret_cast<const uint32_t*>(buf)[0]); buf += sizeof(uint32_t);
+		id = std::string(buf, idSize); buf += idSize;
+		uint32_t msgSize = ntohl(reinterpret_cast<const uint32_t*>(buf)[0]); buf += sizeof(uint32_t);
+		msg = std::string(buf, msgSize); buf += msgSize;
+	}
 
 namespace client {
 	std::mutex mTerminate; // controls access to variables for terminating the client
 	volatile bool shouldStop = false;
-	std::thread thread;
+	std::thread sender;
+	std::thread receiver;
 
-	void loop(NetworkData network) {
+	int serverSocket;
+
+	void start(NetworkData network) {
 		addrinfo hints;
 		addrinfo* serverInfo;
-		int serverSocket;
 
 		memset(&hints, 0, sizeof(hints));
 		hints.ai_family = AF_UNSPEC;
@@ -243,8 +313,36 @@ namespace client {
 
 		freeaddrinfo(serverInfo);
 
+	}
+
+	void stop() {
+		sock::close(serverSocket);
+
+		printf("client done\n");
+	}
+
+	void receiverLoop(NetworkData network) {
 		while (true) {
-			Packet packet;
+			{ // stop
+				std::lock_guard<std::mutex> lk(mTerminate);
+				if (shouldStop)
+					break;
+			}
+			{
+				int type;
+				auto spPacket = Packet::receiveFrom(type, serverSocket);
+				if (type == eMESSAGE) {
+					MessagePacket& packet = *reinterpret_cast<MessagePacket*>(spPacket.get());
+					printf("client msg: %s (%s)\n", packet.msg.c_str(), packet.id.c_str());
+				}
+			}
+		}
+	}
+
+	void senderLoop(NetworkData network) {
+		while (true) {
+			MessagePacket packet;
+			packet.id = network.username;
 			printf(">> ");
 			getline(std::cin, packet.msg);
 
@@ -253,18 +351,15 @@ namespace client {
 				if (shouldStop)
 					break;
 			}
-
 			packet.sendTo(serverSocket);
 		}
-
-		sock::close(serverSocket);
-
-		printf("client done\n");
 	}
 }
 
 void runClient(NetworkData network) {
-	client::thread = std::thread(client::loop, network);
+	client::start(network);
+	client::sender = std::thread(client::senderLoop, network);
+	client::receiver = std::thread(client::receiverLoop, network);
 }
 
 void terminateClient() {
@@ -272,7 +367,9 @@ void terminateClient() {
 		std::lock_guard<std::mutex> lk(client::mTerminate);
 		client::shouldStop = true;
 	}
-	client::thread.join();
+	client::sender.join();
+	client::receiver.join();
+	client::stop();
 	client::shouldStop = false;
 }
 
@@ -305,6 +402,7 @@ namespace server {
 			exit(sock::lastError());
 		}
 		clientSockets.push_back(clientSocket); // add socket
+
 		pollfd clientPollfd;
 		clientPollfd.fd = clientSocket;
 		clientPollfd.events = POLLIN;
@@ -314,16 +412,22 @@ namespace server {
 		printf("Client connected: %s\n", sock::addrToPresentation(reinterpret_cast<sockaddr*>(&clientAddr)).c_str());
 	}
 
-	void recvClient(int socket) {
-		Packet packet = Packet::receiveFrom(socket);
-		printf("message received: %s\n", packet.msg.c_str());
+	void recvClient(int socket, const std::vector<int>& clientSockets) {
+		int type;
+		auto spPacket = Packet::receiveFrom(type, socket);
+		if (type == eMESSAGE) {
+			MessagePacket& packet = *reinterpret_cast<MessagePacket*>(spPacket.get());
+			printf("server msg: %s (%s)\n", packet.msg.c_str(), packet.id.c_str());
+			for (int client : clientSockets)
+				packet.sendTo(client);
+		}
 	}
 
 	void disconnectClient(int socket, int index, std::vector<int>& clientSockets, std::vector<pollfd>& pollfds) {
 		sockaddr clientAddr; // find address to print
 		socklen_t addrSize = sizeof clientAddr;
 		getpeername(socket, &clientAddr, &addrSize);
-		printf("Client disconnected: %s", sock::addrToPresentation(&clientAddr).c_str());
+		printf("Client disconnected: %s\n", sock::addrToPresentation(&clientAddr).c_str());
 
 		if (sock::close(socket) < 0) {
 			sock::printLastError("close");
@@ -351,7 +455,7 @@ namespace server {
 		for (int i = 0; i < pollfds.size()-1; i++) {
 			pollfd poll = pollfds[i+1];
 			if (poll.revents & POLLIN) {
-				recvClient(poll.fd);
+				recvClient(poll.fd, clientSockets);
 			}
 			if (poll.revents & POLLHUP) {
 				disconnectClient(poll.fd, i-eraseOffset, clientSockets, pollfds);
