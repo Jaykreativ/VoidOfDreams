@@ -78,7 +78,7 @@ void drawNetworkInterface(NetworkData& network) {
 	if (isClientRunning) {
 		if (ImGui::Button("Stop Client")) {
 			isClientRunning = false;
-			terminateClient();
+			terminateClient(network);
 		}
 	}
 	else {
