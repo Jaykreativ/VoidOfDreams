@@ -1,8 +1,9 @@
 #pragma once
 
 #include "Shares/NetworkData.h"
+#include "Shares/World.h"
 
-void runClient(NetworkData network);
+void runClient(NetworkData network, WorldData& world);
 
 void terminateClient(NetworkData network);
 

@@ -406,7 +406,7 @@ namespace client {
 		printf("client done\n");
 	}
 
-	void receiverLoop(NetworkData network) {
+	void receiverLoop(NetworkData network, WorldData* world) {
 		while (true) {
 			{ // stop
 				std::lock_guard<std::mutex> lk(mTerminate);
@@ -426,6 +426,12 @@ namespace client {
 						break;
 					}
 					case eCONNECT: {
+						ConnectPacket& packet = *reinterpret_cast<ConnectPacket*>(spPacket.get());
+						std::lock_guard<std::mutex> lk(world->mPlayers);
+						world->players[packet.username] = std::make_shared<Player>(*world->scene);
+						if (packet.username == network.username) {
+							world->pPlayer = world->players.at(packet.username);
+						}
 						break;
 					}
 					case eDISCONNECT: {
@@ -456,10 +462,10 @@ namespace client {
 	}
 }
 
-void runClient(NetworkData network) {
+void runClient(NetworkData network, WorldData& world) {
 	client::start(network);
 	client::sender = std::thread(client::senderLoop, network);
-	client::receiver = std::thread(client::receiverLoop, network);
+	client::receiver = std::thread(client::receiverLoop, network, &world);
 }
 
 void terminateClient(NetworkData network) {

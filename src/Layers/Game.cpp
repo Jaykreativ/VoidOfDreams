@@ -30,6 +30,7 @@ void update(WorldData& world, Controls& controls, float dt, Zap::Window& window)
 	if (ImGui::Button("Third Person"))
 		controls.cameraMode = Controls::eTHIRD_PERSON;
 
+	std::lock_guard<std::mutex> lk(world.mPlayers);
 	if(captured) if (std::shared_ptr<Player> spPlayer = world.pPlayer.lock()) {
 		spPlayer->updateInputs(controls, dt);
 	}
@@ -39,7 +40,7 @@ void update(WorldData& world, Controls& controls, float dt, Zap::Window& window)
 	}
 }
 
-void drawNetworkInterface(NetworkData& network) {
+void drawNetworkInterface(NetworkData& network, WorldData& world) {
 	static bool isServerRunning = false;
 	static bool isClientRunning = false;
 	
@@ -84,7 +85,7 @@ void drawNetworkInterface(NetworkData& network) {
 	else {
 		if (ImGui::Button("Start Client")) {
 			isClientRunning = true;
-			runClient(network);
+			runClient(network, world);
 		}
 	}
 }
@@ -95,17 +96,20 @@ void gameLoop(RenderData& render, WorldData& world, NetworkData& network, Contro
 		//logger::beginRegion("loop"); // define regions for profiling
 		auto startFrame = std::chrono::high_resolution_clock::now();
 
-		drawNetworkInterface(network);
+		drawNetworkInterface(network, world);
 
 		update(world, controls, deltaTime, *render.window);
 
-		if (std::shared_ptr<Player> spPlayer = world.pPlayer.lock()) { // enable rendering only if player is selected
-			render.pbRender->updateCamera(spPlayer->getCamera());
-			render.pbRender->enable();
-			world.scene->update();
-		}
-		else {
-			render.pbRender->disable();
+		{
+			std::lock_guard<std::mutex> lk(world.mPlayers);
+			if (std::shared_ptr<Player> spPlayer = world.pPlayer.lock()) { // enable rendering only if player is selected
+				render.pbRender->updateCamera(spPlayer->getCamera());
+				render.pbRender->enable();
+				world.scene->update();
+			}
+			else {
+				render.pbRender->disable();
+			}
 		}
 		render.renderer->render();
 
