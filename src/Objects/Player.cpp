@@ -105,3 +105,11 @@ void Player::update(Controls& controls) {
 Zap::Actor Player::getCamera() {
 	return m_camera;
 }
+
+void Player::setTransform(glm::mat4 transform) {
+	m_base.cmpTransform_setTransform(transform);
+}
+
+glm::mat4 Player::getTransform() {
+	return m_base.cmpTransform_getTransform();
+}

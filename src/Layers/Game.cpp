@@ -79,6 +79,10 @@ void drawNetworkInterface(NetworkData& network, WorldData& world) {
 	if (isClientRunning) {
 		if (ImGui::Button("Stop Client")) {
 			isClientRunning = false;
+			{ // delete all players as the client is being terminated
+				std::lock_guard<std::mutex> lk(world.mPlayers);
+				world.players.clear();
+			}
 			terminateClient(network);
 		}
 	}
@@ -87,7 +91,7 @@ void drawNetworkInterface(NetworkData& network, WorldData& world) {
 			isClientRunning = true;
 			runClient(network, world);
 		}
-	}
+	}  
 }
 
 void gameLoop(RenderData& render, WorldData& world, NetworkData& network, Controls& controls) {
@@ -96,7 +100,6 @@ void gameLoop(RenderData& render, WorldData& world, NetworkData& network, Contro
 		//logger::beginRegion("loop"); // define regions for profiling
 		auto startFrame = std::chrono::high_resolution_clock::now();
 
-		drawNetworkInterface(network, world);
 
 		update(world, controls, deltaTime, *render.window);
 
@@ -109,8 +112,14 @@ void gameLoop(RenderData& render, WorldData& world, NetworkData& network, Contro
 			}
 			else {
 				render.pbRender->disable();
+				ImGui::GetBackgroundDrawList()->AddRectFilled({ 0, 0 }, ImGui::GetMainViewport()->Size, ImGui::GetColorU32(render.pbRender->clearColor));
 			}
+
+			client::sendPlayerMove(network, world);
 		}
+
+		drawNetworkInterface(network, world);
+
 		render.renderer->render();
 
 		render.window->present();
@@ -176,6 +185,8 @@ void runGame() {
 	render.window->show();
 
 	gameLoop(render, world, network, controls);
+
+	world.players.clear();
 
 	render.renderer->destroy();
 	delete render.renderer;

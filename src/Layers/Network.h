@@ -3,6 +3,11 @@
 #include "Shares/NetworkData.h"
 #include "Shares/World.h"
 
+namespace client {
+	// the world.mPlayers mutex must be locked
+	void sendPlayerMove(NetworkData& network, WorldData& world);
+}
+
 void runClient(NetworkData network, WorldData& world);
 
 void terminateClient(NetworkData network);
