@@ -41,10 +41,7 @@ void update(WorldData& world, Controls& controls, float dt, Zap::Window& window)
 }
 
 void drawNetworkInterface(NetworkData& network, WorldData& world) {
-	static bool isServerRunning = false;
-	static bool isClientRunning = false;
-	
-	if (isServerRunning || isClientRunning)
+	if (server::isRunning() || client::isRunning())
 		ImGui::BeginDisabled();
 	static char usernameBuf[50] = "";
 	memcpy(usernameBuf, network.username.data(), std::min<int>(50, network.username.size()));
@@ -60,35 +57,27 @@ void drawNetworkInterface(NetworkData& network, WorldData& world) {
 	memcpy(portBuf, network.port.data(), std::min<int>(6, network.port.size()));
 	ImGui::InputText("port", portBuf, 6);
 	network.port = portBuf;
-	if (isServerRunning || isClientRunning)
+	if (server::isRunning() || client::isRunning())
 		ImGui::EndDisabled();
 
-	if (isServerRunning) {
+	if (server::isRunning()) {
 		if (ImGui::Button("Stop Server")) {
-			isServerRunning = false;
 			terminateServer();
 		}
 	}
 	else {
 		if (ImGui::Button("Start Server")) {
-			isServerRunning = true;
 			runServer(network);
 		}
 	}
 	
-	if (isClientRunning) {
+	if (client::isRunning()) {
 		if (ImGui::Button("Stop Client")) {
-			isClientRunning = false;
-			{ // delete all players as the client is being terminated
-				std::lock_guard<std::mutex> lk(world.mPlayers);
-				world.players.clear();
-			}
-			terminateClient(network);
+			terminateClient(network, world);
 		}
 	}
 	else {
 		if (ImGui::Button("Start Client")) {
-			isClientRunning = true;
 			runClient(network, world);
 		}
 	}  
@@ -185,6 +174,9 @@ void runGame() {
 	render.window->show();
 
 	gameLoop(render, world, network, controls);
+
+	terminateClient(network, world); // terminate networking if still running
+	terminateServer();
 
 	world.players.clear();
 

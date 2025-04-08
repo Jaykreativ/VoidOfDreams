@@ -25,4 +25,8 @@
 
 #include "Shares/Controls.h"
 
+namespace vod {
+
+}
+
 void runGame();

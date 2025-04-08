@@ -401,17 +401,26 @@ void MovePacket::unpackData(const char* buf, uint32_t size) {
 }
 
 namespace client {
-	bool isConnected = false;
+	std::mutex _mTerminate; // controls access to variables for terminating the client
 
-	std::mutex mTerminate; // controls access to variables for terminating the client
-	volatile bool shouldStop = false;
-	std::thread sender;
-	std::thread receiver;
+	bool _isRunning = false;
+	bool _isConnected = false; // used by threads outisde the client to determine if client is connected
 
-	SocketData serverSocket;
-	pollfd serverPollfd;
+	volatile bool _shouldStop = false;
+	//std::thread sender;
+	std::thread _receiver;
 
-	void start(NetworkData network) {
+	SocketData _serverSocket;
+	pollfd _serverPollfd;
+
+	bool isRunning() {
+		std::lock_guard<std::mutex> lk(_mTerminate);
+		return _isRunning;
+	}
+
+	// initializes resources for client networking
+	// returns false on failure
+	bool start(NetworkData& network) {
 		addrinfo hints;
 		addrinfo* serverInfo;
 
@@ -422,6 +431,7 @@ namespace client {
 		int status;
 		if ((status = getaddrinfo(network.ip.c_str(), network.port.c_str(), &hints, &serverInfo)) != 0) { // get adress from ip and port
 			fprintf(stderr, "getaddrinfo error: %s\n", gai_strerror(status));
+			return false;
 		}
 
 		for (addrinfo* p = serverInfo; p != nullptr; p = p->ai_next) { // print the ip that the client is connecting to
@@ -433,52 +443,71 @@ namespace client {
 			}
 		}
 
-		serverSocket.stream = socket(serverInfo->ai_family, serverInfo->ai_socktype, serverInfo->ai_protocol);
-		if (serverSocket.stream < 0) {
+		_serverSocket.stream = socket(serverInfo->ai_family, serverInfo->ai_socktype, serverInfo->ai_protocol);
+		if (_serverSocket.stream < 0) {
 			sock::printLastError("socket");
+			return false;
 		}
 
-		if (connect(serverSocket.stream, serverInfo->ai_addr, serverInfo->ai_addrlen) < 0) { // connect to the server specified by the ip in network
+		if (connect(_serverSocket.stream, serverInfo->ai_addr, serverInfo->ai_addrlen) < 0) { // connect to the server specified by the ip in network
 			sock::printLastError("connect");
+			return false;
 		}
-		isConnected = true;
+		_isConnected = true;
 
-		serverPollfd.fd = serverSocket.stream;
-		serverPollfd.events = POLLIN;
-		serverPollfd.revents = 0;
+		_serverPollfd.fd = _serverSocket.stream;
+		_serverPollfd.events = POLLIN;
+		_serverPollfd.revents = 0;
 
 		freeaddrinfo(serverInfo);
 
 		ConnectPacket connectPacket;
 		connectPacket.username = network.username;
-		connectPacket.sendTo(serverSocket);
+		connectPacket.sendTo(_serverSocket);
+
+		return true;
 	}
 
-	void stop(NetworkData network) {
+	void stop(NetworkData& network, WorldData& world) {
 		DisconnectPacket disconnectPacket;
 		disconnectPacket.username = network.username;
-		disconnectPacket.sendTo(serverSocket);
-		isConnected = false;
-		sock::close(serverSocket.stream);
+		disconnectPacket.sendTo(_serverSocket);
+		_isConnected = false;
+		sock::close(_serverSocket.stream);
+
+		{ // delete all players as the client is being terminated
+			world.players.clear();
+		}
 
 		printf("client done\n");
+	}
+
+	// terminates the client from a client thread
+	void terminateInternal(NetworkData& network, WorldData& world) {
+		std::lock_guard<std::mutex> lk(_mTerminate);
+		_isRunning = false;
+		_isConnected = false;
+		_shouldStop = true;
+		_receiver.detach();
+		stop(network, world);
 	}
 
 	void receiverLoop(NetworkData network, WorldData* world) {
 		while (true) {
 			{ // stop
-				std::lock_guard<std::mutex> lk(mTerminate);
-				if (shouldStop)
+				std::lock_guard<std::mutex> lk(_mTerminate);
+				if (_shouldStop)
 					break;
 			}
-			int didPoll = sock::pollState(&serverPollfd, 1, 100);
+			int didPoll = sock::pollState(&_serverPollfd, 1, 100);
 			if(didPoll) {
-				if (serverPollfd.revents & POLLHUP) {
+				if (_serverPollfd.revents & POLLHUP) {
 					printf("server closed connection\n");
+					terminateInternal(network, *world);
 					break;
 				}
 				int type;
-				auto spPacket = Packet::receiveFrom(type, serverSocket);
+				auto spPacket = Packet::receiveFrom(type, _serverSocket);
 				if (spPacket) { // check for receive failure
 					switch (type)
 					{
@@ -505,7 +534,12 @@ namespace client {
 					case eMOVE: {
 						MovePacket& packet = *reinterpret_cast<MovePacket*>(spPacket.get());
 						std::lock_guard<std::mutex> lk(world->mPlayers);
-						world->players.at(packet.username)->setTransform(packet.transform);
+						if (world->players.count(packet.username)) {
+							world->players.at(packet.username)->setTransform(packet.transform);
+						}
+						else {
+							printf("%s cannot be moved because that client isn't connected\n", packet.username.c_str());
+						}
 						break;
 					}
 					default:
@@ -541,59 +575,73 @@ namespace client {
 	//}
 
 	void sendPlayerMove(NetworkData& network, WorldData& world) {
-		if(isConnected) if (std::shared_ptr<Player> spPlayer = world.pPlayer.lock()) {
+		if(_isConnected) if (std::shared_ptr<Player> spPlayer = world.pPlayer.lock()) {
 			MovePacket packet;
 			packet.username = network.username;
 			packet.transform = spPlayer->getTransform();
-			packet.sendTo(serverSocket);
+			packet.sendTo(_serverSocket);
 		}
 	}
 }
 
+bool runClient(NetworkData& network, WorldData& world) {
+	if (client::_isRunning)
+		return true;
+	client::_isRunning = true;
 
-void runClient(NetworkData network, WorldData& world) {
-	client::start(network);
+	if (!client::start(network))
+		return false;
+	client::_shouldStop = false;
 	//client::sender = std::thread(client::senderLoop, network, &world);
-	client::receiver = std::thread(client::receiverLoop, network, &world);
+	client::_receiver = std::thread(client::receiverLoop, network, &world);
+	return true;
 }
 
-void terminateClient(NetworkData network) {
+void terminateClient(NetworkData& network, WorldData& world) {
+	if (!client::_isRunning)
+		return;
+	client::_isRunning = false;
+
 	{
-		std::lock_guard<std::mutex> lk(client::mTerminate);
-		client::shouldStop = true;
+		std::lock_guard<std::mutex> lk(client::_mTerminate);
+		client::_shouldStop = true;
 	}
 	//client::sender.join();
-	client::receiver.join();
-	client::stop(network);
-	client::shouldStop = false;
+	if(client::_receiver.joinable())
+		client::_receiver.join();
+	client::stop(network, world);
+	client::_shouldStop = false;
 }
 
 namespace server {
-	std::mutex mTerminate; // controls access to variables for terminating the server
-	volatile bool shouldStop = false;
-	std::thread thread;
+	bool _isRunning = false;
+	std::mutex _mTerminate; // controls access to variables for terminating the server
+	volatile bool _shouldStop = false;
+	std::thread _thread;
 
-	SocketData serverSocket;
-	std::vector<SocketData> clientSockets = {};
+	SocketData _serverSocket;
+	std::vector<SocketData> _clientSockets = {};
+	int _eraseOffset = 0; // used in disconnect soeckt because 
 
 	// this stores all current users, maps their socket to their username
 	// it's used for sending a new player all current players
-	std::unordered_map<int, std::string> connectionMap = {};
+	std::unordered_map<int, std::string> _connectionMap = {};
 
 	// the file descriptors used in the poll command
 	// (#0:server)
 	// index can be converted to corresponding clientSocket index by -1
-	std::vector<pollfd> pollfds = {};
+	std::vector<pollfd> _pollfds = {};
 
-	enum PollResult {
-		eSUCCESS
-	};
+	bool isRunning() {
+		std::lock_guard<std::mutex> lk(_mTerminate);
+		return _isRunning;
+	}
 
 	void acceptClient() {
 		sockaddr_storage clientAddr;
 		socklen_t addrSize = sizeof clientAddr;
 		int clientSocket;
-		if ((clientSocket = accept(serverSocket.stream, reinterpret_cast<sockaddr*>(&clientAddr), &addrSize)) < 0) {
+		if ((clientSocket = accept(_serverSocket.stream, reinterpret_cast<sockaddr*>(&clientAddr), &addrSize)) < 0) {
 			sock::printLastError("accept");
 			exit(sock::lastError());
 		}
@@ -602,15 +650,29 @@ namespace server {
 		socketData.stream = clientSocket;
 		socketData.dgram = 0;
 		socketData.addr = clientAddr;
-		clientSockets.push_back(socketData);
+		_clientSockets.push_back(socketData);
 
 		pollfd clientPollfd;
 		clientPollfd.fd = clientSocket;
 		clientPollfd.events = POLLIN;
 		clientPollfd.revents = 0;
-		pollfds.push_back(clientPollfd); // add pollfd, client will be inserted into the map when receiving the connect packet
+		_pollfds.push_back(clientPollfd); // add pollfd, client will be inserted into the map when receiving the connect packet
 
 		printf("client connected: %s\n", sock::addrToPresentation(reinterpret_cast<sockaddr*>(&clientAddr)).c_str());
+	}
+
+	void disconnectClient(int index) {
+		SocketData socket = _clientSockets[index];
+		printf("client disconnected: %s\n", sock::addrToPresentation(reinterpret_cast<sockaddr*>(&socket.addr)).c_str());
+
+		if (sock::close(socket.stream) < 0) {
+			sock::printLastError("close");
+			exit(sock::lastError());
+		}
+
+		_clientSockets.erase(_clientSockets.begin() + index); // delete the clients socket data
+		_pollfds.erase(_pollfds.begin() + index + 1); // delete the clients pollfd, +1 for the server pollfd
+		_eraseOffset++;
 	}
 
 	void recvClient(SocketData socket) {
@@ -630,25 +692,32 @@ namespace server {
 
 			{
 				bool nameTaken = false;
-				for(const auto& connectionPair : connectionMap)
+				for(const auto& connectionPair : _connectionMap)
 					if (connectionPair.second == packet.username) {
 						nameTaken = true;
 						break;
 					}
 				if (nameTaken) { 
 					printf("%s already present, wont be accepted\n", packet.username.c_str());
+					int i = 0;
+					for (const auto& comp : _clientSockets) {
+						if (comp.stream == socket.stream) {
+							disconnectClient(i);
+						}
+						i++;
+					}
 					break;
 				}
 			} // prevent multiple usernames
 			
-			connectionMap[socket.stream] = packet.username;
+			_connectionMap[socket.stream] = packet.username;
 			printf("%s joined the server\n", packet.username.c_str());
 
-			for (auto clientSocket : clientSockets) {
+			for (auto clientSocket : _clientSockets) {
 				packet.sendTo(clientSocket); // tell all clients(including the new one) that a new player joined
 				if (clientSocket.stream != socket.stream) {
 					ConnectPacket connectPacket;
-					connectPacket.username = connectionMap.at(clientSocket.stream);
+					connectPacket.username = _connectionMap.at(clientSocket.stream);
 					connectPacket.sendTo(socket); // send the new client all clients that where already present
 				}
 			}
@@ -660,7 +729,7 @@ namespace server {
 
 			{
 				bool nameTaken = false;
-				for (const auto& connectionPair : connectionMap)
+				for (const auto& connectionPair : _connectionMap)
 					if (connectionPair.second == packet.username) {
 						nameTaken = true;
 						break;
@@ -672,8 +741,8 @@ namespace server {
 			} // prevent multiple disconnects
 
 			printf("%s left the server\n", packet.username.c_str());
-			connectionMap.erase(socket.stream);
-			for (auto clientSocket : clientSockets) {
+			_connectionMap.erase(socket.stream);
+			for (auto clientSocket : _clientSockets) {
 				if(clientSocket.stream != socket.stream)
 					packet.sendTo(clientSocket);
 			}
@@ -681,7 +750,7 @@ namespace server {
 		}
 		case eMOVE: {
 			MovePacket& packet = *reinterpret_cast<MovePacket*>(spPacket.get());
-			for (auto clientSocket : clientSockets) {
+			for (auto clientSocket : _clientSockets) {
 				if(clientSocket.stream != socket.stream)
 					packet.sendTo(clientSocket);
 			}
@@ -693,26 +762,13 @@ namespace server {
 		}
 	}
 
-	void disconnectClient(int index) {
-		SocketData socket = clientSockets[index];
-		printf("client disconnected: %s\n", sock::addrToPresentation(reinterpret_cast<sockaddr*>(&socket.addr)).c_str());
-
-		if (sock::close(socket.stream) < 0) {
-			sock::printLastError("close");
-			exit(sock::lastError());
-		}
-
-		clientSockets.erase(clientSockets.begin()+index); // delete the clients socket data
-		pollfds.erase(pollfds.begin()+index+1); // delete the clients pollfd, +1 for the server pollfd
-	}
-
-	PollResult handlePoll(int pollCount) {
+	void handlePoll(int pollCount) {
 		if (pollCount == 0) // return if there are no polls
-			return eSUCCESS;
+			return;
 
 		int checkedPollCount = 0;
 
-		pollfd serverPollfd = pollfds[0];
+		pollfd serverPollfd = _pollfds[0];
 		if (serverPollfd.revents & POLLIN) { // accept client
 			acceptClient();
 			checkedPollCount++;
@@ -721,21 +777,33 @@ namespace server {
 		// go through all clients
 		// i is the index of the client in clientSockets
 		int eraseOffset = 0; // offset the index by the times erase was used as erase shifts all remaining indices by -1
-		for (int i = 0; i < pollfds.size()-1; i++) {
-			pollfd poll = pollfds[i+1];
+		for (size_t i = 0; i < _pollfds.size()-1; i++) {
+			pollfd poll = _pollfds[i+1];
 			if (poll.revents & POLLIN) {
-				recvClient(clientSockets[i]);
+				recvClient(_clientSockets[i - eraseOffset]);
 			}
 			if (poll.revents & POLLHUP) {
-				disconnectClient(i-eraseOffset);
-				eraseOffset++;
+				disconnectClient(i - eraseOffset);
 			}
 
 			if (poll.revents & (POLLIN | POLLHUP)) // add checked if poll had events
 				checkedPollCount++;
 			if (checkedPollCount >= pollCount) // return when all polls are checked
-				return eSUCCESS;
+				return;
 		}
+	}
+
+	// free all resources
+	void freeResources() {
+		if (sock::close(_serverSocket.stream) == -1)
+			sock::printLastError("Server close(serverSocket)");
+		for (const auto& socket : _clientSockets)
+			if (sock::close(socket.stream) == -1)
+				sock::printLastError("Server close(clientSocket)");
+
+		_pollfds.clear();
+		_clientSockets.clear();
+		_connectionMap.clear();
 	}
 
 	SocketData getServerSocket(NetworkData& network) {
@@ -786,23 +854,23 @@ namespace server {
 	}
 
 	void loop(NetworkData network) {
-		serverSocket = getServerSocket(network);
+		_serverSocket = getServerSocket(network);
 		pollfd serverPollfd; // make a poll fd for the server socket, gets an event when a new client connects
-		serverPollfd.fd = serverSocket.stream;
+		serverPollfd.fd = _serverSocket.stream;
 		serverPollfd.events = POLLIN;
 		serverPollfd.revents = 0;
-		pollfds.push_back(serverPollfd);
+		_pollfds.push_back(serverPollfd);
 		printf("server running\n");
 
 		while (true) {
 			{
-				std::lock_guard<std::mutex> lk(mTerminate);
-				if (shouldStop) { 
+				std::lock_guard<std::mutex> lk(_mTerminate);
+				if (_shouldStop) { 
 					break;
 				}
 			}
 
-			int pollCount = sock::pollState(pollfds.data(), pollfds.size(), 100);// fetch events of the given pollfds
+			int pollCount = sock::pollState(_pollfds.data(), _pollfds.size(), 100);// fetch events of the given pollfds
 			if (pollCount == 0)
 				continue;
 
@@ -811,31 +879,33 @@ namespace server {
 				exit(sock::lastError());
 			}
 
-			if (handlePoll(pollCount) != eSUCCESS)
-				printf("handlePoll failed\n");
+			handlePoll(pollCount);
 		}
-		// free all resources
-		if (sock::close(serverSocket.stream) == -1)
-			sock::printLastError("Server close(serverSocket)");
-		for (const auto& socket : clientSockets)
-			if (sock::close(socket.stream) == -1)
-				sock::printLastError("Server close(clientSocket)");
 
-		pollfds.clear();
-		clientSockets.clear();
+		freeResources();
+
 		printf("server done\n");
 	}
 }
 
+
 void runServer(NetworkData network) {
-	server::thread = std::thread(server::loop, network);
+	if (server::_isRunning)
+		return;
+	server::_isRunning = true;
+
+	server::_shouldStop = false;
+	server::_thread = std::thread(server::loop, network);
 }
 
 void terminateServer() {
+	if (!server::_isRunning)
+		return;
 	{
-		std::lock_guard<std::mutex> lk(server::mTerminate);
-		server::shouldStop = true;
+		std::lock_guard<std::mutex> lk(server::_mTerminate);
+		server::_shouldStop = true;
 	}
-	server::thread.join();
-	server::shouldStop = false;
+	server::_thread.join();
+	server::_shouldStop = false;
+	server::_isRunning = false;
 }
