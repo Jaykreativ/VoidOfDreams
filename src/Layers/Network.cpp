@@ -122,6 +122,18 @@ void ntohMat4(const void* nData, glm::mat4& mat4) {
 	}
 }
 
+struct SocketData { // combine the socket and its address into one type, cause they're always needed when using both tcp and udp.
+	int stream;
+	int dgram;
+	sockaddr_storage addr;
+
+	// creates the dgram socket
+	// the address has to be set
+	void completeDgram() {
+
+	}
+};
+
 /* Packets */
 
 enum PacketType {
@@ -133,9 +145,9 @@ enum PacketType {
 
 class Packet {
 public:
-	void sendTo(int socket, int flags = 0);
+	void sendTo(SocketData socket, int flags = 0);
 
-	static std::shared_ptr<Packet> receiveFrom(int& type, int socket, int flags = 0);
+	static std::shared_ptr<Packet> receiveFrom(int& type, SocketData socket, int flags = 0);
 
 protected:
 	uint32_t fullSize();
@@ -227,14 +239,14 @@ protected:
 };
 
 // Packet
-void Packet::sendTo(int socket, int flags) {
+void Packet::sendTo(SocketData socket, int flags) {
 	uint32_t len = fullSize();
 	char* buf = new char[len];
 	pack(buf);
 
 	uint32_t offset = 0;
 	while (offset < len) {
-		int bytesSent = send(socket, buf + offset, len - offset, 0);
+		int bytesSent = send(socket.stream, buf + offset, len - offset, 0);
 		if (bytesSent == -1) {
 			sock::printLastError("Packet::send");
 			delete[] buf;
@@ -245,9 +257,9 @@ void Packet::sendTo(int socket, int flags) {
 	delete[] buf;
 }
 
-std::shared_ptr<Packet> Packet::receiveFrom(int& type, int socket, int flags) {
+std::shared_ptr<Packet> Packet::receiveFrom(int& type, SocketData socket, int flags) {
 	char* buf = new char[headerSize()];
-	int bytesRead = recv(socket, buf, headerSize(), 0); // get just header
+	int bytesRead = recv(socket.stream, buf, headerSize(), 0); // get just header
 	if (bytesRead == -1) {
 		sock::printLastError("Packet::recv header");
 		delete[] buf;
@@ -258,7 +270,7 @@ std::shared_ptr<Packet> Packet::receiveFrom(int& type, int socket, int flags) {
 	delete[] buf;
 
 	buf = new char[dataSize];
-	bytesRead = recv(socket, buf, dataSize, 0); // get just data
+	bytesRead = recv(socket.stream, buf, dataSize, 0); // get just data
 	if (bytesRead == -1) {
 		sock::printLastError("Packet::recv data");
 		delete[] buf;
@@ -268,11 +280,11 @@ std::shared_ptr<Packet> Packet::receiveFrom(int& type, int socket, int flags) {
 	std::shared_ptr<Packet> spPacket;
 	switch (type)
 	{
-	case eMESSAGE: {
-		spPacket = std::make_shared<MessagePacket>();
-		spPacket->unpackData(buf, dataSize);
-		break;
-	}
+	//case eMESSAGE: {
+	//	spPacket = std::make_shared<MessagePacket>();
+	//	spPacket->unpackData(buf, dataSize);
+	//	break;
+	//}
 	case eCONNECT: {
 		spPacket = std::make_shared<ConnectPacket>();
 		spPacket->unpackData(buf, dataSize);
@@ -317,28 +329,27 @@ void Packet::unpackHeader(const char* buf, uint32_t& size, int& type) {
 	}
 
 // MessagePacket
-uint32_t MessagePacket::dataSize() {
-		return sizeof(uint32_t) + id.size() + sizeof(uint32_t) + msg.size();
-	}
-
-void MessagePacket::pack(char* buf) {
-		packHeader(buf, eMESSAGE); buf += headerSize();
-		/* data */
-		uint32_t idSize = htonl(id.size());
-		memcpy(buf, &idSize, sizeof(uint32_t));    buf += sizeof(uint32_t);
-		memcpy(buf, id.data(), id.size());         buf += id.size();
-		uint32_t msgSize = htonl(msg.size());
-		memcpy(buf, &msgSize, sizeof(uint32_t));   buf += sizeof(uint32_t);
-		memcpy(buf, msg.data(), msg.size());       buf += msg.size();
-}
-
-void MessagePacket::unpackData(const char* buf, uint32_t size) {
-		uint32_t idSize = ntohl(reinterpret_cast<const uint32_t*>(buf)[0]); buf += sizeof(uint32_t);
-		id = std::string(buf, idSize); buf += idSize;
-		uint32_t msgSize = ntohl(reinterpret_cast<const uint32_t*>(buf)[0]); buf += sizeof(uint32_t);
-		msg = std::string(buf, msgSize); buf += msgSize;
-}
-
+//uint32_t MessagePacket::dataSize() {
+//		return sizeof(uint32_t) + id.size() + sizeof(uint32_t) + msg.size();
+//	}
+//
+//void MessagePacket::pack(char* buf) {
+//		packHeader(buf, eMESSAGE); buf += headerSize();
+//		/* data */
+//		uint32_t idSize = htonl(id.size());
+//		memcpy(buf, &idSize, sizeof(uint32_t));    buf += sizeof(uint32_t);
+//		memcpy(buf, id.data(), id.size());         buf += id.size();
+//		uint32_t msgSize = htonl(msg.size());
+//		memcpy(buf, &msgSize, sizeof(uint32_t));   buf += sizeof(uint32_t);
+//		memcpy(buf, msg.data(), msg.size());       buf += msg.size();
+//}
+//
+//void MessagePacket::unpackData(const char* buf, uint32_t size) {
+//		uint32_t idSize = ntohl(reinterpret_cast<const uint32_t*>(buf)[0]); buf += sizeof(uint32_t);
+//		id = std::string(buf, idSize); buf += idSize;
+//		uint32_t msgSize = ntohl(reinterpret_cast<const uint32_t*>(buf)[0]); buf += sizeof(uint32_t);
+//		msg = std::string(buf, msgSize); buf += msgSize;
+//}
 // ConnectPacket
 uint32_t ConnectPacket::dataSize() {
 	return username.size();
@@ -397,7 +408,7 @@ namespace client {
 	std::thread sender;
 	std::thread receiver;
 
-	int serverSocket;
+	SocketData serverSocket;
 	pollfd serverPollfd;
 
 	void start(NetworkData network) {
@@ -422,17 +433,17 @@ namespace client {
 			}
 		}
 
-		serverSocket = socket(serverInfo->ai_family, serverInfo->ai_socktype, serverInfo->ai_protocol);
-		if (serverSocket < 0) {
+		serverSocket.stream = socket(serverInfo->ai_family, serverInfo->ai_socktype, serverInfo->ai_protocol);
+		if (serverSocket.stream < 0) {
 			sock::printLastError("socket");
 		}
 
-		if (connect(serverSocket, serverInfo->ai_addr, serverInfo->ai_addrlen) < 0) { // connect to the server specified by the ip in network
+		if (connect(serverSocket.stream, serverInfo->ai_addr, serverInfo->ai_addrlen) < 0) { // connect to the server specified by the ip in network
 			sock::printLastError("connect");
 		}
 		isConnected = true;
 
-		serverPollfd.fd = serverSocket;
+		serverPollfd.fd = serverSocket.stream;
 		serverPollfd.events = POLLIN;
 		serverPollfd.revents = 0;
 
@@ -448,7 +459,7 @@ namespace client {
 		disconnectPacket.username = network.username;
 		disconnectPacket.sendTo(serverSocket);
 		isConnected = false;
-		sock::close(serverSocket);
+		sock::close(serverSocket.stream);
 
 		printf("client done\n");
 	}
@@ -562,62 +573,36 @@ namespace server {
 	volatile bool shouldStop = false;
 	std::thread thread;
 
-	struct Player {
-		float transform[16] = {0};
-	};
+	SocketData serverSocket;
+	std::vector<SocketData> clientSockets = {};
 
-	struct ClientStorage {
-		std::vector<int> sockets;
-		std::unordered_map<std::string, int> nameSocketMap;
-		std::unordered_map<int, std::string> socketNameMap;
-
-		bool isPresent(int socket, std::string name) {
-			return nameSocketMap.count(name) || socketNameMap.count(socket);
-		}
-
-		void addClient(int socket, std::string name) {
-			sockets.push_back(socket);
-			nameSocketMap[name] = socket;
-			socketNameMap[socket] = name;
-		}
-
-		void deleteClient(int socket, std::string name) {
-			nameSocketMap.erase(name);
-			socketNameMap.erase(socket);
-			
-			bool found = false;
-			for (size_t i = 0; !found && i < sockets.size(); i++) {
-				if (sockets[i] == socket) {
-					sockets.erase(sockets.begin() + i);
-					found = true;
-				}
-			}
-		}
-
-		void clear() {
-			sockets.clear();
-			nameSocketMap.clear();
-			socketNameMap.clear();
-		}
-
-	} clientStorage;
+	// this stores all current users, maps their socket to their username
+	// it's used for sending a new player all current players
+	std::unordered_map<int, std::string> connectionMap = {};
 
 	// the file descriptors used in the poll command
 	// (#0:server)
-	std::vector<pollfd> pollfds;
+	// index can be converted to corresponding clientSocket index by -1
+	std::vector<pollfd> pollfds = {};
 
 	enum PollResult {
 		eSUCCESS
 	};
 
-	void acceptClient(int serverSocket) {
+	void acceptClient() {
 		sockaddr_storage clientAddr;
 		socklen_t addrSize = sizeof clientAddr;
 		int clientSocket;
-		if ((clientSocket = accept(serverSocket, reinterpret_cast<sockaddr*>(&clientAddr), &addrSize)) < 0) {
+		if ((clientSocket = accept(serverSocket.stream, reinterpret_cast<sockaddr*>(&clientAddr), &addrSize)) < 0) {
 			sock::printLastError("accept");
 			exit(sock::lastError());
 		}
+
+		SocketData socketData;
+		socketData.stream = clientSocket;
+		socketData.dgram = 0;
+		socketData.addr = clientAddr;
+		clientSockets.push_back(socketData);
 
 		pollfd clientPollfd;
 		clientPollfd.fd = clientSocket;
@@ -628,56 +613,76 @@ namespace server {
 		printf("client connected: %s\n", sock::addrToPresentation(reinterpret_cast<sockaddr*>(&clientAddr)).c_str());
 	}
 
-	void recvClient(int socket) {
+	void recvClient(SocketData socket) {
 		int type;
 		auto spPacket = Packet::receiveFrom(type, socket);
 		switch (type)
 		{
-		case eMESSAGE: {
-			MessagePacket& packet = *reinterpret_cast<MessagePacket*>(spPacket.get());
-			printf("server msg: %s (%s)\n", packet.msg.c_str(), packet.id.c_str());
-			for (int clientSocket : clientStorage.sockets)
-				packet.sendTo(clientSocket);
-			break;
-		}
-		case eCONNECT: {
+		//case eMESSAGE: {
+		//	MessagePacket& packet = *reinterpret_cast<MessagePacket*>(spPacket.get());
+		//	printf("server msg: %s (%s)\n", packet.msg.c_str(), packet.id.c_str());
+		//	for (int clientSocket : clientStorage.sockets)
+		//		packet.sendTo(clientSocket);
+		//	break;
+		//}
+		case eCONNECT: { // uses stream sockets
 			ConnectPacket& packet = *reinterpret_cast<ConnectPacket*>(spPacket.get());
-			if (clientStorage.isPresent(socket, packet.username)) { // prevent multiple usernames
-				printf("%s already present, wont be accepted\n", packet.username.c_str());
-				break;
-			}
-			clientStorage.addClient(socket, packet.username);
+
+			{
+				bool nameTaken = false;
+				for(const auto& connectionPair : connectionMap)
+					if (connectionPair.second == packet.username) {
+						nameTaken = true;
+						break;
+					}
+				if (nameTaken) { 
+					printf("%s already present, wont be accepted\n", packet.username.c_str());
+					break;
+				}
+			} // prevent multiple usernames
+			
+			connectionMap[socket.stream] = packet.username;
 			printf("%s joined the server\n", packet.username.c_str());
 
-			for (int clientSocket : clientStorage.sockets) {
+			for (auto clientSocket : clientSockets) {
 				packet.sendTo(clientSocket); // tell all clients(including the new one) that a new player joined
-				if (clientSocket != socket) {
+				if (clientSocket.stream != socket.stream) {
 					ConnectPacket connectPacket;
-					connectPacket.username = clientStorage.socketNameMap.at(clientSocket);
+					connectPacket.username = connectionMap.at(clientSocket.stream);
 					connectPacket.sendTo(socket); // send the new client all clients that where already present
 				}
 			}
 
 			break;
 		}
-		case eDISCONNECT: {
+		case eDISCONNECT: { // uses stream sockets
 			DisconnectPacket& packet = *reinterpret_cast<DisconnectPacket*>(spPacket.get());
-			if (!clientStorage.isPresent(socket, packet.username)) {
-				printf("%s was not connected, already left\n", packet.username.c_str());
-				break;
-			}
+
+			{
+				bool nameTaken = false;
+				for (const auto& connectionPair : connectionMap)
+					if (connectionPair.second == packet.username) {
+						nameTaken = true;
+						break;
+					}
+				if (!nameTaken) {
+					printf("%s not present, already disconnected\n", packet.username.c_str());
+					break;
+				}
+			} // prevent multiple disconnects
+
 			printf("%s left the server\n", packet.username.c_str());
-			clientStorage.deleteClient(socket, packet.username);
-			for (int clientSocket : clientStorage.sockets) {
-				if(clientSocket != socket)
+			connectionMap.erase(socket.stream);
+			for (auto clientSocket : clientSockets) {
+				if(clientSocket.stream != socket.stream)
 					packet.sendTo(clientSocket);
 			}
 			break;
 		}
 		case eMOVE: {
 			MovePacket& packet = *reinterpret_cast<MovePacket*>(spPacket.get());
-			for (int clientSocket : clientStorage.sockets) {
-				if(clientSocket != socket)
+			for (auto clientSocket : clientSockets) {
+				if(clientSocket.stream != socket.stream)
 					packet.sendTo(clientSocket);
 			}
 			break;
@@ -688,16 +693,16 @@ namespace server {
 		}
 	}
 
-	void disconnectClient(int socket, int index) {
-		sockaddr clientAddr; // find address to print
-		socklen_t addrSize = sizeof clientAddr;
-		getpeername(socket, &clientAddr, &addrSize);
-		printf("client disconnected: %s\n", sock::addrToPresentation(&clientAddr).c_str());
+	void disconnectClient(int index) {
+		SocketData socket = clientSockets[index];
+		printf("client disconnected: %s\n", sock::addrToPresentation(reinterpret_cast<sockaddr*>(&socket.addr)).c_str());
 
-		if (sock::close(socket) < 0) {
+		if (sock::close(socket.stream) < 0) {
 			sock::printLastError("close");
 			exit(sock::lastError());
 		}
+
+		clientSockets.erase(clientSockets.begin()+index); // delete the clients socket data
 		pollfds.erase(pollfds.begin()+index+1); // delete the clients pollfd, +1 for the server pollfd
 	}
 
@@ -709,7 +714,7 @@ namespace server {
 
 		pollfd serverPollfd = pollfds[0];
 		if (serverPollfd.revents & POLLIN) { // accept client
-			acceptClient(serverPollfd.fd);
+			acceptClient();
 			checkedPollCount++;
 		}
 
@@ -719,10 +724,10 @@ namespace server {
 		for (int i = 0; i < pollfds.size()-1; i++) {
 			pollfd poll = pollfds[i+1];
 			if (poll.revents & POLLIN) {
-				recvClient(poll.fd);
+				recvClient(clientSockets[i]);
 			}
 			if (poll.revents & POLLHUP) {
-				disconnectClient(poll.fd, i-eraseOffset);
+				disconnectClient(i-eraseOffset);
 				eraseOffset++;
 			}
 
@@ -733,7 +738,9 @@ namespace server {
 		}
 	}
 
-	int getServerSocket(NetworkData& network) {
+	SocketData getServerSocket(NetworkData& network) {
+		SocketData socketData;
+
 		addrinfo hints;
 		addrinfo* serverInfo;
 
@@ -749,39 +756,39 @@ namespace server {
 		}
 
 		// creating the socket
-		int serverSocket;
-		if ((serverSocket = socket(serverInfo->ai_family, serverInfo->ai_socktype, serverInfo->ai_protocol)) < 0) {
+		if ((socketData.stream = socket(serverInfo->ai_family, serverInfo->ai_socktype, serverInfo->ai_protocol)) < 0) {
 			sock::printLastError("socket");
 			exit(sock::lastError());
 		}
 
 		// enable port reuse
 		const char yes = 1;
-		if (setsockopt(serverSocket, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof yes) == -1) {
+		if (setsockopt(socketData.stream, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof yes) == -1) {
 			sock::printLastError("setsockopt");
 			exit(sock::lastError());
 		}
 
 		// bind to port
-		if (bind(serverSocket, serverInfo->ai_addr, serverInfo->ai_addrlen) < 0) {
+		if (bind(socketData.stream, serverInfo->ai_addr, serverInfo->ai_addrlen) < 0) {
 			sock::printLastError("bind");
 			exit(sock::lastError());
 		}
 
-		if (listen(serverSocket, network.backlog) < 0) {
+		if (listen(socketData.stream, network.backlog) < 0) {
 			sock::printLastError("listen");
 			exit(sock::lastError());
 		}
 
+		socketData.addr = *reinterpret_cast<sockaddr_storage*>(serverInfo->ai_addr);
 		freeaddrinfo(serverInfo);
 
-		return serverSocket;
+		return socketData;
 	}
 
 	void loop(NetworkData network) {
-		int serverSocket = getServerSocket(network);
+		serverSocket = getServerSocket(network);
 		pollfd serverPollfd; // make a poll fd for the server socket, gets an event when a new client connects
-		serverPollfd.fd = serverSocket;
+		serverPollfd.fd = serverSocket.stream;
 		serverPollfd.events = POLLIN;
 		serverPollfd.revents = 0;
 		pollfds.push_back(serverPollfd);
@@ -790,11 +797,7 @@ namespace server {
 		while (true) {
 			{
 				std::lock_guard<std::mutex> lk(mTerminate);
-				if (shouldStop) {
-					for (size_t i = 1; i < pollfds.size(); i++)
-						sock::close(pollfds[i].fd);
-					pollfds.clear();
-					clientStorage.clear();
+				if (shouldStop) { 
 					break;
 				}
 			}
@@ -811,11 +814,15 @@ namespace server {
 			if (handlePoll(pollCount) != eSUCCESS)
 				printf("handlePoll failed\n");
 		}
+		// free all resources
+		if (sock::close(serverSocket.stream) == -1)
+			sock::printLastError("Server close(serverSocket)");
+		for (const auto& socket : clientSockets)
+			if (sock::close(socket.stream) == -1)
+				sock::printLastError("Server close(clientSocket)");
 
-		if (sock::close(serverSocket) < 0) {
-			sock::printLastError("close");
-			exit(sock::lastError());
-		}
+		pollfds.clear();
+		clientSockets.clear();
 		printf("server done\n");
 	}
 }
