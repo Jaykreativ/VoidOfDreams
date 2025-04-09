@@ -126,12 +126,6 @@ struct SocketData { // combine the socket and its address into one type, cause t
 	int stream;
 	int dgram;
 	sockaddr_storage addr;
-
-	// creates the dgram socket
-	// the address has to be set
-	void completeDgram() {
-
-	}
 };
 
 /* Packets */
@@ -426,7 +420,6 @@ namespace client {
 
 		memset(&hints, 0, sizeof(hints));
 		hints.ai_family = AF_UNSPEC;
-		hints.ai_socktype = SOCK_STREAM;
 
 		int status;
 		if ((status = getaddrinfo(network.ip.c_str(), network.port.c_str(), &hints, &serverInfo)) != 0) { // get adress from ip and port
@@ -443,14 +436,23 @@ namespace client {
 			}
 		}
 
-		_serverSocket.stream = socket(serverInfo->ai_family, serverInfo->ai_socktype, serverInfo->ai_protocol);
+		_serverSocket.stream = socket(serverInfo->ai_family, SOCK_STREAM, serverInfo->ai_protocol);
 		if (_serverSocket.stream < 0) {
-			sock::printLastError("socket");
+			sock::printLastError("socket(stream)");
+			return false;
+		}
+		_serverSocket.dgram = socket(serverInfo->ai_family, SOCK_DGRAM, serverInfo->ai_protocol);
+		if (_serverSocket.dgram < 0) {
+			sock::printLastError("socket(dgram)");
 			return false;
 		}
 
 		if (connect(_serverSocket.stream, serverInfo->ai_addr, serverInfo->ai_addrlen) < 0) { // connect to the server specified by the ip in network
-			sock::printLastError("connect");
+			sock::printLastError("connect(stream)");
+			return false;
+		}
+		if (connect(_serverSocket.dgram, serverInfo->ai_addr, serverInfo->ai_addrlen) < 0) { // connect to the server specified by the ip in network
+			sock::printLastError("connect(dgram)");
 			return false;
 		}
 		_isConnected = true;
@@ -474,6 +476,7 @@ namespace client {
 		disconnectPacket.sendTo(_serverSocket);
 		_isConnected = false;
 		sock::close(_serverSocket.stream);
+		sock::close(_serverSocket.dgram);
 
 		{ // delete all players as the client is being terminated
 			world.players.clear();
@@ -628,7 +631,8 @@ namespace server {
 	std::unordered_map<int, std::string> _connectionMap = {};
 
 	// the file descriptors used in the poll command
-	// (#0:server)
+	// (#0:tcp server)
+	// (#1:udp server)
 	// index can be converted to corresponding clientSocket index by -1
 	std::vector<pollfd> _pollfds = {};
 
@@ -640,23 +644,28 @@ namespace server {
 	void acceptClient() {
 		sockaddr_storage clientAddr;
 		socklen_t addrSize = sizeof clientAddr;
-		int clientSocket;
-		if ((clientSocket = accept(_serverSocket.stream, reinterpret_cast<sockaddr*>(&clientAddr), &addrSize)) < 0) {
+
+		SocketData socketData;
+		if ((socketData.stream = accept(_serverSocket.stream, reinterpret_cast<sockaddr*>(&clientAddr), &addrSize)) == -1) {
 			sock::printLastError("accept");
 			exit(sock::lastError());
 		}
-
-		SocketData socketData;
-		socketData.stream = clientSocket;
-		socketData.dgram = 0;
+		if ((socketData.dgram = socket(AF_INET, SOCK_DGRAM, 0)) == -1) {
+			sock::printLastError("socket(dgram)");
+			exit(sock::lastError());
+		}
 		socketData.addr = clientAddr;
 		_clientSockets.push_back(socketData);
 
-		pollfd clientPollfd;
-		clientPollfd.fd = clientSocket;
+		pollfd clientPollfd; // only for stream clients
+		clientPollfd.fd = socketData.stream;
 		clientPollfd.events = POLLIN;
 		clientPollfd.revents = 0;
 		_pollfds.push_back(clientPollfd); // add pollfd, client will be inserted into the map when receiving the connect packet
+
+		if (connect(_serverSocket.stream, reinterpret_cast<sockaddr*>(&clientAddr), addrSize) < 0) { // connect to the new client
+			sock::printLastError("connect(dgram)->client");
+		}
 
 		printf("client connected: %s\n", sock::addrToPresentation(reinterpret_cast<sockaddr*>(&clientAddr)).c_str());
 	}
@@ -666,7 +675,11 @@ namespace server {
 		printf("client disconnected: %s\n", sock::addrToPresentation(reinterpret_cast<sockaddr*>(&socket.addr)).c_str());
 
 		if (sock::close(socket.stream) < 0) {
-			sock::printLastError("close");
+			sock::printLastError("close(stream)");
+			exit(sock::lastError());
+		}
+		if (sock::close(socket.dgram) < 0) {
+			sock::printLastError("close(dgram)");
 			exit(sock::lastError());
 		}
 
@@ -768,17 +781,21 @@ namespace server {
 
 		int checkedPollCount = 0;
 
-		pollfd serverPollfd = _pollfds[0];
-		if (serverPollfd.revents & POLLIN) { // accept client
+		pollfd serverStreamPollfd = _pollfds[0];
+		if (serverStreamPollfd.revents & POLLIN) { // accept client
 			acceptClient();
+			checkedPollCount++;
+		}
+		pollfd serverDgramPollfd = _pollfds[1];
+		if (serverDgramPollfd.revents & POLLIN) { // recvClientDgram
 			checkedPollCount++;
 		}
 
 		// go through all clients
 		// i is the index of the client in clientSockets
 		int eraseOffset = 0; // offset the index by the times erase was used as erase shifts all remaining indices by -1
-		for (size_t i = 0; i < _pollfds.size()-1; i++) {
-			pollfd poll = _pollfds[i+1];
+		for (size_t i = 0; i < _pollfds.size()-2; i++) { // go through all client sockets
+			pollfd poll = _pollfds[i+2]; // +2 for the 2 server sockets
 			if (poll.revents & POLLIN) {
 				recvClient(_clientSockets[i - eraseOffset]);
 			}
@@ -814,7 +831,6 @@ namespace server {
 
 		memset(&hints, 0, sizeof(hints));
 		hints.ai_family = AF_INET;
-		hints.ai_socktype = SOCK_STREAM;
 		hints.ai_flags = AI_PASSIVE;
 
 		int status;
@@ -824,20 +840,28 @@ namespace server {
 		}
 
 		// creating the socket
-		if ((socketData.stream = socket(serverInfo->ai_family, serverInfo->ai_socktype, serverInfo->ai_protocol)) < 0) {
+		if ((socketData.stream = socket(serverInfo->ai_family, SOCK_STREAM, serverInfo->ai_protocol)) < 0) {
+			sock::printLastError("socket");
+			exit(sock::lastError());
+		}
+		if ((socketData.dgram = socket(serverInfo->ai_family, SOCK_DGRAM, serverInfo->ai_protocol)) < 0) {
 			sock::printLastError("socket");
 			exit(sock::lastError());
 		}
 
 		// enable port reuse
-		const char yes = 1;
-		if (setsockopt(socketData.stream, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof yes) == -1) {
-			sock::printLastError("setsockopt");
-			exit(sock::lastError());
-		}
+		//const char yes = 1;
+		//if (setsockopt(socketData.stream, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof yes) == -1) {
+		//	sock::printLastError("setsockopt");
+		//	exit(sock::lastError());
+		//}
 
 		// bind to port
 		if (bind(socketData.stream, serverInfo->ai_addr, serverInfo->ai_addrlen) < 0) {
+			sock::printLastError("bind");
+			exit(sock::lastError());
+		}
+		if (bind(socketData.dgram, serverInfo->ai_addr, serverInfo->ai_addrlen) < 0) {
 			sock::printLastError("bind");
 			exit(sock::lastError());
 		}
@@ -848,6 +872,18 @@ namespace server {
 		}
 
 		socketData.addr = *reinterpret_cast<sockaddr_storage*>(serverInfo->ai_addr);
+
+		pollfd serverStreamPollfd; // make a poll fd for the server socket, gets an event when a new client connects
+		serverStreamPollfd.fd = socketData.stream;
+		serverStreamPollfd.events = POLLIN;
+		serverStreamPollfd.revents = 0;
+		_pollfds.push_back(serverStreamPollfd);
+		pollfd serverDgramPollfd; // make a poll fd for the server socket, gets an event when a clientSocketDgram sends data
+		serverDgramPollfd.fd = socketData.dgram;
+		serverDgramPollfd.events = POLLIN;
+		serverDgramPollfd.revents = 0;
+		_pollfds.push_back(serverDgramPollfd);
+
 		freeaddrinfo(serverInfo);
 
 		return socketData;
@@ -855,11 +891,6 @@ namespace server {
 
 	void loop(NetworkData network) {
 		_serverSocket = getServerSocket(network);
-		pollfd serverPollfd; // make a poll fd for the server socket, gets an event when a new client connects
-		serverPollfd.fd = _serverSocket.stream;
-		serverPollfd.events = POLLIN;
-		serverPollfd.revents = 0;
-		_pollfds.push_back(serverPollfd);
 		printf("server running\n");
 
 		while (true) {
@@ -887,7 +918,6 @@ namespace server {
 		printf("server done\n");
 	}
 }
-
 
 void runServer(NetworkData network) {
 	if (server::_isRunning)
