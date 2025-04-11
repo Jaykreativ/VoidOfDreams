@@ -80,7 +80,6 @@ namespace sock {
 		if (sa->sa_family == AF_INET) {
 			return addrToPresentationIPv4(reinterpret_cast<sockaddr_in*>(sa)->sin_addr);
 		}
-
 		return addrToPresentationIPv6(reinterpret_cast<sockaddr_in6*>(sa)->sin6_addr);
 	}
 
@@ -126,6 +125,26 @@ struct SocketData { // combine the socket and its address into one type, cause t
 	int stream;
 	int dgram;
 	sockaddr_storage addr;
+
+	// returns 0 if equal
+	int compAddr(const SocketData& socket) {
+		auto* saa = reinterpret_cast<const sockaddr*>(&addr);
+		auto* sab = reinterpret_cast<const sockaddr*>(&socket.addr);
+		if (saa->sa_family == AF_INET) {
+			sockaddr_in sa4a = *reinterpret_cast<const sockaddr_in*>(saa);
+			sockaddr_in sa4b = *reinterpret_cast<const sockaddr_in*>(sab);
+			return memcmp((char*)&sa4a, (char*)&sa4b, sizeof(sockaddr_in));
+		}
+		else if (saa->sa_family == AF_INET6) {
+			sockaddr_in6 sa6a = *reinterpret_cast<const sockaddr_in6*>(saa);
+			sockaddr_in6 sa6b = *reinterpret_cast<const sockaddr_in6*>(sab);
+			return memcmp((char*)&sa6a, (char*)&sa6b, sizeof(sockaddr_in6));
+		}
+		else {
+			printf("SocketData::compAddr: unsupported address family %i\n", (int)saa->sa_family);
+			exit(0);
+		}
+	}
 };
 
 /* Packets */
@@ -139,9 +158,22 @@ enum PacketType {
 
 class Packet {
 public:
-	void sendTo(SocketData socket, int flags = 0);
+	// send this packet to the specified socket
+	// socket has to be a stream socket or a connected dgram socket
+	void sendTo(int socket, int flags = 0);
 
-	static std::shared_ptr<Packet> receiveFrom(int& type, SocketData socket, int flags = 0);
+	// send this packet to the specified socket
+	// socket has to be a dgram socket
+	void sendToDgram(int socket, const sockaddr* addr, int flags = 0);
+
+	// receive a packet from the specified socket
+	// socket has to be a stream socket or a connected dgram socket
+	static std::shared_ptr<Packet> receiveFrom(int& type, int socket, int flags = 0);
+
+	// receive a packet from the specified socket
+	// socket has to be a dgram socket
+	// the address that sent the received packet will be written to addr with the size of adrrlen
+	static std::shared_ptr<Packet> receiveFromDgram(int& type, int socket, sockaddr* addr, int* addrlen, int flags = 0);
 
 protected:
 	uint32_t fullSize();
@@ -158,7 +190,7 @@ protected:
 	// returns the size of the data stored in the packet
 	static void unpackHeader(const char* buf, uint32_t& size, int& type);
 
-	// takes the pointer to the data part and fills it with the packed data of the package
+	// takes the pointer to a buffer and fills it with the packed packet
 	// should use packHeader
 	virtual void pack(char* buf) = 0;
 
@@ -233,14 +265,20 @@ protected:
 };
 
 // Packet
-void Packet::sendTo(SocketData socket, int flags) {
+void Packet::sendTo(int socket, int flags) {
 	uint32_t len = fullSize();
 	char* buf = new char[len];
 	pack(buf);
 
-	uint32_t offset = 0;
-	while (offset < len) {
-		int bytesSent = send(socket.stream, buf + offset, len - offset, 0);
+	int bytesSent = send(socket, buf, headerSize(), 0); // send header only
+	if (bytesSent == -1) {
+		sock::printLastError("Packet::send");
+		delete[] buf;
+		return;
+	}
+	uint32_t offset = headerSize();
+	while (offset < len) { // send all data
+		bytesSent = send(socket, buf + offset, len - offset, 0);
 		if (bytesSent == -1) {
 			sock::printLastError("Packet::send");
 			delete[] buf;
@@ -251,9 +289,43 @@ void Packet::sendTo(SocketData socket, int flags) {
 	delete[] buf;
 }
 
-std::shared_ptr<Packet> Packet::receiveFrom(int& type, SocketData socket, int flags) {
+void Packet::sendToDgram(int socket, const sockaddr* addr, int flags) {
+	uint32_t len = fullSize();
+	char* buf = new char[len];
+	pack(buf);
+
+	int addrlen;
+	if (addr->sa_family == AF_INET)
+		addrlen = sizeof(sockaddr_in);
+	else if (addr->sa_family == AF_INET6)
+		addrlen = sizeof(sockaddr_in6);
+	else {
+		printf("Packet::sendToDgram address family not supported\n");
+		exit(0);
+	}
+	int bytesSent = sendto(socket, buf, headerSize(), 0, addr, addrlen); // send header only
+	if (bytesSent == -1) {
+		sock::printLastError("Packet::sendto header");
+		delete[] buf;
+		return;
+	}
+	uint32_t offset = headerSize();
+	while (offset < len) { // send all data
+		bytesSent = sendto(socket, buf + offset, len - offset, 0, addr, addrlen);
+		if (bytesSent == -1) {
+			sock::printLastError("Packet::sendto data");
+			delete[] buf;
+			return;
+		}
+		offset += bytesSent;
+	}
+	delete[] buf;
+
+}
+
+std::shared_ptr<Packet> Packet::receiveFrom(int& type, int socket, int flags) {
 	char* buf = new char[headerSize()];
-	int bytesRead = recv(socket.stream, buf, headerSize(), 0); // get just header
+	int bytesRead = recv(socket, buf, headerSize(), 0); // get just header
 	if (bytesRead == -1) {
 		sock::printLastError("Packet::recv header");
 		delete[] buf;
@@ -264,7 +336,7 @@ std::shared_ptr<Packet> Packet::receiveFrom(int& type, SocketData socket, int fl
 	delete[] buf;
 
 	buf = new char[dataSize];
-	bytesRead = recv(socket.stream, buf, dataSize, 0); // get just data
+	bytesRead = recv(socket, buf, dataSize, 0); // get just data
 	if (bytesRead == -1) {
 		sock::printLastError("Packet::recv data");
 		delete[] buf;
@@ -300,6 +372,58 @@ std::shared_ptr<Packet> Packet::receiveFrom(int& type, SocketData socket, int fl
 	delete[] buf;
 
 	return spPacket;
+}
+
+std::shared_ptr<Packet> Packet::receiveFromDgram(int& type, int socket, sockaddr* addr, int* addrlen, int flags) {
+	char* buf = new char[headerSize()] {0};
+	int bytesRead = recvfrom(socket, buf, headerSize(), 0, addr, addrlen); // get just header
+	if (bytesRead == -1) {
+		sock::printLastError("Packet::recvfrom header");
+		delete[] buf;
+		return nullptr;
+	}
+	uint32_t dataSize;
+	unpackHeader(buf, dataSize, type);
+	delete[] buf;
+
+	buf = new char[dataSize];
+	bytesRead = recvfrom(socket, buf, dataSize, 0, addr, addrlen); // get just data
+	if (bytesRead == -1) {
+		sock::printLastError("Packet::recvfrom data");
+		delete[] buf;
+		return nullptr;
+	}
+
+	std::shared_ptr<Packet> spPacket;
+	switch (type)
+	{
+		//case eMESSAGE: {
+		//	spPacket = std::make_shared<MessagePacket>();
+		//	spPacket->unpackData(buf, dataSize);
+		//	break;
+		//}
+	case eCONNECT: {
+		spPacket = std::make_shared<ConnectPacket>();
+		spPacket->unpackData(buf, dataSize);
+		break;
+	}
+	case eDISCONNECT: {
+		spPacket = std::make_shared<DisconnectPacket>();
+		spPacket->unpackData(buf, dataSize);
+		break;
+	}
+	case eMOVE: {
+		spPacket = std::make_shared<MovePacket>();
+		spPacket->unpackData(buf, dataSize);
+		break;
+	}
+	default:
+		break;
+	}
+	delete[] buf;
+
+	return spPacket;
+
 }
 
 uint32_t Packet::fullSize() {
@@ -405,7 +529,8 @@ namespace client {
 	std::thread _receiver;
 
 	SocketData _serverSocket;
-	pollfd _serverPollfd;
+	const size_t _pollfdCount = 2;
+	pollfd _pollfds[_pollfdCount] = {};
 
 	bool isRunning() {
 		std::lock_guard<std::mutex> lk(_mTerminate);
@@ -457,15 +582,18 @@ namespace client {
 		}
 		_isConnected = true;
 
-		_serverPollfd.fd = _serverSocket.stream;
-		_serverPollfd.events = POLLIN;
-		_serverPollfd.revents = 0;
+		_pollfds[0].fd = _serverSocket.stream; // init poll stream
+		_pollfds[0].events = POLLIN;
+		_pollfds[0].revents = 0;
+		_pollfds[1].fd = _serverSocket.dgram; // init poll dgram
+		_pollfds[1].events = POLLIN;
+		_pollfds[1].revents = 0;
 
 		freeaddrinfo(serverInfo);
 
 		ConnectPacket connectPacket;
 		connectPacket.username = network.username;
-		connectPacket.sendTo(_serverSocket);
+		connectPacket.sendTo(_serverSocket.stream);
 
 		return true;
 	}
@@ -473,7 +601,7 @@ namespace client {
 	void stop(NetworkData& network, WorldData& world) {
 		DisconnectPacket disconnectPacket;
 		disconnectPacket.username = network.username;
-		disconnectPacket.sendTo(_serverSocket);
+		disconnectPacket.sendTo(_serverSocket.stream);
 		_isConnected = false;
 		sock::close(_serverSocket.stream);
 		sock::close(_serverSocket.dgram);
@@ -495,6 +623,69 @@ namespace client {
 		stop(network, world);
 	}
 
+	void handlePacket(NetworkData& network, WorldData& world, std::shared_ptr<Packet> spPacket, int type) {
+		if (spPacket) { // check for receive failure
+			switch (type)
+			{
+				//case eMESSAGE: {
+				//	MessagePacket& packet = *reinterpret_cast<MessagePacket*>(spPacket.get());
+				//	printf("client msg: %s (%s)\n", packet.msg.c_str(), packet.id.c_str());
+				//	break;
+				//}
+			case eCONNECT: {
+				ConnectPacket& packet = *reinterpret_cast<ConnectPacket*>(spPacket.get());
+				std::lock_guard<std::mutex> lk(world.mPlayers);
+				world.players[packet.username] = std::make_shared<Player>(*world.scene); // add newly connected player
+				if (packet.username == network.username) { // set this clients player
+					world.pPlayer = world.players.at(packet.username);
+				}
+				break;
+			}
+			case eDISCONNECT: {
+				DisconnectPacket& packet = *reinterpret_cast<DisconnectPacket*>(spPacket.get());
+				std::lock_guard<std::mutex> lk(world.mPlayers);
+				world.players.erase(packet.username); // delete the disconnected player
+				break;
+			}
+			case eMOVE: {
+				MovePacket& packet = *reinterpret_cast<MovePacket*>(spPacket.get());
+				std::lock_guard<std::mutex> lk(world.mPlayers);
+				if (world.players.count(packet.username)) {
+					world.players.at(packet.username)->setTransform(packet.transform);
+				}
+				else {
+					printf("%s cannot be moved because that client isn't connected\n", packet.username.c_str());
+				}
+				break;
+			}
+			default:
+				break;
+			}
+		}
+
+	}
+
+	// return false if failed
+	bool handlePoll(NetworkData& network, WorldData& world) {
+		if (_pollfds[0].revents & POLLHUP) {
+			printf("server closed connection\n");
+			terminateInternal(network, world);
+			return false;
+		}
+		if (_pollfds[0].revents & POLLIN) {
+			int type;
+			auto spPacket = Packet::receiveFrom(type, _serverSocket.stream);
+			handlePacket(network, world, spPacket, type);
+		}
+
+		if (_pollfds[1].revents & POLLIN) {
+			int type;
+			auto spPacket = Packet::receiveFrom(type, _serverSocket.dgram);
+			handlePacket(network, world, spPacket, type);
+		}
+		return true;
+	}
+
 	void receiverLoop(NetworkData network, WorldData* world) {
 		while (true) {
 			{ // stop
@@ -502,52 +693,15 @@ namespace client {
 				if (_shouldStop)
 					break;
 			}
-			int didPoll = sock::pollState(&_serverPollfd, 1, 100);
-			if(didPoll) {
-				if (_serverPollfd.revents & POLLHUP) {
-					printf("server closed connection\n");
-					terminateInternal(network, *world);
+
+			int didPoll = sock::pollState(_pollfds, _pollfdCount, 100);
+			if (didPoll == -1) {
+				sock::printLastError("Client poll");
+				exit(sock::lastError());
+			}
+			if (didPoll) {
+				if (!handlePoll(network, *world)) {
 					break;
-				}
-				int type;
-				auto spPacket = Packet::receiveFrom(type, _serverSocket);
-				if (spPacket) { // check for receive failure
-					switch (type)
-					{
-					case eMESSAGE: {
-						MessagePacket& packet = *reinterpret_cast<MessagePacket*>(spPacket.get());
-						printf("client msg: %s (%s)\n", packet.msg.c_str(), packet.id.c_str());
-						break;
-					}
-					case eCONNECT: {
-						ConnectPacket& packet = *reinterpret_cast<ConnectPacket*>(spPacket.get());
-						std::lock_guard<std::mutex> lk(world->mPlayers);
-						world->players[packet.username] = std::make_shared<Player>(*world->scene); // add newly connected player
-						if (packet.username == network.username) { // set this clients player
-							world->pPlayer = world->players.at(packet.username);
-						}
-						break;
-					}
-					case eDISCONNECT: {
-						DisconnectPacket& packet = *reinterpret_cast<DisconnectPacket*>(spPacket.get());
-						std::lock_guard<std::mutex> lk(world->mPlayers);
-						world->players.erase(packet.username); // delete the disconnected player
-						break;
-					}
-					case eMOVE: {
-						MovePacket& packet = *reinterpret_cast<MovePacket*>(spPacket.get());
-						std::lock_guard<std::mutex> lk(world->mPlayers);
-						if (world->players.count(packet.username)) {
-							world->players.at(packet.username)->setTransform(packet.transform);
-						}
-						else {
-							printf("%s cannot be moved because that client isn't connected\n", packet.username.c_str());
-						}
-						break;
-					}
-					default:
-						break;
-					}
 				}
 			}
 		}
@@ -582,7 +736,7 @@ namespace client {
 			MovePacket packet;
 			packet.username = network.username;
 			packet.transform = spPlayer->getTransform();
-			packet.sendTo(_serverSocket);
+			packet.sendTo(_serverSocket.dgram);
 		}
 	}
 }
@@ -653,7 +807,7 @@ namespace server {
 		if ((socketData.dgram = socket(AF_INET, SOCK_DGRAM, 0)) == -1) {
 			sock::printLastError("socket(dgram)");
 			exit(sock::lastError());
-		}
+		} 
 		socketData.addr = clientAddr;
 		_clientSockets.push_back(socketData);
 
@@ -663,7 +817,7 @@ namespace server {
 		clientPollfd.revents = 0;
 		_pollfds.push_back(clientPollfd); // add pollfd, client will be inserted into the map when receiving the connect packet
 
-		if (connect(_serverSocket.stream, reinterpret_cast<sockaddr*>(&clientAddr), addrSize) < 0) { // connect to the new client
+		if (connect(socketData.dgram, reinterpret_cast<sockaddr*>(&clientAddr), addrSize) < 0) { // connect to the new client
 			sock::printLastError("connect(dgram)->client");
 		}
 
@@ -688,29 +842,27 @@ namespace server {
 		_eraseOffset++;
 	}
 
-	void recvClient(SocketData socket) {
-		int type;
-		auto spPacket = Packet::receiveFrom(type, socket);
+	void handlePacket(SocketData socket, std::shared_ptr<Packet> spPacket, int type) {
 		switch (type)
 		{
-		//case eMESSAGE: {
-		//	MessagePacket& packet = *reinterpret_cast<MessagePacket*>(spPacket.get());
-		//	printf("server msg: %s (%s)\n", packet.msg.c_str(), packet.id.c_str());
-		//	for (int clientSocket : clientStorage.sockets)
-		//		packet.sendTo(clientSocket);
-		//	break;
-		//}
+			//case eMESSAGE: {
+			//	MessagePacket& packet = *reinterpret_cast<MessagePacket*>(spPacket.get());
+			//	printf("server msg: %s (%s)\n", packet.msg.c_str(), packet.id.c_str());
+			//	for (int clientSocket : clientStorage.sockets)
+			//		packet.sendTo(clientSocket);
+			//	break;
+			//}
 		case eCONNECT: { // uses stream sockets
 			ConnectPacket& packet = *reinterpret_cast<ConnectPacket*>(spPacket.get());
 
 			{
 				bool nameTaken = false;
-				for(const auto& connectionPair : _connectionMap)
+				for (const auto& connectionPair : _connectionMap)
 					if (connectionPair.second == packet.username) {
 						nameTaken = true;
 						break;
 					}
-				if (nameTaken) { 
+				if (nameTaken) {
 					printf("%s already present, wont be accepted\n", packet.username.c_str());
 					int i = 0;
 					for (const auto& comp : _clientSockets) {
@@ -722,16 +874,16 @@ namespace server {
 					break;
 				}
 			} // prevent multiple usernames
-			
+
 			_connectionMap[socket.stream] = packet.username;
 			printf("%s joined the server\n", packet.username.c_str());
 
 			for (auto clientSocket : _clientSockets) {
-				packet.sendTo(clientSocket); // tell all clients(including the new one) that a new player joined
+				packet.sendTo(clientSocket.stream); // tell all clients(including the new one) that a new player joined
 				if (clientSocket.stream != socket.stream) {
 					ConnectPacket connectPacket;
 					connectPacket.username = _connectionMap.at(clientSocket.stream);
-					connectPacket.sendTo(socket); // send the new client all clients that where already present
+					connectPacket.sendTo(socket.stream); // send the new client all clients that where already present
 				}
 			}
 
@@ -756,16 +908,16 @@ namespace server {
 			printf("%s left the server\n", packet.username.c_str());
 			_connectionMap.erase(socket.stream);
 			for (auto clientSocket : _clientSockets) {
-				if(clientSocket.stream != socket.stream)
-					packet.sendTo(clientSocket);
+				if (clientSocket.stream != socket.stream)
+					packet.sendTo(clientSocket.stream);
 			}
 			break;
 		}
-		case eMOVE: {
+		case eMOVE: { // uses dgram sockets
 			MovePacket& packet = *reinterpret_cast<MovePacket*>(spPacket.get());
 			for (auto clientSocket : _clientSockets) {
-				if(clientSocket.stream != socket.stream)
-					packet.sendTo(clientSocket);
+				if (clientSocket.compAddr(socket) != 0)
+					packet.sendToDgram(clientSocket.dgram, reinterpret_cast<const sockaddr*>(&clientSocket.addr));
 			}
 			break;
 		}
@@ -773,6 +925,23 @@ namespace server {
 			break;
 		}
 		}
+	}
+
+	void recvClientDgram() {
+		sockaddr_storage addr;
+		int addrlen = sizeof(sockaddr_storage);
+
+		int type;
+		auto spPacket = Packet::receiveFromDgram(type, _serverSocket.dgram, reinterpret_cast<sockaddr*>(&addr), &addrlen);
+		SocketData addrOnly;
+		addrOnly.addr = addr;
+		handlePacket(addrOnly, spPacket, type); // for dgram packets only their origin address is known while the sockets are unknown
+	}
+
+	void recvClient(SocketData socket) {
+		int type;
+		auto spPacket = Packet::receiveFrom(type, socket.stream);
+		handlePacket(socket, spPacket, type);
 	}
 
 	void handlePoll(int pollCount) {
@@ -788,6 +957,7 @@ namespace server {
 		}
 		pollfd serverDgramPollfd = _pollfds[1];
 		if (serverDgramPollfd.revents & POLLIN) { // recvClientDgram
+			recvClientDgram();
 			checkedPollCount++;
 		}
 
@@ -802,7 +972,7 @@ namespace server {
 			if (poll.revents & POLLHUP) {
 				disconnectClient(i - eraseOffset);
 			}
-
+		
 			if (poll.revents & (POLLIN | POLLHUP)) // add checked if poll had events
 				checkedPollCount++;
 			if (checkedPollCount >= pollCount) // return when all polls are checked
@@ -850,11 +1020,13 @@ namespace server {
 		}
 
 		// enable port reuse
-		//const char yes = 1;
-		//if (setsockopt(socketData.stream, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof yes) == -1) {
-		//	sock::printLastError("setsockopt");
-		//	exit(sock::lastError());
-		//}
+		const char yes = 1;
+		if (setsockopt(socketData.stream, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof yes) == -1) {
+			sock::printLastError("setsockopt");
+		}
+		if (setsockopt(socketData.dgram, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof yes) == -1) {
+			sock::printLastError("setsockopt");
+		}
 
 		// bind to port
 		if (bind(socketData.stream, serverInfo->ai_addr, serverInfo->ai_addrlen) < 0) {
