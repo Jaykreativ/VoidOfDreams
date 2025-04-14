@@ -570,6 +570,10 @@ namespace client {
 	// initializes resources for client networking
 	// returns false on failure
 	bool start(NetworkData& network) {
+		if (client::_isRunning)
+			return true;
+		client::_isRunning = true;
+
 		addrinfo hints;
 		addrinfo* serverInfo;
 
@@ -635,14 +639,21 @@ namespace client {
 	}
 
 	void stop(NetworkData& network, WorldData& world) {
-		DisconnectPacket disconnectPacket;
-		disconnectPacket.username = network.username;
-		disconnectPacket.sendTo(_serverSocket.stream);
-		_isConnected = false;
+		if (!client::_isRunning)
+			return;
+		client::_isRunning = false;
+
+		if (_isConnected) {
+			DisconnectPacket disconnectPacket;
+			disconnectPacket.username = network.username;
+			disconnectPacket.sendTo(_serverSocket.stream);
+			_isConnected = false;
+		}
 		sock::close(_serverSocket.stream);
 		sock::close(_serverSocket.dgram);
 
 		{ // delete all players as the client is being terminated
+			std::lock_guard<std::mutex> lk(world.mPlayers);
 			world.players.clear();
 		}
 
@@ -652,8 +663,6 @@ namespace client {
 	// terminates the client from a client thread
 	void terminateInternal(NetworkData& network, WorldData& world) {
 		std::lock_guard<std::mutex> lk(_mTerminate);
-		_isRunning = false;
-		_isConnected = false;
 		_shouldStop = true;
 		_receiver.detach();
 		stop(network, world);
@@ -775,6 +784,7 @@ namespace client {
 	//}
 
 	void sendPlayerMove(NetworkData& network, WorldData& world) {
+		std::lock_guard<std::mutex> lk(_mTerminate);
 		if(_isConnected) if (std::shared_ptr<Player> spPlayer = world.pPlayer.lock()) {
 			MovePacket packet;
 			packet.username = network.username;
@@ -785,12 +795,10 @@ namespace client {
 }
 
 bool runClient(NetworkData& network, WorldData& world) {
-	if (client::_isRunning)
-		return true;
-	client::_isRunning = true;
-
-	if (!client::start(network))
+	if (!client::start(network)) {
+		client::stop(network, world);
 		return false;
+	}
 	client::_shouldStop = false;
 	//client::sender = std::thread(client::senderLoop, network, &world);
 	client::_receiver = std::thread(client::receiverLoop, network, &world);
@@ -798,10 +806,6 @@ bool runClient(NetworkData& network, WorldData& world) {
 }
 
 void terminateClient(NetworkData& network, WorldData& world) {
-	if (!client::_isRunning)
-		return;
-	client::_isRunning = false;
-
 	{
 		std::lock_guard<std::mutex> lk(client::_mTerminate);
 		client::_shouldStop = true;

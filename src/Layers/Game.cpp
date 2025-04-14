@@ -41,7 +41,10 @@ void update(WorldData& world, Controls& controls, float dt, Zap::Window& window)
 }
 
 void drawNetworkInterface(NetworkData& network, WorldData& world) {
-	if (server::isRunning() || client::isRunning())
+	bool serverRunning = server::isRunning();
+	bool clientRunning = client::isRunning();
+
+	if (serverRunning || clientRunning)
 		ImGui::BeginDisabled();
 	static char usernameBuf[50] = "";
 	memcpy(usernameBuf, network.username.data(), std::min<int>(50, network.username.size()));
@@ -57,10 +60,10 @@ void drawNetworkInterface(NetworkData& network, WorldData& world) {
 	memcpy(portBuf, network.port.data(), std::min<int>(6, network.port.size()));
 	ImGui::InputText("port", portBuf, 6);
 	network.port = portBuf;
-	if (server::isRunning() || client::isRunning())
+	if (serverRunning || clientRunning)
 		ImGui::EndDisabled();
 
-	if (server::isRunning()) {
+	if (serverRunning) {
 		if (ImGui::Button("Stop Server")) {
 			terminateServer();
 		}
@@ -71,7 +74,7 @@ void drawNetworkInterface(NetworkData& network, WorldData& world) {
 		}
 	}
 	
-	if (client::isRunning()) {
+	if (clientRunning) {
 		if (ImGui::Button("Stop Client")) {
 			terminateClient(network, world);
 		}
