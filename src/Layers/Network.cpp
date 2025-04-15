@@ -142,7 +142,6 @@ void ntohMat4(const void* nData, glm::mat4& mat4) {
 	}
 }
 
-static uint32_t _idCount = 0;
 struct SocketData { // combine the socket and its address into one type, cause they're always needed when using both tcp and udp.
 	std::string username;
 	int stream;
@@ -302,15 +301,9 @@ void Packet::sendTo(int socket, int flags) {
 	char* buf = new char[len];
 	pack(buf);
 
-	int bytesSent = send(socket, buf, headerSize(), 0); // send header only
-	if (bytesSent == -1) {
-		sock::printLastError("Packet::send");
-		delete[] buf;
-		return;
-	}
-	uint32_t offset = headerSize();
-	while (offset < len) { // send all data
-		bytesSent = send(socket, buf + offset, len - offset, 0);
+	uint32_t offset = 0;
+	while (offset < len) {
+		int bytesSent = send(socket, buf + offset, len - offset, 0);
 		if (bytesSent == -1) {
 			sock::printLastError("Packet::send");
 			delete[] buf;
