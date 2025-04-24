@@ -13,11 +13,14 @@
 #include "imgui.h"
 
 #include <chrono>
-#include <thread>
+#include <string>
+#include <unordered_map>
 
 namespace logger {
 	typedef std::chrono::nanoseconds RegionDuration;
+	typedef std::chrono::duration<float> RegionDurationSFloat;
 	typedef std::chrono::time_point<std::chrono::steady_clock> RegionTimePoint;
+
 	struct RegionTime {
 		RegionTimePoint beginTime = RegionTimePoint(RegionDuration(-1));
 		RegionTimePoint endTime = RegionTimePoint(RegionDuration(-1));
@@ -31,37 +34,73 @@ namespace logger {
 		RegionTime time = {};
 	};
 
+	Settings _settings;
+
 	std::vector<std::string> _regionStack;
 
 	// time storage
 	RegionTimePoint _programStartTime = std::chrono::high_resolution_clock::now();
 	RegionTimeProfile _rootTimeProfile = {};
 	RegionTimeProfile* _pCurrentTimeProfile = &_rootTimeProfile;
-
-	// time gui
 	RegionDuration _timelineValidDuration = std::chrono::seconds(10); // default to ten seconds to view
 
-	void initLog() {
-		_rootTimeProfile.region = "root";
-		_rootTimeProfile.time.beginTime = std::chrono::high_resolution_clock::now();
+	// frameview
+	bool _isInFrame = false;
+	struct RegionFrameTime {
+		RegionFrameTime* parent = nullptr;
+		std::unordered_map<std::string, RegionFrameTime> children = {};
+
+		std::string region = "";
+		float duration = 0;
+		size_t samples = 0;
+
+		RegionTime time = {};
+	};
+	RegionFrameTime _rootFrameTime = {};
+	RegionFrameTime* _pCurrentFrameTime = &_rootFrameTime;
+
+	void initLog(Settings settings) {
+		_settings = settings;
+
+		if (_settings.enableGlobalTimestamps) {
+			_rootTimeProfile.region = "root";
+			_rootTimeProfile.time.beginTime = std::chrono::high_resolution_clock::now();
+		}
 
 		_regionStack = {};
 	}
 
 	void terminateLog() {}
 
-	void beginRegion(std::string name) {
-		_pCurrentTimeProfile->childProfiles.push_back({_pCurrentTimeProfile}); // make a new time profile in the tree
-		_pCurrentTimeProfile = &_pCurrentTimeProfile->childProfiles.back();
+	void frameTimeBegin(std::string region);
 
-		_pCurrentTimeProfile->region = name;
-		_pCurrentTimeProfile->time.beginTime = std::chrono::high_resolution_clock::now(); // save the begin time
+	void frameTimeEnd(std::string region);
+
+	void beginRegion(std::string name) {
+		if (_settings.enableGlobalTimestamps) {
+			_pCurrentTimeProfile->childProfiles.push_back({_pCurrentTimeProfile}); // make a new time profile in the tree
+			_pCurrentTimeProfile = &_pCurrentTimeProfile->childProfiles.back();
+
+			_pCurrentTimeProfile->region = name;
+			_pCurrentTimeProfile->time.beginTime = std::chrono::high_resolution_clock::now(); // save the begin time
+		}
+
+		if (_isInFrame && _settings.enableFrameTimestamps) {
+			frameTimeBegin(name);
+		}
+
 		_regionStack.push_back(name);
 	}
 
 	void endRegion() {
-		_pCurrentTimeProfile->time.endTime = std::chrono::high_resolution_clock::now(); // save the end time
-		_pCurrentTimeProfile = _pCurrentTimeProfile->parentProfile; // go back to parent
+		if (_settings.enableGlobalTimestamps) {
+			_pCurrentTimeProfile->time.endTime = std::chrono::high_resolution_clock::now(); // save the end time
+			_pCurrentTimeProfile = _pCurrentTimeProfile->parentProfile; // go back to parent
+		}
+
+		if (_isInFrame && _settings.enableFrameTimestamps) {
+			frameTimeEnd(_regionStack.back());
+		}
 
 		_regionStack.pop_back();
 	}
@@ -106,37 +145,63 @@ namespace logger {
 		printf("%lld\n", _timelineValidDuration.count());
 	}
 
-	void cleanProfile(RegionTimeProfile& profile, uint32_t index) {
+	void cleanProfile(RegionTimeProfile& profile, uint32_t& index) {
 		if (profile.time.endTime > RegionTimePoint(RegionDuration(0)) &&
 			std::chrono::high_resolution_clock::now() - profile.time.endTime > _timelineValidDuration
 		) {
-			profile.parentProfile->childProfiles.erase(profile.parentProfile->childProfiles.begin() + index);
+			profile.parentProfile->childProfiles.erase(profile.parentProfile->childProfiles.begin() + index); // TODO fix parent ptr getting invalid
+			index--;
 			return;
 		}
-		uint32_t i = 0;
-		for (auto& childProfile : profile.childProfiles) {
-			cleanProfile(childProfile, i);
-			i++;
+		for (uint32_t i = 0; i < profile.childProfiles.size(); i++) {
+			cleanProfile(profile.childProfiles[i], i);
 		}
 	}
 
 	void cleanTimeline() {
-		uint32_t i = 0;
-		for (auto& childProfile : _rootTimeProfile.childProfiles) {
-			cleanProfile(childProfile, i);
-			i++;
+		for (uint32_t i = 0; i < _rootTimeProfile.childProfiles.size(); i++) {
+			cleanProfile(_rootTimeProfile.childProfiles[i], i);
 		}
+	}
+
+	void frameTimeBegin(std::string region) {
+		auto* newFrameTime = &_pCurrentFrameTime->children[region];
+		newFrameTime->parent = _pCurrentFrameTime;
+		newFrameTime->region = region;
+		newFrameTime->time.beginTime = std::chrono::high_resolution_clock::now();
+		_pCurrentFrameTime = newFrameTime;
+	}
+
+	void frameTimeEnd(std::string region) {
+		_pCurrentFrameTime->time.endTime = std::chrono::high_resolution_clock::now();
+		float duration = std::chrono::duration_cast<RegionDurationSFloat>(_pCurrentFrameTime->time.endTime - _pCurrentFrameTime->time.beginTime).count();
+		_pCurrentFrameTime->duration = (_pCurrentFrameTime->duration * _pCurrentFrameTime->samples + duration) / (_pCurrentFrameTime->samples + 1);
+		_pCurrentFrameTime->samples++;
+		_pCurrentFrameTime = _pCurrentFrameTime->parent;
+	}
+
+	void beginFrame() {
+		_isInFrame = true;
+		_rootFrameTime.parent = nullptr;
+		_rootFrameTime.region = "root";
+		_rootFrameTime.time.beginTime = std::chrono::high_resolution_clock::now();
+		_pCurrentFrameTime = &_rootFrameTime;
+	}
+
+	void endFrame() {
+		_isInFrame = false;
+		_rootFrameTime.time.endTime = std::chrono::high_resolution_clock::now();
+		float duration = std::chrono::duration_cast<RegionDurationSFloat>(_pCurrentFrameTime->time.endTime - _pCurrentFrameTime->time.beginTime).count();
+		_rootFrameTime.duration = (_rootFrameTime.duration * _rootFrameTime.samples + duration) / (_rootFrameTime.samples + 1);
+		_rootFrameTime.samples++;
 	}
 
 	struct TimelineGuiData {
 		float width = 0;
 		RegionTimePoint now;
+		RegionDuration viewDuration = std::chrono::round<RegionDuration>(RegionDurationSFloat(1));
 		glm::vec2 zero = {0, 0};
 	} _timelineGuiData;
-
-	void drawTimeBlock(RegionTimePoint begin, RegionTimePoint end) {
-
-	}
 
 	void drawRegionProfile(const RegionTimeProfile& profile, uint32_t depth) {
 		auto* drawList = ImGui::GetWindowDrawList();
@@ -147,9 +212,10 @@ namespace logger {
 			endFromNow = 0;
 		else
 			endFromNow = std::chrono::duration_cast<std::chrono::duration<float>>(_timelineGuiData.now - profile.time.endTime).count();
-		float guiDuration = std::chrono::duration_cast<std::chrono::duration<float>>(_timelineValidDuration).count();
+		float guiDuration = std::chrono::duration_cast<std::chrono::duration<float>>(_timelineGuiData.viewDuration).count();
 
-		auto seed = (uint32_t)(&profile); // generate random color from object ptr
+		std::hash<std::string> strHasher	;
+		auto seed = strHasher(profile.region); // generate random color from region string, same string results in same color
 		float randColor[3];
 		srand(seed); seed = rand();
 		randColor[0] = (float)(seed % 256) / 256;
@@ -174,10 +240,108 @@ namespace logger {
 	}
 
 	void drawTimelineImGui() {
+		if (!_settings.enableGlobalTimestamps) {
+			ImGui::Text("Global Timestamps are disabled");
+			return;
+		}
 
 		_timelineGuiData.width = ImGui::GetContentRegionAvail().x;
 		_timelineGuiData.now = std::chrono::high_resolution_clock::now();
 		_timelineGuiData.zero = (glm::vec2)ImGui::GetWindowContentRegionMin() + (glm::vec2)ImGui::GetWindowPos();
+
+		// input for view duration
+		float duration = std::chrono::duration_cast<RegionDurationSFloat>(_timelineGuiData.viewDuration).count();
+		float maxDuration = std::chrono::duration_cast<RegionDurationSFloat>(_timelineValidDuration).count();
+		ImGui::SliderFloat("view duration", &duration, 0.001, maxDuration);
+		_timelineGuiData.viewDuration = std::chrono::round<RegionDuration>(RegionDurationSFloat(duration));
+
 		drawRegionProfile(_rootTimeProfile, 0);
+	}
+
+	struct FrameProfileGuiData {
+		glm::vec2 contentMin = {};
+		glm::vec2 contentMax = {};
+	} _frameProfileGuiData;
+
+	void drawFrameRegion(RegionFrameTime& frameTime, uint32_t depth) {
+		auto* drawList = ImGui::GetWindowDrawList();
+
+		float xPos = _frameProfileGuiData.contentMin.x;
+		float xOffset = ImGui::GetCursorPosX();
+		float xSize = ImGui::GetWindowContentRegionMax().x - ImGui::GetWindowContentRegionMin().x;
+		float yPos = _frameProfileGuiData.contentMin.y;
+		float yOffset = ImGui::GetCursorPosY();
+		float yOffsetText = ImGui::GetCursorPosY();
+		float ySize = ImGui::GetTextLineHeightWithSpacing()*frameTime.children.size();
+
+		for (auto& childPair : frameTime.children) {
+			std::hash<std::string> strHasher;
+			auto seed = strHasher(childPair.second.region); // generate random color from region string, same string results in same color
+			float randColor[3];
+			srand(seed); seed = rand();
+			randColor[0] = (float)(seed % 256) / 256;
+			srand(seed); seed = rand();
+			randColor[1] = (float)(seed % 256) / 256;
+			srand(seed); seed = rand();
+			randColor[2] = (float)(seed % 256) / 256;
+			ImU32 color = ImGui::GetColorU32({ randColor[0], randColor[1], randColor[2], .5 });
+
+			float xDurationSize = xSize * childPair.second.duration / frameTime.duration;
+			drawList->AddRectFilled(
+				{ xPos + xOffset, yPos + yOffset },
+				{ xPos + xOffset + xDurationSize, yPos + yOffset + ySize},
+				color);
+			xOffset += xDurationSize;
+		}
+		xOffset = ImGui::GetCursorPosX();
+		yOffset = ImGui::GetCursorPosY();
+		yOffsetText = ImGui::GetCursorPosY();
+		for (auto& childPair : frameTime.children) {
+			std::hash<std::string> strHasher;
+			auto seed = strHasher(childPair.second.region); // generate random color from region string, same string results in same color
+			float randColor[3];
+			srand(seed); seed = rand();
+			randColor[0] = (float)(seed % 256) / 256;
+			srand(seed); seed = rand();
+			randColor[1] = (float)(seed % 256) / 256;
+			srand(seed); seed = rand();
+			randColor[2] = (float)(seed % 256) / 256;
+			ImU32 color = ImGui::GetColorU32({ randColor[0], randColor[1], randColor[2], .5 });
+
+			float xDurationSize = xSize * childPair.second.duration / frameTime.duration;
+			std::string text = childPair.second.region + "(" + std::to_string(childPair.second.duration*1000) + "ms)";
+			drawList->AddText({ xPos + xOffset, yPos + yOffsetText }, ImGui::GetColorU32({1, 1, 1, 1}), text.data(), text.data() + text.size());
+			xOffset += xDurationSize;
+			yOffsetText += ImGui::GetTextLineHeightWithSpacing();
+		}
+		ImGui::SetCursorPosY(yOffset + ySize + 10);
+
+		for (auto& childPair : frameTime.children) {
+			drawFrameRegion(childPair.second, depth + 1);
+		}
+
+	}
+
+	void clearSamples(RegionFrameTime& frameTime) {
+		frameTime.samples = 0;
+		for (auto& childPair : frameTime.children)
+			clearSamples(childPair.second);
+	};
+
+	void drawFrameProfileImGui() {
+		if (!_settings.enableFrameTimestamps) {
+			ImGui::Text("Frame Timestamps are disabled");
+			return;
+		}
+
+		if (ImGui::Button("reset")) {
+			clearSamples(_rootFrameTime);
+		}
+
+
+		_frameProfileGuiData.contentMin = (glm::vec2)ImGui::GetWindowPos();
+		_frameProfileGuiData.contentMax = _frameProfileGuiData.contentMin + (glm::vec2)ImGui::GetContentRegionAvail();
+
+		drawFrameRegion(_rootFrameTime, 0);
 	}
 }

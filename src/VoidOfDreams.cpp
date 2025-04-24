@@ -29,7 +29,7 @@ void closeWSA() {
 #endif // _WIN32
 
 void main() {
-	logger::initLog();
+	logger::initLog({false, true});
 	logger::beginRegion("main");
 
 #ifdef _WIN32

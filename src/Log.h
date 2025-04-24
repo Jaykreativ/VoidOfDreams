@@ -4,7 +4,13 @@
 #include <vector>
 
 namespace logger {
-	void initLog();
+
+	struct Settings {
+		bool enableGlobalTimestamps = false;
+		bool enableFrameTimestamps = false;
+	};
+
+	void initLog(Settings settings = Settings{});
 
 	void terminateLog();
 
@@ -22,17 +28,22 @@ namespace logger {
 	void info(std::string msg);
 	void infoRaw(std::string msg);
 
-
 	std::string getCurrentRegion();
 
 	const std::vector<std::string>& getRegionStack();
 
-	// delete old profiles
-	// this has to be called from time to time to not run out of memory
 	// duration in seconds
 	void setTimelineValidDuration(float duration);
 
+	// delete old profiles
+	// this has to be called from time to time to not run out of memory
 	void cleanTimeline();
 
+	void beginFrame();
+
+	void endFrame();
+
 	void drawTimelineImGui();
+
+	void drawFrameProfileImGui();
 }
