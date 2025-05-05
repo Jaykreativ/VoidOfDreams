@@ -1,19 +1,19 @@
 meshCount: 3;
 [Mesh0] {
 handle: 1350689233431339116;
-filepath: C:\Users\Jan\source\repos\Jaykreativ\Void of Dreams\Models\Player.glb;
+filepath: Models\Player.glb;
 index: 0;
 transform: mat4x4((1.000000, 0.000000, 0.000000, 0.000000), (0.000000, 1.000000, 0.000000, 0.000000), (0.000000, 0.000000, 1.000000, 0.000000), (0.000000, 0.000000, 0.000000, 1.000000));
 }
 [Mesh1] {
 handle: 15688062647189668350;
-filepath: C:\Users\Jan\source\repos\Jaykreativ\Void of Dreams\Models\Player.glb;
+filepath: Models\Player.glb;
 index: 1;
 transform: mat4x4((1.000000, 0.000000, 0.000000, 0.000000), (0.000000, 1.000000, 0.000000, 0.000000), (0.000000, 0.000000, 1.000000, 0.000000), (0.000000, 0.000000, 0.000000, 1.000000));
 }
 [Mesh2] {
 handle: 8680218850382325513;
-filepath: C:\Users\Jan\source\repos\Jaykreativ\Void of Dreams\Models\Cube.obj;
+filepath: Models\Cube.obj;
 index: 0;
 transform: mat4x4((1.000000, 0.000000, 0.000000, 0.000000), (0.000000, 1.000000, 0.000000, 0.000000), (0.000000, 0.000000, 1.000000, 0.000000), (0.000000, 0.000000, 0.000000, 1.000000));
 }
