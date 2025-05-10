@@ -46,3 +46,9 @@ filepath: Models\Cube.obj;
 index: 1;
 }
 textureCount: 0;
+hitMeshCount: 1;
+[HitMesh0] {
+handle: 6441665543458331982;
+filepath: Models\PlayerConvexHull.obj;
+index: 0;
+}
