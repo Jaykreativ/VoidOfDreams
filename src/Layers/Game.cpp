@@ -1,6 +1,8 @@
 #include "Game.h"
 
 #include "Log.h"
+#include "Layers/Network.h"
+#include "Shares/NetworkData.h"
 #include "Shares/Render.h"
 #include "Shares/World.h"
 
@@ -28,22 +30,88 @@ void update(WorldData& world, Controls& controls, float dt, Zap::Window& window)
 	if (ImGui::Button("Third Person"))
 		controls.cameraMode = Controls::eTHIRD_PERSON;
 
-	world.pPlayer->updateAnimations(dt);
-	if(captured)
-		world.pPlayer->updateInputs(controls, dt);
-	world.pPlayer->update(controls);
+	std::lock_guard<std::mutex> lk(world.mPlayers);
+	if(captured) if (std::shared_ptr<Player> spPlayer = world.pPlayer.lock()) {
+		spPlayer->updateInputs(controls, dt);
+	}
+	for (auto spPlayerPair : world.players) {
+		spPlayerPair.second->updateAnimations(dt);
+		spPlayerPair.second->update(controls);
+	}
 }
 
-void gameLoop(RenderData& render, WorldData& world, Controls& controls) {
+void drawNetworkInterface(NetworkData& network, WorldData& world) {
+	bool serverRunning = server::isRunning();
+	bool clientRunning = client::isRunning();
+
+	if (serverRunning || clientRunning)
+		ImGui::BeginDisabled();
+	static char usernameBuf[50] = "";
+	memcpy(usernameBuf, network.username.data(), std::min<int>(50, network.username.size()));
+	ImGui::InputText("username", usernameBuf, 50);
+	network.username = usernameBuf;
+	
+	static char ipBuf[16] = "";
+	memcpy(ipBuf, network.ip.data(), std::min<int>(16, network.ip.size()));
+	ImGui::InputText("ip", ipBuf, 16);
+	network.ip = ipBuf;
+
+	static char portBuf[6] = "";
+	memcpy(portBuf, network.port.data(), std::min<int>(6, network.port.size()));
+	ImGui::InputText("port", portBuf, 6);
+	network.port = portBuf;
+	if (serverRunning || clientRunning)
+		ImGui::EndDisabled();
+
+	if (serverRunning) {
+		if (ImGui::Button("Stop Server")) {
+			terminateServer();
+		}
+	}
+	else {
+		if (ImGui::Button("Start Server")) {
+			runServer(network);
+		}
+	}
+	
+	if (clientRunning) {
+		if (ImGui::Button("Stop Client")) {
+			terminateClient(network, world);
+		}
+	}
+	else {
+		if (ImGui::Button("Start Client")) {
+			runClient(network, world);
+		}
+	}  
+}
+
+void gameLoop(RenderData& render, WorldData& world, NetworkData& network, Controls& controls) {
 	float deltaTime = 0;
 	while (!render.window->shouldClose()) {
 		//logger::beginRegion("loop"); // define regions for profiling
 		auto startFrame = std::chrono::high_resolution_clock::now();
 
+
 		update(world, controls, deltaTime, *render.window);
 
-		render.pbRender->updateCamera(world.pPlayer->getCamera());
-		world.scene->update();
+		{
+			std::lock_guard<std::mutex> lk(world.mPlayers);
+			if (std::shared_ptr<Player> spPlayer = world.pPlayer.lock()) { // enable rendering only if player is selected
+				render.pbRender->updateCamera(spPlayer->getCamera());
+				render.pbRender->enable();
+				world.scene->update();
+			}
+			else {
+				render.pbRender->disable();
+				ImGui::GetBackgroundDrawList()->AddRectFilled({ 0, 0 }, ImGui::GetMainViewport()->Size, ImGui::GetColorU32(render.pbRender->clearColor));
+			}
+
+			client::sendPlayerMove(network, world);
+		}
+
+		drawNetworkInterface(network, world);
+
 		render.renderer->render();
 
 		render.window->present();
@@ -60,10 +128,7 @@ void setupWorld(WorldData& world) {
 	Zap::ActorLoader loader;
 	loader.load((std::string)"Actors/Light.zac", world.scene);  // Loading actor from file, they can be changed using the editor
 	loader.load((std::string)"Actors/Light2.zac", world.scene); // All actors can be changed at runtime
-	loader.load((std::string)"Actors/Cube.zac", world.scene);
-
-	world.pPlayer = std::make_unique<Player>(*world.scene, loader); // create player, will be deleted when world exits scope
-}
+	loader.load((std::string)"Actors/Cube.zac", world.scene);}
 
 void resize(Zap::ResizeEvent& eventParams, void* customParams) {
 	Zap::PBRenderer* pbRender = reinterpret_cast<Zap::PBRenderer*>(customParams);
@@ -73,11 +138,11 @@ void resize(Zap::ResizeEvent& eventParams, void* customParams) {
 void runGame() {
 	RenderData render = {};
 	WorldData world = {};
+	NetworkData network = {};
 	Controls controls = {};
 
 	render.window = new Zap::Window(1000, 600, "Void of Dreams");
 	render.window->init();
-
 
 	world.scene = new Zap::Scene();
 
@@ -111,7 +176,12 @@ void runGame() {
 
 	render.window->show();
 
-	gameLoop(render, world, controls);
+	gameLoop(render, world, network, controls);
+
+	terminateClient(network, world); // terminate networking if still running
+	terminateServer();
+
+	world.players.clear();
 
 	render.renderer->destroy();
 	delete render.renderer;

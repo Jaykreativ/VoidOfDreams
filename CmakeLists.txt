@@ -41,6 +41,12 @@ set(Zap_DIR "${PROJECT_SOURCE_DIR}/Zap")
 add_subdirectory(${Zap_DIR} "${Zap_DIR}/${CMAKE_BUILD_TYPE}")
 
 target_link_libraries(VOD PUBLIC Zap)
+if(WIN32)
+target_link_libraries(
+	VOD PUBLIC
+	"ws2_32.lib"
+)
+endif(WIN32)
 target_include_directories(
     VOD PUBLIC
     "${PROJECT_BINARY_DIR}"

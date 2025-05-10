@@ -8,6 +8,7 @@
 #include <string>
 
 Player::Player(Zap::Scene& scene, Zap::ActorLoader loader) {
+	loader.flags = loader.flags | Zap::ActorLoader::eReuseActor;
 	m_base = loader.load(std::filesystem::path(ACTOR_DIR) / std::filesystem::path("PlayerBase.zac"), &scene);
 	m_core = loader.load(std::filesystem::path(ACTOR_DIR) / std::filesystem::path("PlayerCore.zac"), &scene);
 	m_hull = loader.load(std::filesystem::path(ACTOR_DIR) / std::filesystem::path("PlayerHull.zac"), &scene);
@@ -19,7 +20,10 @@ Player::Player(Zap::Scene& scene, Zap::ActorLoader loader) {
 }
 
 Player::~Player() {
-
+	m_base.destroy();
+	m_core.destroy();
+	m_hull.destroy();
+	m_camera.destroy();
 }
 
 void Player::updateCamera(Controls& controls) {
@@ -100,4 +104,12 @@ void Player::update(Controls& controls) {
 
 Zap::Actor Player::getCamera() {
 	return m_camera;
+}
+
+void Player::setTransform(glm::mat4 transform) {
+	m_base.cmpTransform_setTransform(transform);
+}
+
+glm::mat4 Player::getTransform() {
+	return m_base.cmpTransform_getTransform();
 }

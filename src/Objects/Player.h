@@ -20,6 +20,10 @@ public:
 
 	Zap::Actor getCamera();
 
+	void setTransform(glm::mat4 transform);
+
+	glm::mat4 getTransform();
+
 private:
 	Zap::Actor m_base; // this is the actual transform of the player
 	Zap::Actor m_core; // the bright core in the centre
