@@ -47,36 +47,36 @@ void Player::updateCamera(Controls& controls) {
 }
 
 void Player::updateAnimations(float dt) {
-	m_hull.cmpTransform_rotate(15 * dt, {2, 3, 5});
+	//m_hull.cmpTransform_rotate(15 * dt, {2, 3, 5});
 	m_core.cmpTransform_rotate(-90 * dt, {2, 3, 5});
 }
 
 void Player::updateInputs(Controls& controls, float dt) {
 	glm::mat4 transform = m_base.cmpTransform_getTransform();
-	glm::vec3 pos = m_base.cmpTransform_getPos();
+	glm::vec3 force = {0, 0, 0};
 	glm::vec3 xDir = glm::normalize(transform[0]);
 	glm::vec3 yDir = glm::normalize(transform[1]);
 	glm::vec3 zDir = glm::normalize(transform[2]);
 
 	// move
-	float velocity = 10;
+	float speed = 25;
 	if (ImGui::IsKeyDown(controls.moveForward)) {
-		pos += zDir * dt * velocity;
+		force += zDir * dt * speed;
 	}
 	if (ImGui::IsKeyDown(controls.moveBackward)) {
-		pos += -zDir * dt * velocity;
+		force += -zDir * dt * speed;
 	}
 	if (ImGui::IsKeyDown(controls.moveLeft)) {
-		pos += -xDir * dt * velocity;
+		force += -xDir * dt * speed;
 	}
 	if (ImGui::IsKeyDown(controls.moveRight)) {
-		pos += xDir * dt * velocity;
+		force += xDir * dt * speed;
 	}
 	if (ImGui::IsKeyDown(controls.moveUp)) {
-		pos += yDir * dt * velocity;
+		force += yDir * dt * speed;
 	}
 	if (ImGui::IsKeyDown(controls.moveDown)) {
-		pos += -yDir * dt * velocity;
+		force += -yDir * dt * speed;
 	}
 
 
@@ -91,13 +91,13 @@ void Player::updateInputs(Controls& controls, float dt) {
 	ImGui::Text((std::to_string(xDir.x) + "," + std::to_string(xDir.y) + "," + std::to_string(xDir.z)).c_str());
 
 	m_base.cmpTransform_setTransform(transform * rotMat);
-	m_base.cmpTransform_setPos(pos);
+	m_hull.cmpRigidDynamic_addForce(force);
 }
 
 void Player::update(Controls& controls) {
-	glm::vec3 pos = m_base.cmpTransform_getPos();
+	glm::vec3 pos = m_hull.cmpTransform_getPos(); // hull determines the position
 	m_core.cmpTransform_setPos(pos);
-	m_hull.cmpTransform_setPos(pos);
+	m_base.cmpTransform_setPos(pos);
 
 	updateCamera(controls);
 }

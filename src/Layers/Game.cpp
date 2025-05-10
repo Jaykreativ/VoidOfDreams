@@ -101,6 +101,7 @@ void gameLoop(RenderData& render, WorldData& world, NetworkData& network, Contro
 				render.pbRender->updateCamera(spPlayer->getCamera());
 				render.pbRender->enable();
 				world.scene->update();
+				world.scene->simulate(deltaTime);
 			}
 			else {
 				render.pbRender->disable();
@@ -145,14 +146,13 @@ void runGame() {
 	render.window->init();
 
 	world.scene = new Zap::Scene();
+	world.scene->init();
 
 	render.renderer = new Zap::Renderer();
 	render.pbRender = new Zap::PBRenderer(world.scene);
 	render.pGui = new Zap::Gui();
 
 	setupWorld(world);
-
-	world.scene->init();
 
 	render.renderer->setTarget(render.window);
 	render.renderer->addRenderTask(render.pbRender);
