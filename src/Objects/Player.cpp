@@ -107,9 +107,10 @@ Zap::Actor Player::getCamera() {
 }
 
 void Player::setTransform(glm::mat4 transform) {
-	m_base.cmpTransform_setTransform(transform);
+	m_hull.cmpTransform_setTransform(transform);
+	m_hull.cmpRigidDynamic_updatePose();
 }
 
 glm::mat4 Player::getTransform() {
-	return m_base.cmpTransform_getTransform();
+	return m_hull.cmpTransform_getTransform();
 }
