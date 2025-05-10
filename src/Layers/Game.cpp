@@ -145,8 +145,10 @@ void runGame() {
 	render.window = new Zap::Window(1000, 600, "Void of Dreams");
 	render.window->init();
 
+	Zap::SceneDesc desc{};
+	desc.gravity = { 0, 0, 0 };
 	world.scene = new Zap::Scene();
-	world.scene->init();
+	world.scene->init(desc);
 
 	render.renderer = new Zap::Renderer();
 	render.pbRender = new Zap::PBRenderer(world.scene);

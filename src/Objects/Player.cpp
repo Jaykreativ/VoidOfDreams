@@ -12,6 +12,8 @@ Player::Player(Zap::Scene& scene, Zap::ActorLoader loader) {
 	m_base = loader.load(std::filesystem::path(ACTOR_DIR) / std::filesystem::path("PlayerBase.zac"), &scene);
 	m_core = loader.load(std::filesystem::path(ACTOR_DIR) / std::filesystem::path("PlayerCore.zac"), &scene);
 	m_hull = loader.load(std::filesystem::path(ACTOR_DIR) / std::filesystem::path("PlayerHull.zac"), &scene);
+	m_hull.cmpRigidDynamic_setAngularDamping(.5);
+	m_hull.cmpRigidDynamic_setLinearDamping(.9);
 
 	m_camera = Zap::Actor(); // creating a camera to follow player
 	scene.attachActor(m_camera);
@@ -47,8 +49,10 @@ void Player::updateCamera(Controls& controls) {
 }
 
 void Player::updateAnimations(float dt) {
-	//m_hull.cmpTransform_rotate(15 * dt, {2, 3, 5});
 	m_core.cmpTransform_rotate(-90 * dt, {2, 3, 5});
+
+	auto v = m_hull.cmpRigidDynamic_getLinearVelocity();
+	m_hull.cmpRigidDynamic_addTorque(v*0.0001f);
 }
 
 void Player::updateInputs(Controls& controls, float dt) {
@@ -100,6 +104,8 @@ void Player::update(Controls& controls) {
 	m_base.cmpTransform_setPos(pos);
 
 	updateCamera(controls);
+
+	// apply environment forces
 }
 
 Zap::Actor Player::getCamera() {
