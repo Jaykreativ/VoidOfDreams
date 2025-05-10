@@ -36,7 +36,7 @@ void Player::updateCamera(Controls& controls) {
 	switch (controls.cameraMode)
 	{
 	case Controls::eFIRST_PERSON:
-		offset = glm::translate(offset, zDir*1.5f); // offset camera to the front in first person
+		offset = glm::translate(offset, zDir*1.6f); // offset camera to the front in first person
 		break;
 	case Controls::eTHIRD_PERSON:
 		offset = glm::translate(offset, zDir*-5.f); // offset camera to the back in third person
@@ -85,14 +85,11 @@ void Player::updateInputs(Controls& controls, float dt) {
 
 
 	//rotate
-	glm::vec2 mousePos = (glm::vec2)ImGui::GetMousePos();
-	glm::vec2 mouseDelta = mousePos - m_lastMousePos;
-	m_lastMousePos = mousePos;
+	glm::vec2 mouseDelta = ImGui::GetIO().MouseDelta;
 
 	glm::mat4 rotMat(1);
 	rotMat = glm::rotate(rotMat, mouseDelta.x / 100.f, {0, 1, 0});
 	rotMat = glm::rotate(rotMat, mouseDelta.y/100.f, {1, 0, 0});
-	ImGui::Text((std::to_string(xDir.x) + "," + std::to_string(xDir.y) + "," + std::to_string(xDir.z)).c_str());
 
 	m_base.cmpTransform_setTransform(transform * rotMat);
 	m_hull.cmpRigidDynamic_addForce(force);
