@@ -24,9 +24,9 @@ void drawNetworkInterface(NetworkData& network, WorldData& world) {
 	ImGui::InputText("username", usernameBuf, 50);
 	network.username = usernameBuf;
 
-	static char ipBuf[16] = "";
+	static char ipBuf[50] = "";
 	memcpy(ipBuf, network.ip.data(), std::min<int>(16, network.ip.size()));
-	ImGui::InputText("ip", ipBuf, 16);
+	ImGui::InputText("ip", ipBuf, 50);
 	network.ip = ipBuf;
 
 	static char portBuf[6] = "";
