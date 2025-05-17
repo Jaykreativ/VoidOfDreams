@@ -102,7 +102,11 @@ void Player::update(Controls& controls) {
 
 	updateCamera(controls);
 
-	// apply environment forces
+	m_inventory.update(*this); // update all items in inventory
+}
+
+PlayerInventory& Player::getInventory() {
+	return m_inventory;
 }
 
 Zap::Actor Player::getCamera() {

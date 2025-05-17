@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Shares/Controls.h"
+#include "Objects/Inventory.h"
 
 #include "Zap/Zap.h"
 #include "Zap/FileLoader.h"
@@ -18,6 +19,8 @@ public:
 
 	void update(Controls& controls);
 
+	PlayerInventory& getInventory();
+
 	Zap::Actor getCamera();
 
 	void setTransform(glm::mat4 transform);
@@ -29,6 +32,8 @@ private:
 	Zap::Actor m_core; // the bright core in the centre
 	Zap::Actor m_hull; // the rotating hull
 	Zap::Actor m_camera;
+
+	PlayerInventory m_inventory;
 
 	void updateCamera(Controls& controls);
 };
