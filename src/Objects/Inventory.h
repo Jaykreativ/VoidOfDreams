@@ -15,15 +15,25 @@ class Inventory {
 public:
 	using iterator = typename std::array<std::shared_ptr<Item>, _size>::iterator ;
 
-	void resetItem(size_t index);
+	void resetItem(size_t index) {
+		m_items[index].reset();
+	}
 
-	void setItem(std::shared_ptr<Item> spItem, size_t index);
+	void setItem(std::shared_ptr<Item> spItem, size_t index) {
+		m_items[index] = spItem;
+	}
 
-	iterator begin();
+	iterator begin() {
+		return m_items.begin();
+	}
 
-	iterator end();
+	iterator end() {
+		return m_items.end();
+	}
 
-	size_t size();
+	size_t size() {
+		return _size;
+	}
 
 private:
 	std::array<std::shared_ptr<Item>, _size> m_items = {};

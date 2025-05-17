@@ -5,6 +5,10 @@
 #include "Shares/NetworkData.h"
 #include "Shares/Render.h"
 #include "Shares/World.h"
+#include "Objects/Inventory.h"
+#include "Objects/Weapons/Ray.h"
+#include "Objects/PermaAbilities/Dash.h"
+#include "Objects/Triggers/SimpleTrigger.h"
 
 #include "Zap/Zap.h"
 #include "Zap/FileLoader.h"
@@ -132,6 +136,21 @@ void gameLoop(RenderData& render, WorldData& world, NetworkData& network, Contro
 		//logger::endRegion();
 		//logger::cleanTimeline();
 	}
+}
+
+void setupLocalPlayer(WorldData& world, std::string username) {
+	world.players[username] = std::make_shared<Player>(*world.scene);
+	world.pPlayer = world.players.at(username);
+	if (std::shared_ptr<Player> spPlayer = world.pPlayer.lock()) {
+		spPlayer->getInventory().setItem(std::make_shared<Ray>(), 0);
+		spPlayer->getInventory().setItem(std::make_shared<SimpleTrigger>(), 1);
+		spPlayer->getInventory().setItem(std::make_shared<Dash>(), 2);
+		spPlayer->getInventory().setItem(std::make_shared<SimpleTrigger>(), 3);
+	}
+}
+
+void setupExternalPlayer(WorldData& world, std::string username) {
+	world.players[username] = std::make_shared<Player>(*world.scene);
 }
 
 void setupWorld(WorldData& world) {

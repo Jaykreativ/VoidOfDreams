@@ -1,6 +1,7 @@
 #include "Network.h"
 
 #include "Shares/NetworkData.h"
+#include "Layers/Game.h"
 
 #include "glm.hpp"
 
@@ -656,9 +657,11 @@ namespace client {
 			case eCONNECT: {
 				ConnectPacket& packet = *reinterpret_cast<ConnectPacket*>(spPacket.get());
 				std::lock_guard<std::mutex> lk(world.mPlayers);
-				world.players[packet.username] = std::make_shared<Player>(*world.scene); // add newly connected player
 				if (packet.username == network.username) { // set this clients player
-					world.pPlayer = world.players.at(packet.username);
+					setupLocalPlayer(world, packet.username);
+				}
+				else {
+					setupExternalPlayer(world, packet.username);
 				}
 				break;
 			}
