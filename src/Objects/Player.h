@@ -25,11 +25,14 @@ public:
 
 	Zap::Actor getPhysicsActor();
 
+	glm::mat4 getCameraTransform();
+
+	glm::vec3 getMovementDirection();
+
 	void setTransform(glm::mat4 transform);
 
 	glm::mat4 getTransform();
 
-	glm::mat4 getCameraTransform();
 
 private:
 	Zap::Actor m_base; // this is the actual transform of the player
@@ -38,6 +41,8 @@ private:
 	Zap::Actor m_camera;
 
 	PlayerInventory m_inventory;
+
+	glm::vec3 m_movementDir = { 0, 0, 0 };
 
 	void updateCamera(Controls& controls);
 };

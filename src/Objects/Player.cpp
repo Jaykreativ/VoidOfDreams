@@ -57,32 +57,33 @@ void Player::updateAnimations(float dt) {
 
 void Player::updateInputs(Controls& controls, float dt) {
 	glm::mat4 transform = m_base.cmpTransform_getTransform();
-	glm::vec3 force = {0, 0, 0};
 	glm::vec3 xDir = glm::normalize(transform[0]);
 	glm::vec3 yDir = glm::normalize(transform[1]);
 	glm::vec3 zDir = glm::normalize(transform[2]);
 
 	// move
 	float speed = 25;
+	m_movementDir = { 0, 0, 0 };
 	if (ImGui::IsKeyDown(controls.moveForward)) {
-		force += zDir * dt * speed;
+		m_movementDir += zDir;
 	}
 	if (ImGui::IsKeyDown(controls.moveBackward)) {
-		force += -zDir * dt * speed;
+		m_movementDir += -zDir;
 	}
 	if (ImGui::IsKeyDown(controls.moveLeft)) {
-		force += -xDir * dt * speed;
+		m_movementDir += -xDir;
 	}
 	if (ImGui::IsKeyDown(controls.moveRight)) {
-		force += xDir * dt * speed;
+		m_movementDir += xDir;
 	}
 	if (ImGui::IsKeyDown(controls.moveUp)) {
-		force += yDir * dt * speed;
+		m_movementDir += yDir;
 	}
 	if (ImGui::IsKeyDown(controls.moveDown)) {
-		force += -yDir * dt * speed;
+		m_movementDir += -yDir;
 	}
-
+	if (m_movementDir != glm::vec3(0, 0, 0))
+		m_movementDir = glm::normalize(m_movementDir);
 
 	//rotate
 	glm::vec2 mouseDelta = ImGui::GetIO().MouseDelta;
@@ -92,7 +93,7 @@ void Player::updateInputs(Controls& controls, float dt) {
 	rotMat = glm::rotate(rotMat, mouseDelta.y/100.f, {1, 0, 0});
 
 	m_base.cmpTransform_setTransform(transform * rotMat);
-	m_hull.cmpRigidDynamic_addForce(force);
+	m_hull.cmpRigidDynamic_addForce(m_movementDir * dt * speed);
 }
 
 void Player::update(Controls& controls) {
@@ -117,6 +118,14 @@ Zap::Actor Player::getPhysicsActor() {
 	return m_hull;
 }
 
+glm::mat4 Player::getCameraTransform() {
+	return m_camera.cmpTransform_getTransform();
+}
+
+glm::vec3 Player::getMovementDirection() {
+	return m_movementDir;
+}
+
 void Player::setTransform(glm::mat4 transform) {
 	m_hull.cmpTransform_setTransform(transform);
 	m_hull.cmpRigidDynamic_updatePose();
@@ -124,8 +133,4 @@ void Player::setTransform(glm::mat4 transform) {
 
 glm::mat4 Player::getTransform() {
 	return m_hull.cmpTransform_getTransform();
-}
-
-glm::mat4 Player::getCameraTransform() {
-	return m_camera.cmpTransform_getTransform();
 }
