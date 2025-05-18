@@ -96,14 +96,26 @@ void Player::updateInputs(Controls& controls, float dt) {
 	m_hull.cmpRigidDynamic_addForce(m_movementDir * dt * speed);
 }
 
-void Player::update(Controls& controls) {
+void Player::update(Controls& controls, float dt) {
 	glm::vec3 pos = m_hull.cmpTransform_getPos(); // hull determines the position
 	m_core.cmpTransform_setPos(pos);
 	m_base.cmpTransform_setPos(pos);
 
 	updateCamera(controls);
 
+	m_energy = std::min<float>(m_energy, 100);
+
 	m_inventory.update(*this); // update all items in inventory
+
+	m_energy += (m_energy * 0.1 + 5) * dt;
+}
+
+void Player::spendEnergy(float energy) {
+	m_energy -= energy;
+}
+
+float Player::getEnergy() {
+	return m_energy;
 }
 
 PlayerInventory& Player::getInventory() {

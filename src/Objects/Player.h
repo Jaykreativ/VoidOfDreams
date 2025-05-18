@@ -17,7 +17,11 @@ public:
 
 	void updateInputs(Controls& controls, float dt);
 
-	void update(Controls& controls);
+	void update(Controls& controls, float dt);
+
+	void spendEnergy(float energy);
+
+	float getEnergy();
 
 	PlayerInventory& getInventory();
 
@@ -41,6 +45,8 @@ private:
 	Zap::Actor m_camera;
 
 	PlayerInventory m_inventory;
+
+	float m_energy = 100;
 
 	glm::vec3 m_movementDir = { 0, 0, 0 };
 
