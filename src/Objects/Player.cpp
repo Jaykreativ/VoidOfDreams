@@ -113,6 +113,10 @@ Zap::Actor Player::getCamera() {
 	return m_camera;
 }
 
+Zap::Actor Player::getPhysicsActor() {
+	return m_hull;
+}
+
 void Player::setTransform(glm::mat4 transform) {
 	m_hull.cmpTransform_setTransform(transform);
 	m_hull.cmpRigidDynamic_updatePose();
@@ -120,4 +124,8 @@ void Player::setTransform(glm::mat4 transform) {
 
 glm::mat4 Player::getTransform() {
 	return m_hull.cmpTransform_getTransform();
+}
+
+glm::mat4 Player::getCameraTransform() {
+	return m_camera.cmpTransform_getTransform();
 }
