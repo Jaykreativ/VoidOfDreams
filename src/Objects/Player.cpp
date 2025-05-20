@@ -90,7 +90,7 @@ void Player::updateInputs(Controls& controls, float dt) {
 
 	glm::mat4 rotMat(1);
 	rotMat = glm::rotate(rotMat, mouseDelta.x / 100.f, {0, 1, 0});
-	rotMat = glm::rotate(rotMat, mouseDelta.y/100.f, {1, 0, 0});
+	rotMat = glm::rotate(rotMat, mouseDelta.y / 100.f, {1, 0, 0});
 
 	m_base.cmpTransform_setTransform(transform * rotMat);
 	m_hull.cmpRigidDynamic_addForce(m_movementDir * dt * speed);

@@ -143,7 +143,7 @@ void setupLocalPlayer(WorldData& world, std::string username) {
 	world.players[username] = std::make_shared<Player>(*world.scene);
 	world.pPlayer = world.players.at(username);
 	if (std::shared_ptr<Player> spPlayer = world.pPlayer.lock()) {
-		spPlayer->getInventory().setItem(std::make_shared<Ray>(), 0);
+		spPlayer->getInventory().setItem(std::make_shared<Ray>(world), 0);
 		spPlayer->getInventory().setItem(std::make_shared<SimpleTrigger>(ImGuiMouseButton_Left), 1);
 		spPlayer->getInventory().setItem(std::make_shared<Dash>(), 2);
 		spPlayer->getInventory().setItem(std::make_shared<SimpleTrigger>(ImGuiKey_LeftShift), 3);
