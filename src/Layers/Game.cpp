@@ -13,33 +13,6 @@
 
 #include <chrono>
 
-void update(WorldData& world, Controls& controls, float dt, Zap::Window& window) {
-	static bool captured = false;
-	if (ImGui::Button("Capture")) { // use imgui to capture mouse because there is no menu implemented yet
-		glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
-		captured = true;
-	}
-	if (captured && ImGui::IsKeyPressed(ImGuiKey_Escape)) {
-		glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
-		captured = false;
-	}
-
-	if (ImGui::Button("First Person"))
-		controls.cameraMode = Controls::eFIRST_PERSON;
-	ImGui::SameLine();
-	if (ImGui::Button("Third Person"))
-		controls.cameraMode = Controls::eTHIRD_PERSON;
-
-	std::lock_guard<std::mutex> lk(world.mPlayers);
-	if(captured) if (std::shared_ptr<Player> spPlayer = world.pPlayer.lock()) {
-		spPlayer->updateInputs(controls, dt);
-	}
-	for (auto spPlayerPair : world.players) {
-		spPlayerPair.second->updateAnimations(dt);
-		spPlayerPair.second->update(controls);
-	}
-}
-
 void drawNetworkInterface(NetworkData& network, WorldData& world) {
 	bool serverRunning = server::isRunning();
 	bool clientRunning = client::isRunning();
@@ -51,9 +24,9 @@ void drawNetworkInterface(NetworkData& network, WorldData& world) {
 	ImGui::InputText("username", usernameBuf, 50);
 	network.username = usernameBuf;
 	
-	static char ipBuf[16] = "";
+	static char ipBuf[50] = "";
 	memcpy(ipBuf, network.ip.data(), std::min<int>(16, network.ip.size()));
-	ImGui::InputText("ip", ipBuf, 16);
+	ImGui::InputText("ip", ipBuf, 50);
 	network.ip = ipBuf;
 
 	static char portBuf[6] = "";
@@ -83,7 +56,55 @@ void drawNetworkInterface(NetworkData& network, WorldData& world) {
 		if (ImGui::Button("Start Client")) {
 			runClient(network, world);
 		}
-	}  
+	}
+}
+
+void update(WorldData& world, NetworkData& network, Controls& controls, float dt, Zap::Window& window) {
+	static bool captured = false;
+	bool wasCaptured = captured;
+	if (wasCaptured)
+		ImGui::BeginDisabled();
+
+	if (ImGui::Button("Capture")) { // use imgui to capture mouse because there is no menu implemented yet
+		glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+		captured = true;
+	}
+	if (captured && ImGui::IsKeyPressed(ImGuiKey_Escape)) {
+		glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
+		captured = false;
+	}
+
+	if (ImGui::Button("First Person"))
+		controls.cameraMode = Controls::eFIRST_PERSON;
+	ImGui::SameLine();
+	if (ImGui::Button("Third Person"))
+		controls.cameraMode = Controls::eTHIRD_PERSON;
+
+	{
+		std::lock_guard<std::mutex> lk(world.mPlayers);
+		if (captured) if (std::shared_ptr<Player> spPlayer = world.pPlayer.lock()) {
+			spPlayer->updateInputs(controls, dt);
+		}
+		for (auto spPlayerPair : world.players) {
+			spPlayerPair.second->updateAnimations(dt);
+			spPlayerPair.second->update(controls);
+		}  
+	}
+
+	logger::beginRegion("gui");
+	drawNetworkInterface(network, world);
+
+	ImGui::Begin("Frame Profile");
+	logger::drawFrameProfileImGui();
+	ImGui::End();
+
+	//ImGui::Begin("Timeline");
+	//logger::drawTimelineImGui();
+	//ImGui::End();
+	logger::endRegion();
+
+	if (wasCaptured)
+		ImGui::EndDisabled();
 }
 
 void gameLoop(RenderData& render, WorldData& world, NetworkData& network, Controls& controls) {
@@ -93,7 +114,7 @@ void gameLoop(RenderData& render, WorldData& world, NetworkData& network, Contro
 		auto startFrame = std::chrono::high_resolution_clock::now();
 
 		logger::beginRegion("update");
-		update(world, controls, deltaTime, *render.window);
+		update(world, network, controls, deltaTime, *render.window);
 
 		{
 			std::lock_guard<std::mutex> lk(world.mPlayers);
@@ -101,26 +122,15 @@ void gameLoop(RenderData& render, WorldData& world, NetworkData& network, Contro
 				render.pbRender->updateCamera(spPlayer->getCamera());
 				render.pbRender->enable();
 				world.scene->update();
+				world.scene->simulate(deltaTime);
 			}
 			else {
 				render.pbRender->disable();
-				ImGui::GetBackgroundDrawList()->AddRectFilled({ 0, 0 }, ImGui::GetMainViewport()->Size, ImGui::GetColorU32(render.pbRender->clearColor));
+				ImGui::GetBackgroundDrawList()->AddRectFilled({ 0, 0 }, ImGui::GetMainViewport()->Size, ImGui::GetColorU32(render.pbRender->clearColor)); // improvised clear
 			}
 
 			client::sendPlayerMove(network, world);
 		}
-		logger::endRegion();
-
-		logger::beginRegion("gui");
-		drawNetworkInterface(network, world);
-
-		ImGui::Begin("Frame Profile");
-		logger::drawFrameProfileImGui();
-		ImGui::End();
-
-		//ImGui::Begin("Timeline");
-		//logger::drawTimelineImGui();
-		//ImGui::End();
 		logger::endRegion();
 
 		logger::beginRegion("render");
@@ -159,15 +169,16 @@ void runGame() {
 	render.window = new Zap::Window(1000, 600, "Void of Dreams");
 	render.window->init();
 
+	Zap::SceneDesc desc{};
+	desc.gravity = { 0, 0, 0 };
 	world.scene = new Zap::Scene();
+	world.scene->init(desc);
 
 	render.renderer = new Zap::Renderer();
 	render.pbRender = new Zap::PBRenderer(world.scene);
 	render.pGui = new Zap::Gui();
 
 	setupWorld(world);
-
-	world.scene->init();
 
 	render.renderer->setTarget(render.window);
 	render.renderer->addRenderTask(render.pbRender);

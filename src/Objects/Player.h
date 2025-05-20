@@ -30,8 +30,5 @@ private:
 	Zap::Actor m_hull; // the rotating hull
 	Zap::Actor m_camera;
 
-	// rotation
-	glm::vec2 m_lastMousePos = {};
-
 	void updateCamera(Controls& controls);
 };
