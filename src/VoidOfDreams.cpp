@@ -29,7 +29,6 @@ void closeWSA() {
 #endif // _WIN32
 
 void main() {
-	logger::initLog({false, true});
 	logger::beginRegion("main");
 
 #ifdef _WIN32
@@ -49,7 +48,6 @@ void main() {
 #endif // _WIN32
 
 	logger::endRegion();
-	logger::terminateLog();
 
 	system("pause");
 }

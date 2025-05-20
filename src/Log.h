@@ -3,18 +3,12 @@
 #include <string>
 #include <vector>
 
+// for time profiles use
+// #define LOG_GLOBAL_TIMESTAMPS for a global timeline
+// #define LOG_FRAME_TIMESTAMPS for a frame profile
+#define LOG_GLOBAL_TIMESTAMPS
+#define LOG_FRAME_TIMESTAMPS
 namespace logger {
-
-	struct Settings {
-		bool enableGlobalTimestamps = false;
-		bool enableFrameTimestamps = false;
-	};
-
-	void initLog(Settings settings = Settings{});
-
-	void terminateLog();
-
-
 	void beginRegion(std::string name);
 
 	void endRegion();

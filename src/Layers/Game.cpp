@@ -89,10 +89,10 @@ void drawNetworkInterface(NetworkData& network, WorldData& world) {
 void gameLoop(RenderData& render, WorldData& world, NetworkData& network, Controls& controls) {
 	float deltaTime = 0;
 	while (!render.window->shouldClose()) {
-		//logger::beginRegion("loop"); // define regions for profiling
+		logger::beginRegion("loop"); // define regions for profiling
 		auto startFrame = std::chrono::high_resolution_clock::now();
 
-
+		logger::beginRegion("update");
 		update(world, controls, deltaTime, *render.window);
 
 		{
@@ -109,17 +109,32 @@ void gameLoop(RenderData& render, WorldData& world, NetworkData& network, Contro
 
 			client::sendPlayerMove(network, world);
 		}
+		logger::endRegion();
 
+		logger::beginRegion("gui");
 		drawNetworkInterface(network, world);
 
-		render.renderer->render();
+		ImGui::Begin("Frame Profile");
+		logger::drawFrameProfileImGui();
+		ImGui::End();
 
+		//ImGui::Begin("Timeline");
+		//logger::drawTimelineImGui();
+		//ImGui::End();
+		logger::endRegion();
+
+		logger::beginRegion("render");
+		render.renderer->render();
+		logger::endRegion();
+
+		logger::beginRegion("present");
 		render.window->present();
+		logger::endRegion();
 		render.window->pollEvents();
 
 		auto endFrame = std::chrono::high_resolution_clock::now();
 		deltaTime = std::chrono::duration_cast<std::chrono::duration<float>>(endFrame - startFrame).count();
-		//logger::endRegion();
+		logger::endRegion();
 		//logger::cleanTimeline();
 	}
 }

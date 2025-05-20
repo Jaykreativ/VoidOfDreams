@@ -1,5 +1,9 @@
 #include "Log.h"
 
+#include <thread>
+#include <sstream>
+#include <array>
+
 #define IM_VEC2_CLASS_EXTRA\
 	operator glm::vec2() {return glm::vec2(x, y);}\
 	ImVec2(glm::vec2& vec)\
@@ -34,79 +38,86 @@ namespace logger {
 		RegionTime time = {};
 	};
 
-	Settings _settings;
-
-	std::vector<std::string> _regionStack;
-
-	// time storage
-	RegionTimePoint _programStartTime = std::chrono::high_resolution_clock::now();
-	RegionTimeProfile _rootTimeProfile = {};
-	RegionTimeProfile* _pCurrentTimeProfile = &_rootTimeProfile;
-	RegionDuration _timelineValidDuration = std::chrono::seconds(10); // default to ten seconds to view
-
-	// frameview
-	bool _isInFrame = false;
 	struct RegionFrameTime {
 		RegionFrameTime* parent = nullptr;
 		std::unordered_map<std::string, RegionFrameTime> children = {};
 
 		std::string region = "";
-		float duration = 0;
-		size_t samples = 0;
+		static const size_t sampleCount = 60;
+		std::array<float, sampleCount> durations;
 
 		RegionTime time = {};
-	};
-	RegionFrameTime _rootFrameTime = {};
-	RegionFrameTime* _pCurrentFrameTime = &_rootFrameTime;
 
-	void initLog(Settings settings) {
-		_settings = settings;
-
-		if (_settings.enableGlobalTimestamps) {
-			_rootTimeProfile.region = "root";
-			_rootTimeProfile.time.beginTime = std::chrono::high_resolution_clock::now();
+		void shiftSamples(float duration) {
+			for (size_t i = 0; i < sampleCount-1; i++) {
+				durations[i] = durations[i + 1];
+			}
+			durations[sampleCount - 1] = duration;
 		}
 
-		_regionStack = {};
-	}
+		float average() {
+			float sum = 0;
+			for (auto duration : durations)
+				sum += duration;
+			return sum / durations.size();
+		}
+	};
 
-	void terminateLog() {}
+	struct ThreadStorage {
+		std::vector<std::string> regionStack;
+
+		// time storage
+		RegionTimeProfile rootTimeProfile = {};
+		RegionTimeProfile* pCurrentTimeProfile = &rootTimeProfile;
+
+		// frameview
+		bool isInFrame = false;
+		RegionFrameTime rootFrameTime = {};
+		RegionFrameTime* pCurrentFrameTime = &rootFrameTime;
+	};
+
+	RegionTimePoint _programStartTime = std::chrono::high_resolution_clock::now();
+	RegionDuration _timelineValidDuration = std::chrono::seconds(10); // default to ten seconds to view
+
+	std::unordered_map<std::thread::id, ThreadStorage> _threads = {};
 
 	void frameTimeBegin(std::string region);
 
 	void frameTimeEnd(std::string region);
 
 	void beginRegion(std::string name) {
-		if (_settings.enableGlobalTimestamps) {
-			_pCurrentTimeProfile->childProfiles.push_back({_pCurrentTimeProfile}); // make a new time profile in the tree
-			_pCurrentTimeProfile = &_pCurrentTimeProfile->childProfiles.back();
+		auto& data = _threads[std::this_thread::get_id()];
 
-			_pCurrentTimeProfile->region = name;
-			_pCurrentTimeProfile->time.beginTime = std::chrono::high_resolution_clock::now(); // save the begin time
-		}
+#ifdef LOG_GLOBAL_TIMESTAMPS
+		data.pCurrentTimeProfile->childProfiles.push_back({ data.pCurrentTimeProfile}); // make a new time profile in the tree
+		data.pCurrentTimeProfile = &data.pCurrentTimeProfile->childProfiles.back();
 
-		if (_isInFrame && _settings.enableFrameTimestamps) {
-			frameTimeBegin(name);
-		}
+		data.pCurrentTimeProfile->region = name;
+		data.pCurrentTimeProfile->time.beginTime = std::chrono::high_resolution_clock::now(); // save the begin time
+#endif // LOG_GLOBAL_TIMESTAMPS
 
-		_regionStack.push_back(name);
+		frameTimeBegin(name);
+
+		data.regionStack.push_back(name);
 	}
 
 	void endRegion() {
-		if (_settings.enableGlobalTimestamps) {
-			_pCurrentTimeProfile->time.endTime = std::chrono::high_resolution_clock::now(); // save the end time
-			_pCurrentTimeProfile = _pCurrentTimeProfile->parentProfile; // go back to parent
-		}
+		auto& data = _threads[std::this_thread::get_id()];
 
-		if (_isInFrame && _settings.enableFrameTimestamps) {
-			frameTimeEnd(_regionStack.back());
-		}
+		#ifdef LOG_GLOBAL_TIMESTAMPS
+		data.pCurrentTimeProfile->time.endTime = std::chrono::high_resolution_clock::now(); // save the end time
+		data.pCurrentTimeProfile = data.pCurrentTimeProfile->parentProfile; // go back to parent
+		#endif // LOG_GLOBAL_TIMESTAMPS
 
-		_regionStack.pop_back();
+		frameTimeEnd(data.regionStack.back());
+
+		data.regionStack.pop_back();
 	}
 
 	void error(std::string msg) {
-		for (std::string region : _regionStack)
+		auto& data = _threads[std::this_thread::get_id()];
+
+		for (std::string region : data.regionStack)
 			printf("%s -> ", region.c_str());
 		fprintf(stderr, ":\nERROR: %s\n", msg.c_str());
 	}
@@ -115,7 +126,9 @@ namespace logger {
 	}
 
 	void warning(std::string msg) {
-		for (std::string region : _regionStack)
+		auto& data = _threads[std::this_thread::get_id()];
+
+		for (std::string region : data.regionStack)
 			printf("%s -> ", region.c_str());
 		printf(":\nWARNING: %s\n", msg.c_str());
 	}
@@ -124,7 +137,9 @@ namespace logger {
 	}
 
 	void info(std::string msg) {
-		for (std::string region : _regionStack)
+		auto& data = _threads[std::this_thread::get_id()];
+
+		for (std::string region : data.regionStack)
 			printf("%s -> ", region.c_str());
 		printf(":\n%s\n", msg.c_str());
 	}
@@ -133,16 +148,19 @@ namespace logger {
 	}
 
 	std::string getCurrentRegion() {
-		return _regionStack.back();
+		auto& data = _threads[std::this_thread::get_id()];
+
+		return data.regionStack.back();
 	}
 
 	const std::vector<std::string>& getRegionStack() {
-		return _regionStack;
+		auto& data = _threads[std::this_thread::get_id()];
+
+		return data.regionStack;
 	}
 
 	void setTimelineValidDuration(float duration) {
 		_timelineValidDuration = std::chrono::seconds((int64_t)duration);
-		printf("%lld\n", _timelineValidDuration.count());
 	}
 
 	void cleanProfile(RegionTimeProfile& profile, uint32_t& index) {
@@ -159,41 +177,53 @@ namespace logger {
 	}
 
 	void cleanTimeline() {
-		for (uint32_t i = 0; i < _rootTimeProfile.childProfiles.size(); i++) {
-			cleanProfile(_rootTimeProfile.childProfiles[i], i);
+		auto& data = _threads[std::this_thread::get_id()];
+
+		for (uint32_t i = 0; i < data.rootTimeProfile.childProfiles.size(); i++) {
+			cleanProfile(data.rootTimeProfile.childProfiles[i], i);
 		}
 	}
 
 	void frameTimeBegin(std::string region) {
-		auto* newFrameTime = &_pCurrentFrameTime->children[region];
-		newFrameTime->parent = _pCurrentFrameTime;
+#ifdef LOG_FRAME_TIMESTAMPS
+		auto& data = _threads[std::this_thread::get_id()];
+
+		auto* newFrameTime = &data.pCurrentFrameTime->children[region];
+		newFrameTime->parent = data.pCurrentFrameTime;
 		newFrameTime->region = region;
 		newFrameTime->time.beginTime = std::chrono::high_resolution_clock::now();
-		_pCurrentFrameTime = newFrameTime;
+		data.pCurrentFrameTime = newFrameTime;
+#endif // LOG_FRAME_TIMESTAMPS
 	}
 
 	void frameTimeEnd(std::string region) {
-		_pCurrentFrameTime->time.endTime = std::chrono::high_resolution_clock::now();
-		float duration = std::chrono::duration_cast<RegionDurationSFloat>(_pCurrentFrameTime->time.endTime - _pCurrentFrameTime->time.beginTime).count();
-		_pCurrentFrameTime->duration = (_pCurrentFrameTime->duration * _pCurrentFrameTime->samples + duration) / (_pCurrentFrameTime->samples + 1);
-		_pCurrentFrameTime->samples++;
-		_pCurrentFrameTime = _pCurrentFrameTime->parent;
+#ifdef LOG_FRAME_TIMESTAMPS
+		auto& data = _threads[std::this_thread::get_id()];
+		
+		data.pCurrentFrameTime->time.endTime = std::chrono::high_resolution_clock::now();
+		float duration = std::chrono::duration_cast<RegionDurationSFloat>(data.pCurrentFrameTime->time.endTime - data.pCurrentFrameTime->time.beginTime).count();
+		data.pCurrentFrameTime->shiftSamples(duration);
+		data.pCurrentFrameTime = data.pCurrentFrameTime->parent;
+#endif // LOG_FRAME_TIMESTAMPS
 	}
 
 	void beginFrame() {
-		_isInFrame = true;
-		_rootFrameTime.parent = nullptr;
-		_rootFrameTime.region = "root";
-		_rootFrameTime.time.beginTime = std::chrono::high_resolution_clock::now();
-		_pCurrentFrameTime = &_rootFrameTime;
+		auto& data = _threads[std::this_thread::get_id()];
+
+		data.isInFrame = true;
+		data.rootFrameTime.parent = nullptr;
+		data.rootFrameTime.region = "root";
+		data.rootFrameTime.time.beginTime = std::chrono::high_resolution_clock::now();
+		data.pCurrentFrameTime = &data.rootFrameTime;
 	}
 
 	void endFrame() {
-		_isInFrame = false;
-		_rootFrameTime.time.endTime = std::chrono::high_resolution_clock::now();
-		float duration = std::chrono::duration_cast<RegionDurationSFloat>(_pCurrentFrameTime->time.endTime - _pCurrentFrameTime->time.beginTime).count();
-		_rootFrameTime.duration = (_rootFrameTime.duration * _rootFrameTime.samples + duration) / (_rootFrameTime.samples + 1);
-		_rootFrameTime.samples++;
+		auto& data = _threads[std::this_thread::get_id()];
+
+		data.isInFrame = false;
+		data.rootFrameTime.time.endTime = std::chrono::high_resolution_clock::now();
+		float duration = std::chrono::duration_cast<RegionDurationSFloat>(data.pCurrentFrameTime->time.endTime - data.pCurrentFrameTime->time.beginTime).count();
+		data.pCurrentFrameTime->shiftSamples(duration);
 	}
 
 	struct TimelineGuiData {
@@ -240,10 +270,11 @@ namespace logger {
 	}
 
 	void drawTimelineImGui() {
-		if (!_settings.enableGlobalTimestamps) {
-			ImGui::Text("Global Timestamps are disabled");
-			return;
-		}
+#ifndef LOG_GLOBAL_TIMESTAMPS
+		ImGui::Text("Global Timestamps are disabled");
+#else
+		auto& data = _threads[std::this_thread::get_id()];
+
 
 		_timelineGuiData.width = ImGui::GetContentRegionAvail().x;
 		_timelineGuiData.now = std::chrono::high_resolution_clock::now();
@@ -255,7 +286,8 @@ namespace logger {
 		ImGui::SliderFloat("view duration", &duration, 0.001, maxDuration);
 		_timelineGuiData.viewDuration = std::chrono::round<RegionDuration>(RegionDurationSFloat(duration));
 
-		drawRegionProfile(_rootTimeProfile, 0);
+		drawRegionProfile(data.rootTimeProfile, 0);
+#endif
 	}
 
 	struct FrameProfileGuiData {
@@ -268,13 +300,17 @@ namespace logger {
 
 		float xPos = _frameProfileGuiData.contentMin.x;
 		float xOffset = ImGui::GetCursorPosX();
-		float xSize = ImGui::GetWindowContentRegionMax().x - ImGui::GetWindowContentRegionMin().x;
-		float yPos = _frameProfileGuiData.contentMin.y;
+		float xSize = ImGui::GetWindowContentRegionMax().x - ImGui::GetWindowContentRegionMin().x - 100;
+		float yPos = _frameProfileGuiData.contentMin.y - ImGui::GetScrollY();
 		float yOffset = ImGui::GetCursorPosY();
 		float yOffsetText = ImGui::GetCursorPosY();
 		float ySize = ImGui::GetTextLineHeightWithSpacing()*frameTime.children.size();
 
-		for (auto& childPair : frameTime.children) {
+		float frameTimeAvg = frameTime.average();
+
+		for (auto& childPair : frameTime.children) { // draw color boxes
+			float childAvg = childPair.second.average();
+
 			std::hash<std::string> strHasher;
 			auto seed = strHasher(childPair.second.region); // generate random color from region string, same string results in same color
 			float randColor[3];
@@ -286,7 +322,7 @@ namespace logger {
 			randColor[2] = (float)(seed % 256) / 256;
 			ImU32 color = ImGui::GetColorU32({ randColor[0], randColor[1], randColor[2], .5 });
 
-			float xDurationSize = xSize * childPair.second.duration / frameTime.duration;
+			float xDurationSize = xSize * childAvg / frameTimeAvg;
 			drawList->AddRectFilled(
 				{ xPos + xOffset, yPos + yOffset },
 				{ xPos + xOffset + xDurationSize, yPos + yOffset + ySize},
@@ -296,21 +332,13 @@ namespace logger {
 		xOffset = ImGui::GetCursorPosX();
 		yOffset = ImGui::GetCursorPosY();
 		yOffsetText = ImGui::GetCursorPosY();
-		for (auto& childPair : frameTime.children) {
-			std::hash<std::string> strHasher;
-			auto seed = strHasher(childPair.second.region); // generate random color from region string, same string results in same color
-			float randColor[3];
-			srand(seed); seed = rand();
-			randColor[0] = (float)(seed % 256) / 256;
-			srand(seed); seed = rand();
-			randColor[1] = (float)(seed % 256) / 256;
-			srand(seed); seed = rand();
-			randColor[2] = (float)(seed % 256) / 256;
-			ImU32 color = ImGui::GetColorU32({ randColor[0], randColor[1], randColor[2], .5 });
+		for (auto& childPair : frameTime.children) { // draw labels
+			float childAvg = childPair.second.average();
 
-			float xDurationSize = xSize * childPair.second.duration / frameTime.duration;
-			std::string text = childPair.second.region + "(" + std::to_string(childPair.second.duration*1000) + "ms)";
+			float xDurationSize = xSize * childAvg / frameTimeAvg;
+			std::string text = childPair.second.region + "(" + std::to_string(childAvg*1000) + "ms)";
 			drawList->AddText({ xPos + xOffset, yPos + yOffsetText }, ImGui::GetColorU32({1, 1, 1, 1}), text.data(), text.data() + text.size());
+			ImGui::GetFontSize();
 			xOffset += xDurationSize;
 			yOffsetText += ImGui::GetTextLineHeightWithSpacing();
 		}
@@ -322,26 +350,24 @@ namespace logger {
 
 	}
 
-	void clearSamples(RegionFrameTime& frameTime) {
-		frameTime.samples = 0;
-		for (auto& childPair : frameTime.children)
-			clearSamples(childPair.second);
-	};
-
 	void drawFrameProfileImGui() {
-		if (!_settings.enableFrameTimestamps) {
-			ImGui::Text("Frame Timestamps are disabled");
-			return;
+#ifndef LOG_FRAME_TIMESTAMPS
+		ImGui::Text("Frame Timestamps are disabled");
+#else
+		auto& data = _threads[std::this_thread::get_id()];
+		for (auto& dataPair : _threads) {
+			auto& data = dataPair.second;
+			std::stringstream ss;
+			ss << std::hex << std::this_thread::get_id();
+			ImGui::BeginChild(("FrameProfile##Thread" + ss.str()).c_str());
+			ImGui::Text(("Thread (" + ss.str() + ")").c_str());
+
+			_frameProfileGuiData.contentMin = (glm::vec2)ImGui::GetWindowPos();
+			_frameProfileGuiData.contentMax = _frameProfileGuiData.contentMin + (glm::vec2)ImGui::GetContentRegionAvail();
+
+			drawFrameRegion(data.rootFrameTime, 0);
+			ImGui::EndChild();
 		}
-
-		if (ImGui::Button("reset")) {
-			clearSamples(_rootFrameTime);
-		}
-
-
-		_frameProfileGuiData.contentMin = (glm::vec2)ImGui::GetWindowPos();
-		_frameProfileGuiData.contentMax = _frameProfileGuiData.contentMin + (glm::vec2)ImGui::GetContentRegionAvail();
-
-		drawFrameRegion(_rootFrameTime, 0);
+#endif
 	}
 }
