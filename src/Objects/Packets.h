@@ -123,3 +123,21 @@ protected:
 	// takes just the data part
 	void unpackData(const char* buf, uint32_t size);
 };
+
+class DamagePacket : public Packet {
+	friend class Packet;
+public:
+	//data
+	std::string username = "";
+	float damage = 0;
+	float health = 0;
+
+protected:
+	uint32_t dataSize();
+
+	// packs the data into the given buffer, buffer needs to have the same size as packet.fullSize()
+	void pack(char* buf);
+
+	// takes just the data part
+	void unpackData(const char* buf, uint32_t size);
+};

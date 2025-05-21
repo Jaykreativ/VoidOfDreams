@@ -1,5 +1,20 @@
 #include "Packets.h"
 
+// takes a ptr to an already allocated chunk of memory and packs the string into it
+// the ptr will point to the end of the packed string
+void packString(char*& buf, std::string string) {
+	uint32_t size = htonl(string.size());
+	memcpy(buf, &size, sizeof(uint32_t)); buf += sizeof(uint32_t);
+	memcpy(buf, string.data(), string.size()); buf += string.size();
+}
+
+// takes a ptr to a packed string
+// the ptr will point to the end of the packed string
+std::string unpackString(const char*& buf) {
+	uint32_t usernameSize = ntohl(reinterpret_cast<const uint32_t*>(buf)[0]); buf += sizeof(uint32_t);
+	return std::string(buf, usernameSize); buf += usernameSize;
+}
+
 // Packet
 void Packet::sendTo(int socket, int flags) {
 	uint32_t len = fullSize();
@@ -214,14 +229,32 @@ uint32_t MovePacket::dataSize() {
 void MovePacket::pack(char* buf) {
 	packHeader(buf, eMOVE); buf += headerSize();
 	/* data */
-	uint32_t usernameSize = htonl(username.size());
-	memcpy(buf, &usernameSize, sizeof(uint32_t)); buf += sizeof(uint32_t);
-	memcpy(buf, username.data(), username.size()); buf += username.size();
+	packString(buf, username);
 	sock::htonMat4(transform, buf);
 }
 
 void MovePacket::unpackData(const char* buf, uint32_t size) {
-	uint32_t usernameSize = ntohl(reinterpret_cast<const uint32_t*>(buf)[0]); buf += sizeof(uint32_t);
-	username = std::string(buf, usernameSize); buf += usernameSize;
+	username = unpackString(buf);
 	sock::ntohMat4(buf, transform);
+}
+
+// DamagePacket
+uint32_t DamagePacket::dataSize() {
+	return sizeof(float);
+}
+
+void DamagePacket::pack(char* buf) {
+	packHeader(buf, eMOVE); buf += headerSize();
+	/* data */
+	packString(buf, username);
+	uint32_t nDamage = htonf(damage);
+	memcpy(buf, &nDamage, sizeof(uint32_t)); buf += sizeof(uint32_t);
+	uint32_t nHealth = htonf(health);
+	memcpy(buf, &nHealth, sizeof(uint32_t));
+}
+
+void DamagePacket::unpackData(const char* buf, uint32_t size) {
+	username = unpackString(buf);
+	damage = ntohf(reinterpret_cast<const uint32_t*>(buf)[0]);
+	health = ntohf(reinterpret_cast<const uint32_t*>(buf)[1]);
 }
