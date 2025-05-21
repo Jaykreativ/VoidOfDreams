@@ -240,7 +240,7 @@ void MovePacket::unpackData(const char* buf, uint32_t size) {
 
 // DamagePacket
 uint32_t DamagePacket::dataSize() {
-	return sizeof(float);
+	return sizeof(uint32_t) + username.size() + 2*sizeof(float);
 }
 
 void DamagePacket::pack(char* buf) {
@@ -257,4 +257,23 @@ void DamagePacket::unpackData(const char* buf, uint32_t size) {
 	username = unpackString(buf);
 	damage = ntohf(reinterpret_cast<const uint32_t*>(buf)[0]);
 	health = ntohf(reinterpret_cast<const uint32_t*>(buf)[1]);
+}
+
+// RayPacket
+uint32_t RayPacket::dataSize() {
+	return sizeof(uint32_t) + username.size() + 2*sizeof(glm::vec3);
+}
+
+void RayPacket::pack(char* buf) {
+	packHeader(buf, eMOVE); buf += headerSize();
+	/* data */
+	packString(buf, username);
+	sock::htonVec3(origin, buf); buf += sizeof(glm::vec3);
+	sock::htonVec3(direction, buf);
+}
+
+void RayPacket::unpackData(const char* buf, uint32_t size) {
+	username = unpackString(buf);
+	sock::ntohVec3(buf, origin); buf += sizeof(glm::vec3);
+	sock::ntohVec3(buf, direction);
 }

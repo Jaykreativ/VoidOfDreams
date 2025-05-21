@@ -141,3 +141,22 @@ protected:
 	// takes just the data part
 	void unpackData(const char* buf, uint32_t size);
 };
+
+// Item Packets
+class RayPacket : public Packet {
+	friend class Packet;
+public:
+	//data
+	std::string username = "";
+	glm::vec3 origin = { 0, 0, 0 };
+	glm::vec3 direction = { 0, 0, 0 };
+
+protected:
+	uint32_t dataSize();
+
+	// packs the data into the given buffer, buffer needs to have the same size as packet.fullSize()
+	void pack(char* buf);
+
+	// takes just the data part
+	void unpackData(const char* buf, uint32_t size);
+};

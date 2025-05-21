@@ -58,6 +58,26 @@ namespace sock {
 		}
 	}
 
+	inline void htonVec3(const glm::vec3& vec3, void* nData) {
+		uint32_t* buf = reinterpret_cast<uint32_t*>(nData);
+		uint32_t nx = htonf(vec3.x);
+		buf[0] = nx;
+		uint32_t ny = htonf(vec3.y);
+		buf[1] = ny;
+		uint32_t nz = htonf(vec3.z);
+		buf[2] = nz;
+	}
+
+	inline void ntohVec3(const void* nData, glm::vec3& vec3) {
+		const uint32_t* buf = reinterpret_cast<const uint32_t*>(nData);
+		float hx = ntohf(buf[0]);
+		vec3.x = hx;
+		float hy = ntohf(buf[1]);
+		vec3.y = hy;
+		float hz = ntohf(buf[2]);
+		vec3.z = hz;
+	}
+
 	inline void htonAddr(const sockaddr_storage& addr, void* nData) {
 		uint16_t* shortData = reinterpret_cast<uint16_t*>(nData);
 		shortData[0] = htons(addr.ss_family); shortData++;
