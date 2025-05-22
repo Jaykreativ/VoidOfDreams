@@ -98,6 +98,16 @@ std::shared_ptr<Packet> Packet::receiveFrom(int& type, int socket, int flags) {
 		spPacket->unpackData(buf, dataSize);
 		break;
 	}
+	case eDamage: {
+		spPacket = std::make_shared<DamagePacket>();
+		spPacket->unpackData(buf, dataSize);
+		break;
+	}
+	case eRay: {
+		spPacket = std::make_shared<RayPacket>();
+		spPacket->unpackData(buf, dataSize);
+		break;
+	}
 	default:
 		break;
 	}
@@ -139,6 +149,16 @@ std::shared_ptr<Packet> Packet::receiveFromDgram(int& type, int socket, sockaddr
 	case eMOVE: {
 		spPacket = std::make_shared<MovePacket>();
 		spPacket->unpackData(ptr, dataSize);
+		break;
+	}
+	case eDamage: {
+		spPacket = std::make_shared<DamagePacket>();
+		spPacket->unpackData(buf, dataSize);
+		break;
+	}
+	case eRay: {
+		spPacket = std::make_shared<RayPacket>();
+		spPacket->unpackData(buf, dataSize);
 		break;
 	}
 	default:
@@ -245,7 +265,7 @@ uint32_t DamagePacket::dataSize() {
 }
 
 void DamagePacket::pack(char* buf) {
-	packHeader(buf, eMOVE); buf += headerSize();
+	packHeader(buf, eDamage); buf += headerSize();
 	/* data */
 	packString(buf, username);
 	uint32_t nDamage = htonf(damage);
@@ -266,7 +286,7 @@ uint32_t RayPacket::dataSize() {
 }
 
 void RayPacket::pack(char* buf) {
-	packHeader(buf, eMOVE); buf += headerSize();
+	packHeader(buf, eRay); buf += headerSize();
 	/* data */
 	packString(buf, username);
 	sock::htonVec3(origin, buf); buf += sizeof(glm::vec3);

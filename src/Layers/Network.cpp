@@ -4,6 +4,7 @@
 #include "Shares/NetworkData.h"
 #include "Layers/Game.h"
 #include "Objects/Packets.h"
+#include "Objects/Weapons/Ray.h"
 
 #include "glm.hpp"
 
@@ -196,6 +197,18 @@ namespace client {
 				}
 				else {
 					printf("%s cannot be moved because that client isn't connected\n", packet.username.c_str());
+				}
+				break;
+			}
+			case eDamage: {
+				DamagePacket& packet = *reinterpret_cast<DamagePacket*>(spPacket.get());
+				break;
+			}
+			case eRay: {
+				RayPacket& packet = *reinterpret_cast<RayPacket*>(spPacket.get());
+				std::lock_guard<std::mutex> lk(world.mPlayers);
+				if (std::shared_ptr<Player> spPlayer = world.pPlayer.lock()) {
+					Ray::processRay(packet.origin, packet.direction, world, *spPlayer, *world.players.at(packet.username));
 				}
 				break;
 			}
@@ -464,6 +477,22 @@ namespace server {
 			for (auto clientSocket : _clients) {
 				if (packet.username != clientSocket.username)
 					packet.sendToDgram(_serverSocket.dgram, reinterpret_cast<const sockaddr*>(&clientSocket.addr));
+			}
+			break;
+		}
+		case eDamage: { // uses stream sockets
+			DamagePacket& packet = *reinterpret_cast<DamagePacket*>(spPacket.get());
+			for (auto clientSocket : _clients) {
+				if (packet.username != clientSocket.username)
+					packet.sendTo(clientSocket.stream);
+			}
+			break;
+		}
+		case eRay: { // uses strem sockets
+			RayPacket& packet = *reinterpret_cast<RayPacket*>(spPacket.get());
+			for (auto clientSocket : _clients) {
+				if (packet.username != clientSocket.username)
+					packet.sendTo(clientSocket.stream);
 			}
 			break;
 		}

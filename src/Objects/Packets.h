@@ -13,7 +13,9 @@ enum PacketType {
 	eMESSAGE = 1,
 	eCONNECT = 2,
 	eDISCONNECT = 3,
-	eMOVE = 4
+	eMOVE = 4,
+	eDamage = 5,
+	eRay = 100
 };
 
 class Packet {

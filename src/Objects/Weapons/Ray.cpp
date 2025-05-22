@@ -28,12 +28,15 @@ public:
 void Ray::update(Player& player, PlayerInventory::iterator iterator) {
 	if (m_isTriggered) {
 		m_isTriggered = false; // one time trigger
-		//client::sendRay(player.getTransform()[3], player.getCameraTransform()[2], player.getUsername());
-		//Zap::Scene::RaycastOutput out = {};
-		//RayFilter filter;
-		//filter.excludedActor = player.getPhysicsActor();
-		//if (m_world.scene->raycast(player.getTransform()[3], player.getCameraTransform()[2], 1000, &out, &filter)) {
-		//	printf("ray hit (%fm)\n", out.distance);
-		//}
+		client::sendRay(player.getTransform()[3], player.getCameraTransform()[2], player.getUsername());
+	}
+}
+
+void Ray::processRay(glm::vec3 origin, glm::vec3 direction, WorldData& world, Player& checkPlayer, Player& senderPlayer) {
+	Zap::Scene::RaycastOutput out = {};
+	RayFilter filter;
+	filter.excludedActor = senderPlayer.getPhysicsActor();
+	if (world.scene->raycast(origin, direction, 1000, &out, &filter)) {
+		printf("ray hit (%fm)\n", out.distance);
 	}
 }
