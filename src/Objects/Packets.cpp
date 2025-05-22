@@ -12,7 +12,8 @@ void packString(char*& buf, std::string string) {
 // the ptr will point to the end of the packed string
 std::string unpackString(const char*& buf) {
 	uint32_t usernameSize = ntohl(reinterpret_cast<const uint32_t*>(buf)[0]); buf += sizeof(uint32_t);
-	return std::string(buf, usernameSize); buf += usernameSize;
+	auto str = std::string(buf, usernameSize); buf += usernameSize;
+	return str;
 }
 
 // Packet
