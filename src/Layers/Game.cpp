@@ -140,7 +140,7 @@ void gameLoop(RenderData& render, WorldData& world, NetworkData& network, Contro
 }
 
 void setupLocalPlayer(WorldData& world, std::string username) {
-	world.players[username] = std::make_shared<Player>(*world.scene);
+	world.players[username] = std::make_shared<Player>(*world.scene, username);
 	world.pPlayer = world.players.at(username);
 	if (std::shared_ptr<Player> spPlayer = world.pPlayer.lock()) {
 		spPlayer->getInventory().setItem(std::make_shared<Ray>(world), 0);
@@ -151,7 +151,7 @@ void setupLocalPlayer(WorldData& world, std::string username) {
 }
 
 void setupExternalPlayer(WorldData& world, std::string username) {
-	world.players[username] = std::make_shared<Player>(*world.scene);
+	world.players[username] = std::make_shared<Player>(*world.scene, username);
 }
 
 void setupWorld(WorldData& world) {

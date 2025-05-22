@@ -10,7 +10,7 @@
 
 class Player {
 public:
-	Player(Zap::Scene& scene, Zap::ActorLoader loader = Zap::ActorLoader());
+	Player(Zap::Scene& scene, std::string username, Zap::ActorLoader loader = Zap::ActorLoader());
 	~Player();
 
 	void updateAnimations(float dt);
@@ -19,11 +19,17 @@ public:
 
 	void update(Controls& controls, float dt);
 
+	void damage(float damage);
+
 	void spendEnergy(float energy);
+
+	float getHealth();
 
 	float getEnergy();
 
 	PlayerInventory& getInventory();
+
+	std::string getUsername();
 
 	Zap::Actor getCamera();
 
@@ -37,6 +43,8 @@ public:
 
 	glm::mat4 getTransform();
 
+	// network interaction/synchronization
+	void syncDamage(float damage, float newHealth);
 
 private:
 	Zap::Actor m_base; // this is the actual transform of the player
@@ -46,7 +54,10 @@ private:
 
 	PlayerInventory m_inventory;
 
+	float m_health = 100;
 	float m_energy = 100;
+
+	std::string m_username;
 
 	glm::vec3 m_movementDir = { 0, 0, 0 };
 

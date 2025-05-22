@@ -282,6 +282,28 @@ namespace client {
 			packet.sendToDgram(_serverSocket.dgram, reinterpret_cast<const sockaddr*>(&_serverSocket.addr));
 		}
 	}
+
+	void sendRay(glm::vec3 origin, glm::vec3 direction, std::string username) {
+		std::lock_guard<std::mutex> lk(_mTerminate);
+		if(_isConnected) {
+			RayPacket packet;
+			packet.username = username;
+			packet.origin = origin;
+			packet.direction = direction;
+			packet.sendTo(_serverSocket.stream);
+		}
+	}
+
+	void sendDamage(float damage, Player& player, std::string username) {
+		std::lock_guard<std::mutex> lk(_mTerminate);
+		if (_isConnected) {
+			DamagePacket packet;
+			packet.username = username;
+			packet.damage = damage;
+			packet.health = player.getHealth();
+			packet.sendTo(_serverSocket.stream);
+		}
+	}
 }
 
 bool runClient(NetworkData& network, WorldData& world) {

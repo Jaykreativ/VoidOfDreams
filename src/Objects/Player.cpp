@@ -1,4 +1,5 @@
 #include "Layers/Game.h"
+#include "Layers/Network.h"
 
 #include "glm.hpp"
 #include "imgui.h"
@@ -7,7 +8,9 @@
 
 #include <string>
 
-Player::Player(Zap::Scene& scene, Zap::ActorLoader loader) {
+Player::Player(Zap::Scene& scene, std::string username, Zap::ActorLoader loader)
+	: m_username(username)
+{
 	loader.flags = loader.flags | Zap::ActorLoader::eReuseActor;
 	m_base = loader.load(std::filesystem::path(ACTOR_DIR) / std::filesystem::path("PlayerBase.zac"), &scene);
 	m_core = loader.load(std::filesystem::path(ACTOR_DIR) / std::filesystem::path("PlayerCore.zac"), &scene);
@@ -110,8 +113,17 @@ void Player::update(Controls& controls, float dt) {
 	m_energy += (m_energy * 0.1 + 5) * dt;
 }
 
+void Player::damage(float damage) {
+	m_health -= damage;
+	client::sendDamage(damage, *this, m_username);
+}
+
 void Player::spendEnergy(float energy) {
 	m_energy -= energy;
+}
+
+float Player::getHealth() {
+	return m_health;
 }
 
 float Player::getEnergy() {
@@ -120,6 +132,10 @@ float Player::getEnergy() {
 
 PlayerInventory& Player::getInventory() {
 	return m_inventory;
+}
+
+std::string Player::getUsername() {
+	return m_username;
 }
 
 Zap::Actor Player::getCamera() {
@@ -145,4 +161,8 @@ void Player::setTransform(glm::mat4 transform) {
 
 glm::mat4 Player::getTransform() {
 	return m_hull.cmpTransform_getTransform();
+}
+
+void Player::syncDamage(float damage, float newHealth) {
+	m_health = newHealth;
 }

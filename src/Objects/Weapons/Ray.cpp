@@ -1,5 +1,7 @@
 #include "Ray.h"
 
+#include "Layers/Network.h"
+
 #include "Zap/Scene/Actor.h"
 
 Ray::Ray(WorldData& world)
@@ -26,11 +28,12 @@ public:
 void Ray::update(Player& player, PlayerInventory::iterator iterator) {
 	if (m_isTriggered) {
 		m_isTriggered = false; // one time trigger
-		Zap::Scene::RaycastOutput out = {};
-		RayFilter filter;
-		filter.excludedActor = player.getPhysicsActor();
-		if (m_world.scene->raycast(player.getTransform()[3], player.getCameraTransform()[2], 1000, &out, &filter)) {
-			printf("ray hit (%fm)\n", out.distance);
-		}
+		//client::sendRay(player.getTransform()[3], player.getCameraTransform()[2], player.getUsername());
+		//Zap::Scene::RaycastOutput out = {};
+		//RayFilter filter;
+		//filter.excludedActor = player.getPhysicsActor();
+		//if (m_world.scene->raycast(player.getTransform()[3], player.getCameraTransform()[2], 1000, &out, &filter)) {
+		//	printf("ray hit (%fm)\n", out.distance);
+		//}
 	}
 }
