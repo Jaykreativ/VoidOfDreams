@@ -319,9 +319,14 @@ namespace logger {
 		float yPos = _frameProfileGuiData.contentMin.y - ImGui::GetScrollY();
 		float yOffset = ImGui::GetCursorPosY();
 		float yOffsetText = ImGui::GetCursorPosY();
-		float ySize = ImGui::GetTextLineHeightWithSpacing()*frameTime.children.size();
+		float ySize = 0;
 
 		float frameTimeAvg = frameTime.average();
+
+		for (auto& childPair : frameTime.children) { // draw color boxes
+			if (childPair.second.wasActive)
+				ySize += ImGui::GetTextLineHeightWithSpacing();
+		}
 
 		size_t i = 0;
 		for (auto& childPair : frameTime.children) { // draw color boxes
