@@ -46,6 +46,9 @@ namespace logger {
 		static const size_t sampleCount = 60;
 		std::array<float, sampleCount> durations;
 
+		bool active = false;
+		bool wasActive = false;
+
 		RegionTime time = {};
 
 		void shiftSamples(float duration) {
@@ -191,6 +194,7 @@ namespace logger {
 		auto* newFrameTime = &data.pCurrentFrameTime->children[region];
 		newFrameTime->parent = data.pCurrentFrameTime;
 		newFrameTime->region = region;
+		newFrameTime->active = true;
 		newFrameTime->time.beginTime = std::chrono::high_resolution_clock::now();
 		data.pCurrentFrameTime = newFrameTime;
 #endif // LOG_FRAME_TIMESTAMPS
@@ -207,6 +211,14 @@ namespace logger {
 #endif // LOG_FRAME_TIMESTAMPS
 	}
 
+	void resetActive(RegionFrameTime& frametime) {
+		frametime.wasActive = frametime.active;
+		frametime.active = false;
+		for (auto& pair : frametime.children) {
+			resetActive(pair.second);
+		}
+	}
+
 	void beginFrame() {
 		auto& data = _threads[std::this_thread::get_id()];
 
@@ -215,6 +227,8 @@ namespace logger {
 		data.rootFrameTime.region = "root";
 		data.rootFrameTime.time.beginTime = std::chrono::high_resolution_clock::now();
 		data.pCurrentFrameTime = &data.rootFrameTime;
+
+		resetActive(data.rootFrameTime);
 	}
 
 	void endFrame() {
@@ -248,16 +262,16 @@ namespace logger {
 		auto seed = strHasher(profile.region); // generate random color from region string, same string results in same color
 		float randColor[3];
 		srand(seed); seed = rand();
-		randColor[0] = (float)(seed % 256) / 256;
+		randColor[0] = ((float)(seed % 128) + 128) / 256;
 		srand(seed); seed = rand();
-		randColor[1] = (float)(seed % 256) / 256;
+		randColor[1] = ((float)(seed % 128) + 128) / 256;
 		srand(seed); seed = rand();
-		randColor[2] = (float)(seed % 256) / 256;
+		randColor[2] = ((float)(seed % 128) + 128) / 256;
 
 		drawList->AddRectFilled(
 			_timelineGuiData.zero + glm::vec2(_timelineGuiData.width * std::max<float>(1 - beginFromNow / guiDuration, 0), 25*(depth)),
 			_timelineGuiData.zero + glm::vec2(_timelineGuiData.width * std::max<float>(1 - endFromNow / guiDuration, 0), 25*(depth+1)),
-			ImGui::GetColorU32({ randColor[0], randColor[1], randColor[2], .25}));
+			ImGui::GetColorU32({ randColor[0], randColor[1], randColor[2], 1.f}));
 
 		if(ImGui::TreeNode(profile.region.c_str())){
 			ImGui::Text(("begin was(ms): " + std::to_string(beginFromNow)).c_str());
@@ -293,6 +307,7 @@ namespace logger {
 	struct FrameProfileGuiData {
 		glm::vec2 contentMin = {};
 		glm::vec2 contentMax = {};
+		std::vector<std::string> regionViewPath = {};
 	} _frameProfileGuiData;
 
 	void drawFrameRegion(RegionFrameTime& frameTime, uint32_t depth) {
@@ -308,31 +323,62 @@ namespace logger {
 
 		float frameTimeAvg = frameTime.average();
 
+		size_t i = 0;
 		for (auto& childPair : frameTime.children) { // draw color boxes
+			if (!childPair.second.wasActive)
+				continue;
 			float childAvg = childPair.second.average();
 
-			std::hash<std::string> strHasher;
-			auto seed = strHasher(childPair.second.region); // generate random color from region string, same string results in same color
+
 			float randColor[3];
-			srand(seed); seed = rand();
-			randColor[0] = (float)(seed % 256) / 256;
-			srand(seed); seed = rand();
-			randColor[1] = (float)(seed % 256) / 256;
-			srand(seed); seed = rand();
-			randColor[2] = (float)(seed % 256) / 256;
-			ImU32 color = ImGui::GetColorU32({ randColor[0], randColor[1], randColor[2], .5 });
+			ImGui::ColorConvertHSVtoRGB(i * 0.4 + 0.1, .8, .8, randColor[0], randColor[1], randColor[2]);
+			ImU32 color;
+			if(_frameProfileGuiData.regionViewPath.size() > depth && _frameProfileGuiData.regionViewPath[depth] == childPair.second.region)
+				color = ImGui::GetColorU32({ randColor[0], randColor[1], randColor[2], 1 });
+			else
+				color = ImGui::GetColorU32({ randColor[0], randColor[1], randColor[2], .5 });
 
 			float xDurationSize = xSize * childAvg / frameTimeAvg;
-			drawList->AddRectFilled(
-				{ xPos + xOffset, yPos + yOffset },
-				{ xPos + xOffset + xDurationSize, yPos + yOffset + ySize},
-				color);
+			glm::vec2 rectMin = { xPos + xOffset, yPos + yOffset };
+			glm::vec2 rectMax = {xPos + xOffset + xDurationSize, yPos + yOffset + ySize};
+			drawList->AddRectFilled(rectMin, rectMax, color);
+
+			// check for click input
+			if (
+				ImGui::IsMouseClicked(ImGuiMouseButton_Left) &&
+				ImGui::IsMouseHoveringRect(rectMin, rectMax)
+			) {
+				auto& vector = _frameProfileGuiData.regionViewPath;
+				if (!childPair.second.children.empty()) {
+					std::string topRegion = "";
+					int j = vector.size() - 1;
+					for (;;j--) { // find out the index of the clicked region in path, if not in path j = -1
+						if (j < 0)
+							break;
+						topRegion = vector[j];
+						if (topRegion == childPair.second.region)
+							break;
+					}
+					if(vector.empty() || frameTime.region == vector.back())
+						vector.push_back(childPair.second.region);
+					else if (j >= 0) {
+						if (j == vector.size() - 1)
+							vector.pop_back();
+						else
+							vector.erase(vector.begin() + j + 1, vector.end());
+					}
+				}
+			}
+
 			xOffset += xDurationSize;
+			i++;
 		}
 		xOffset = ImGui::GetCursorPosX();
 		yOffset = ImGui::GetCursorPosY();
 		yOffsetText = ImGui::GetCursorPosY();
 		for (auto& childPair : frameTime.children) { // draw labels
+			if (!childPair.second.wasActive)
+				continue;
 			float childAvg = childPair.second.average();
 
 			float xDurationSize = xSize * childAvg / frameTimeAvg;
@@ -344,10 +390,12 @@ namespace logger {
 		}
 		ImGui::SetCursorPosY(yOffset + ySize + 10);
 
-		for (auto& childPair : frameTime.children) {
-			drawFrameRegion(childPair.second, depth + 1);
+		if (_frameProfileGuiData.regionViewPath.size() > depth) {
+			for (auto& childPair : frameTime.children) {
+				if(_frameProfileGuiData.regionViewPath[depth] == childPair.second.region)
+					drawFrameRegion(childPair.second, depth + 1);
+			}
 		}
-
 	}
 
 	void drawFrameProfileImGui() {

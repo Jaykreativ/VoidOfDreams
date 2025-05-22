@@ -61,6 +61,21 @@ void drawNetworkInterface(NetworkData& network, WorldData& world) {
 
 void update(WorldData& world, NetworkData& network, Controls& controls, float dt, Zap::Window& window) {
 	static bool captured = false;
+
+	logger::beginRegion("players");
+	{
+		std::lock_guard<std::mutex> lk(world.mPlayers);
+		if (captured) if (std::shared_ptr<Player> spPlayer = world.pPlayer.lock()) {
+			spPlayer->updateInputs(controls, dt);
+		}
+		for (auto spPlayerPair : world.players) {
+			spPlayerPair.second->updateAnimations(dt);
+			spPlayerPair.second->update(controls);
+		}  
+	}
+	logger::endRegion();
+
+	logger::beginRegion("gui");
 	bool wasCaptured = captured;
 	if (wasCaptured)
 		ImGui::BeginDisabled();
@@ -80,18 +95,6 @@ void update(WorldData& world, NetworkData& network, Controls& controls, float dt
 	if (ImGui::Button("Third Person"))
 		controls.cameraMode = Controls::eTHIRD_PERSON;
 
-	{
-		std::lock_guard<std::mutex> lk(world.mPlayers);
-		if (captured) if (std::shared_ptr<Player> spPlayer = world.pPlayer.lock()) {
-			spPlayer->updateInputs(controls, dt);
-		}
-		for (auto spPlayerPair : world.players) {
-			spPlayerPair.second->updateAnimations(dt);
-			spPlayerPair.second->update(controls);
-		}  
-	}
-
-	logger::beginRegion("gui");
 	drawNetworkInterface(network, world);
 
 	ImGui::Begin("Frame Profile");
@@ -110,6 +113,7 @@ void update(WorldData& world, NetworkData& network, Controls& controls, float dt
 void gameLoop(RenderData& render, WorldData& world, NetworkData& network, Controls& controls) {
 	float deltaTime = 0;
 	while (!render.window->shouldClose()) {
+		logger::beginFrame();
 		logger::beginRegion("loop"); // define regions for profiling
 		auto startFrame = std::chrono::high_resolution_clock::now();
 
@@ -119,10 +123,14 @@ void gameLoop(RenderData& render, WorldData& world, NetworkData& network, Contro
 		{
 			std::lock_guard<std::mutex> lk(world.mPlayers);
 			if (std::shared_ptr<Player> spPlayer = world.pPlayer.lock()) { // enable rendering only if player is selected
+				logger::beginRegion("engine");
 				render.pbRender->updateCamera(spPlayer->getCamera());
 				render.pbRender->enable();
 				world.scene->update();
+				logger::endRegion();
+				logger::beginRegion("simulation");
 				world.scene->simulate(deltaTime);
+				logger::endRegion();
 			}
 			else {
 				render.pbRender->disable();
@@ -146,6 +154,7 @@ void gameLoop(RenderData& render, WorldData& world, NetworkData& network, Contro
 		deltaTime = std::chrono::duration_cast<std::chrono::duration<float>>(endFrame - startFrame).count();
 		logger::endRegion();
 		//logger::cleanTimeline();
+		logger::endFrame();
 	}
 }
 
