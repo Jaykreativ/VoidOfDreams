@@ -8,6 +8,12 @@ namespace client {
 
 	// the world.mPlayers mutex must be locked
 	void sendPlayerMove(NetworkData& network, WorldData& world);
+
+	// the world.mPlayers mutex must be locked
+	void sendRay(glm::vec3 origin, glm::vec3 direction, std::string username);
+
+	// the world.mPlayers mutex must be locked
+	void sendDamage(float damage, Player& player, std::string username);
 }
 
 // runs the client networking
