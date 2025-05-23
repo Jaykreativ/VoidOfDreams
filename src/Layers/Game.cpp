@@ -27,7 +27,7 @@ void drawNetworkInterface(NetworkData& network, WorldData& world) {
 	memcpy(usernameBuf, network.username.data(), std::min<int>(50, network.username.size()));
 	ImGui::InputText("username", usernameBuf, 50);
 	network.username = usernameBuf;
-
+	
 	static char ipBuf[50] = "";
 	memcpy(ipBuf, network.ip.data(), std::min<int>(16, network.ip.size()));
 	ImGui::InputText("ip", ipBuf, 50);
@@ -50,7 +50,7 @@ void drawNetworkInterface(NetworkData& network, WorldData& world) {
 			runServer(network);
 		}
 	}
-
+	
 	if (clientRunning) {
 		if (ImGui::Button("Stop Client")) {
 			terminateClient(network, world);
@@ -65,6 +65,24 @@ void drawNetworkInterface(NetworkData& network, WorldData& world) {
 
 void update(WorldData& world, NetworkData& network, Controls& controls, float dt, Zap::Window& window) {
 	static bool captured = false;
+
+	logger::beginRegion("players");
+	{
+		std::lock_guard<std::mutex> lk(world.mPlayers);
+		if (std::shared_ptr<Player> spPlayer = world.pPlayer.lock()) {
+			ImGui::Text(("Energy: " + std::to_string(spPlayer->getEnergy())).c_str());
+			ImGui::Text(("Health: " + std::to_string(spPlayer->getHealth())).c_str());
+			if (captured)
+				spPlayer->updateInputs(controls, dt);
+		}
+		for (auto spPlayerPair : world.players) {
+			spPlayerPair.second->updateAnimations(dt);
+			spPlayerPair.second->update(controls, dt);
+		}
+	}
+	logger::endRegion();
+
+	logger::beginRegion("gui");
 	bool wasCaptured = captured;
 	if (wasCaptured)
 		ImGui::BeginDisabled();
@@ -84,21 +102,16 @@ void update(WorldData& world, NetworkData& network, Controls& controls, float dt
 	if (ImGui::Button("Third Person"))
 		controls.cameraMode = Controls::eTHIRD_PERSON;
 
-	{
-		std::lock_guard<std::mutex> lk(world.mPlayers);
-		if (std::shared_ptr<Player> spPlayer = world.pPlayer.lock()) {
-			ImGui::Text(("Energy: " + std::to_string(spPlayer->getEnergy())).c_str());
-			ImGui::Text(("Health: " + std::to_string(spPlayer->getHealth())).c_str());
-			if (captured)
-				spPlayer->updateInputs(controls, dt);
-		}
-		for (auto spPlayerPair : world.players) {
-			spPlayerPair.second->updateAnimations(dt);
-			spPlayerPair.second->update(controls, dt);
-		}
-	}
-
 	drawNetworkInterface(network, world);
+
+	ImGui::Begin("Frame Profile");
+	logger::drawFrameProfileImGui();
+	ImGui::End();
+
+	//ImGui::Begin("Timeline");
+	//logger::drawTimelineImGui();
+	//ImGui::End();
+	logger::endRegion();
 
 	if (wasCaptured)
 		ImGui::EndDisabled();
@@ -107,19 +120,24 @@ void update(WorldData& world, NetworkData& network, Controls& controls, float dt
 void gameLoop(RenderData& render, WorldData& world, NetworkData& network, Controls& controls) {
 	float deltaTime = 0;
 	while (!render.window->shouldClose()) {
-		//logger::beginRegion("loop"); // define regions for profiling
+		logger::beginFrame();
+		logger::beginRegion("loop"); // define regions for profiling
 		auto startFrame = std::chrono::high_resolution_clock::now();
 
-
+		logger::beginRegion("update");
 		update(world, network, controls, deltaTime, *render.window);
 
 		{
 			std::lock_guard<std::mutex> lk(world.mPlayers);
 			if (std::shared_ptr<Player> spPlayer = world.pPlayer.lock()) { // enable rendering only if player is selected
+				logger::beginRegion("engine");
 				render.pbRender->updateCamera(spPlayer->getCamera());
 				render.pbRender->enable();
 				world.scene->update();
+				logger::endRegion();
+				logger::beginRegion("simulation");
 				world.scene->simulate(deltaTime);
+				logger::endRegion();
 			}
 			else {
 				render.pbRender->disable();
@@ -128,16 +146,22 @@ void gameLoop(RenderData& render, WorldData& world, NetworkData& network, Contro
 
 			client::sendPlayerMove(network, world);
 		}
+		logger::endRegion();
 
+		logger::beginRegion("render");
 		render.renderer->render();
+		logger::endRegion();
 
+		logger::beginRegion("present");
 		render.window->present();
+		logger::endRegion();
 		render.window->pollEvents();
 
 		auto endFrame = std::chrono::high_resolution_clock::now();
 		deltaTime = std::chrono::duration_cast<std::chrono::duration<float>>(endFrame - startFrame).count();
-		//logger::endRegion();
+		logger::endRegion();
 		//logger::cleanTimeline();
+		logger::endFrame();
 	}
 }
 
