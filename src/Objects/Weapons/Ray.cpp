@@ -4,6 +4,9 @@
 
 #include "Zap/Scene/Actor.h"
 
+const float _energyCost = 10;
+const float _damage = 10;
+
 Ray::Ray(WorldData& world)
 	: m_world(world)
 {}
@@ -26,10 +29,11 @@ public:
 };
 
 void Ray::update(Player& player, PlayerInventory::iterator iterator) {
-	if (m_isTriggered) {
-		m_isTriggered = false; // one time trigger
+	if (m_isTriggered && (player.getEnergy() >= _energyCost)) {
 		client::sendRay(player.getTransform()[3], player.getCameraTransform()[2], player.getUsername());
+		player.spendEnergy(_energyCost);
 	}
+	m_isTriggered = false; // one time trigger
 }
 
 void Ray::processRay(glm::vec3 origin, glm::vec3 direction, WorldData& world, Player& checkPlayer, Player& senderPlayer) {
@@ -37,6 +41,8 @@ void Ray::processRay(glm::vec3 origin, glm::vec3 direction, WorldData& world, Pl
 	RayFilter filter;
 	filter.excludedActor = senderPlayer.getPhysicsActor();
 	if (world.scene->raycast(origin, direction, 1000, &out, &filter)) {
-		printf("ray hit (%fm)\n", out.distance);
+		if (out.actor == checkPlayer.getPhysicsActor()) {
+			checkPlayer.damage(_damage);
+		}
 	}
 }

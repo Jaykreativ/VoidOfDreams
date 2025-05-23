@@ -202,6 +202,11 @@ namespace client {
 			}
 			case eDamage: {
 				DamagePacket& packet = *reinterpret_cast<DamagePacket*>(spPacket.get());
+				std::lock_guard<std::mutex> lk(world.mPlayers);
+				if (world.players.count(packet.username)) {
+					auto spPlayer = world.players.at(packet.username);
+					spPlayer->syncDamage(packet.damage, packet.health);
+				}
 				break;
 			}
 			case eRay: {

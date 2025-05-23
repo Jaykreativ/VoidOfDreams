@@ -86,9 +86,11 @@ void update(WorldData& world, NetworkData& network, Controls& controls, float dt
 
 	{
 		std::lock_guard<std::mutex> lk(world.mPlayers);
-		if (captured) if (std::shared_ptr<Player> spPlayer = world.pPlayer.lock()) {
+		if (std::shared_ptr<Player> spPlayer = world.pPlayer.lock()) {
 			ImGui::Text(("Energy: " + std::to_string(spPlayer->getEnergy())).c_str());
-			spPlayer->updateInputs(controls, dt);
+			ImGui::Text(("Health: " + std::to_string(spPlayer->getHealth())).c_str());
+			if (captured)
+				spPlayer->updateInputs(controls, dt);
 		}
 		for (auto spPlayerPair : world.players) {
 			spPlayerPair.second->updateAnimations(dt);

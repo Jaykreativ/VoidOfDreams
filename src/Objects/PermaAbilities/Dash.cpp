@@ -2,6 +2,8 @@
 
 #include "Objects/Player.h"
 
+const float _energyCost = 30;
+
 void Dash::update(Player& player, PlayerInventory::iterator iterator) {
 	if (m_isTriggered && (player.getEnergy() >= _energyCost)) {
 		auto transform = player.getCameraTransform();
