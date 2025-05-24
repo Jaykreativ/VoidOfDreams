@@ -1,6 +1,10 @@
 #include "Network.h"
 
+#include "SockUitls.h"
 #include "Shares/NetworkData.h"
+#include "Layers/Game.h"
+#include "Objects/Packets.h"
+#include "Objects/Weapons/Ray.h"
 
 #include "glm.hpp"
 
@@ -33,126 +37,6 @@ typedef in6_addr IN6_ADDR;
 
 #define UDP_PACKET_BUFFER_SIZE 1472
 
-namespace sock {
-	int closeSocket(int socket) {
-#ifdef _WIN32
-		return closesocket(socket);
-#elif __linux__
-		return close(socket);
-#endif
-	}
-
-	int pollState(pollfd fds[], size_t nfds, int timeout) {
-#ifdef _WIN32
-		return WSAPoll(fds, nfds, timeout);
-#elif __linux__
-		return poll(fds, nfds, timeout);
-#endif
-	}
-
-	IN_ADDR presentationToAddrIPv4(std::string presentation) {
-		IN_ADDR addr;
-		if (inet_pton(AF_INET, presentation.c_str(), &addr) <= 0) {
-			fprintf(stderr, "error while decoding ip address\n");
-			exit(3);
-		}
-		return addr;
-	}
-	IN6_ADDR presentationToAddrIPv6(std::string presentation) {
-		IN6_ADDR addr;
-		if (inet_pton(AF_INET6, presentation.c_str(), &addr) <= 0) {
-			fprintf(stderr, "error while decoding ip address\n");
-			exit(3);
-		}
-		return addr;
-	}
-
-	std::string addrToPresentationIPv4(IN_ADDR addr) {
-		char ip4[INET_ADDRSTRLEN];
-		inet_ntop(AF_INET, &addr, ip4, INET_ADDRSTRLEN);
-		return std::string(ip4);
-	}
-	std::string addrToPresentationIPv6(IN6_ADDR addr) {
-		char ip6[INET6_ADDRSTRLEN];
-		inet_ntop(AF_INET6, &addr, ip6, INET6_ADDRSTRLEN);
-		return ip6;
-	}
-	std::string addrToPresentation(sockaddr* sa) {
-		if (sa->sa_family == AF_INET) {
-			return addrToPresentationIPv4(reinterpret_cast<sockaddr_in*>(sa)->sin_addr);
-		}
-		return addrToPresentationIPv6(reinterpret_cast<sockaddr_in6*>(sa)->sin6_addr);
-	}
-
-	int cmpAddr(const sockaddr* a, const sockaddr* b) {
-		if (a->sa_family != b->sa_family)
-			return -1;
-
-		if (a->sa_family == AF_INET) {
-			sockaddr_in sa4a = *reinterpret_cast<const sockaddr_in*>(a);
-			sockaddr_in sa4b = *reinterpret_cast<const sockaddr_in*>(b);
-			return *(uint32_t*)(&sa4a.sin_addr) - *(uint32_t*)(&sa4b.sin_addr) +
-				sa4a.sin_port - sa4b.sin_port;
-		}
-		else if (a->sa_family == AF_INET6) {
-			sockaddr_in6 sa6a = *reinterpret_cast<const sockaddr_in6*>(a);
-			sockaddr_in6 sa6b = *reinterpret_cast<const sockaddr_in6*>(b);
-			return memcmp((char*)&sa6a, (char*)&sa6b, sizeof(sockaddr_in6));
-		}
-		else {
-			printf("cmpAddr: unsupported address family %i\n", (int)a->sa_family);
-			exit(0);
-		}
-	}
-
-	int lastError() {
-#ifdef _WIN32
-		return WSAGetLastError();
-#elif __linux__
-		return errno;
-#endif
-	}
-
-	void printLastError(const char* msg) {
-#ifdef _WIN32
-		char* s = NULL;
-		FormatMessageA(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
-			NULL, WSAGetLastError(),
-			MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
-			(LPSTR)&s, 0, NULL);
-		fprintf(stderr, "%s: %s\n", msg, s);
-#elif __linux__
-		perror(msg);
-#endif
-	}
-}
-
-void htonMat4(const glm::mat4& mat4, void* nData) {
-	uint32_t* buf = reinterpret_cast<uint32_t*>(nData);
-	for (size_t i = 0; i < 16; i += 1) {
-		uint32_t nf = htonf(mat4[floor(i/4)][i%4]);
-		buf[i] = nf;
-	}
-}
-
-void ntohMat4(const void* nData, glm::mat4& mat4) {
-	const uint32_t* buf = reinterpret_cast<const uint32_t*>(nData);
-	for (size_t i = 0; i < 16; i += 1) {
-		float hf = ntohf(buf[i]);
-		mat4[floor(i / 4)][i % 4] = hf;
-	}
-}
-
-void htonAddr(const sockaddr_storage& addr, void* nData) {
-	uint16_t* shortData = reinterpret_cast<uint16_t*>(nData);
-	shortData[0] = htons(addr.ss_family); shortData++;
-}
-
-void ntohAddr(const void* nData, sockaddr_storage& addr) {
-	const uint16_t* shortData = reinterpret_cast<const uint16_t*>(nData);
-	addr.ss_family = ntohs(shortData[0]); shortData++;
-}
-
 struct SocketData { // combine the socket and its address into one type, cause they're always needed when using both tcp and udp.
 	std::string username;
 	int stream;
@@ -170,349 +54,6 @@ struct SocketData { // combine the socket and its address into one type, cause t
 		return sock::cmpAddr(saa, sab);
 	}
 };
-
-/* Packets */
-
-enum PacketType {
-	eMESSAGE = 1,
-	eCONNECT = 2,
-	eDISCONNECT = 3,
-	eMOVE = 4
-};
-
-class Packet {
-public:
-	// send this packet to the specified socket
-	// socket has to be a stream socket or a connected dgram socket
-	void sendTo(int socket, int flags = 0);
-
-	// send this packet to the specified socket
-	// socket has to be a dgram socket
-	void sendToDgram(int socket, const sockaddr* addr, int flags = 0);
-
-	// receive a packet from the specified socket
-	// socket has to be a stream socket or a connected dgram socket
-	static std::shared_ptr<Packet> receiveFrom(int& type, int socket, int flags = 0);
-
-	// receive a packet from the specified socket
-	// socket has to be a dgram socket
-	// the address that sent the received packet will be written to addr with the size of adrrlen
-	static std::shared_ptr<Packet> receiveFromDgram(int& type, int socket, sockaddr* addr, int* addrlen, int flags = 0);
-
-protected:
-	uint32_t fullSize();
-
-	static uint32_t headerSize();
-
-	virtual uint32_t dataSize() = 0;
-
-	// packs just the header
-	// takes the buffer which contains the network package
-	void packHeader(char* buf, const int type);
-
-	// takes just the header
-	// returns the size of the data stored in the packet
-	static void unpackHeader(const char* buf, uint32_t& size, int& type);
-
-	// takes the pointer to a buffer and fills it with the packed packet
-	// should use packHeader
-	virtual void pack(char* buf) = 0;
-
-	// takes the pointer to the data part and fills the package with data
-	virtual void unpackData(const char* buf, uint32_t size) = 0;
-};
-
-class MessagePacket : public Packet {
-	friend class Packet;
-public:
-	// data
-	std::string id = "";
-	std::string msg = "";
-
-protected:
-	uint32_t dataSize();
-
-	// packs the data into the given buffer, buffer needs to have the same size as packet.fullSize()
-	void pack(char* buf);
-
-	// takes just the data part
-	void unpackData(const char* buf, uint32_t size);
-};
-
-class ConnectPacket : public Packet {
-	friend class Packet;
-public:
-	// data
-	std::string username = "";
-
-protected:
-	uint32_t dataSize();
-
-	// packs the data into the given buffer, buffer needs to have the same size as packet.fullSize()
-	void pack(char* buf);
-
-	// takes just the data part
-	void unpackData(const char* buf, uint32_t size);
-};
-
-class DisconnectPacket : public Packet {
-	friend class Packet;
-public:
-	// data
-	std::string username = "";
-
-protected:
-	uint32_t dataSize();
-
-	// packs the data into the given buffer, buffer needs to have the same size as packet.fullSize()
-	void pack(char* buf);
-
-	// takes just the data part
-	void unpackData(const char* buf, uint32_t size);
-};
-
-class MovePacket : public Packet {
-	friend class Packet;
-public:
-	// data
-	std::string username = "";
-	glm::mat4 transform = glm::mat4(1);
-
-protected:
-	uint32_t dataSize();
-
-	// packs the data into the given buffer, buffer needs to have the same size as packet.fullSize()
-	void pack(char* buf);
-
-	// takes just the data part
-	void unpackData(const char* buf, uint32_t size);
-};
-
-// Packet
-void Packet::sendTo(int socket, int flags) {
-	uint32_t len = fullSize();
-	char* buf = new char[len];
-	pack(buf);
-
-	uint32_t offset = 0;
-	while (offset < len) {
-		int bytesSent = send(socket, buf + offset, len - offset, 0);
-		if (bytesSent == -1) {
-			sock::printLastError("Packet::send");
-			delete[] buf;
-			return;
-		}
-		offset += bytesSent;
-	}
-	delete[] buf;
-}
-
-void Packet::sendToDgram(int socket, const sockaddr* addr, int flags) {
-	char buf[UDP_PACKET_BUFFER_SIZE];
-	pack(buf);
-
-	int addrlen;
-	if (addr->sa_family == AF_INET)
-		addrlen = sizeof(sockaddr_in);
-	else if (addr->sa_family == AF_INET6)
-		addrlen = sizeof(sockaddr_in6);
-	else {
-		printf("Packet::sendToDgram address family not supported\n");
-		exit(0);
-	}
-	int bytesSent = sendto(socket, buf, UDP_PACKET_BUFFER_SIZE, 0, addr, addrlen); // send header only
-	if (bytesSent == -1) {
-		sock::printLastError("Packet::sendto header");
-		return;
-	}
-}
-
-std::shared_ptr<Packet> Packet::receiveFrom(int& type, int socket, int flags) {
-	char* buf = new char[headerSize()];
-	int bytesRead = recv(socket, buf, headerSize(), 0); // get just header
-	if (bytesRead == -1) {
-		sock::printLastError("Packet::recv header");
-		delete[] buf;
-		return nullptr;
-	}
-	uint32_t dataSize;
-	unpackHeader(buf, dataSize, type);
-	delete[] buf;
-
-	buf = new char[dataSize];
-	bytesRead = recv(socket, buf, dataSize, 0); // get just data
-	if (bytesRead == -1) {
-		sock::printLastError("Packet::recv data");
-		delete[] buf;
-		return nullptr;
-	}
-
-	std::shared_ptr<Packet> spPacket;
-	switch (type)
-	{
-	//case eMESSAGE: {
-	//	spPacket = std::make_shared<MessagePacket>();
-	//	spPacket->unpackData(buf, dataSize);
-	//	break;
-	//}
-	case eCONNECT: {
-		spPacket = std::make_shared<ConnectPacket>();
-		spPacket->unpackData(buf, dataSize);
-		break;
-	}
-	case eDISCONNECT: {
-		spPacket = std::make_shared<DisconnectPacket>();
-		spPacket->unpackData(buf, dataSize);
-		break;
-	}
-	case eMOVE: {
-		spPacket = std::make_shared<MovePacket>();
-		spPacket->unpackData(buf, dataSize);
-		break;
-	}
-	default:
-		break;
-	}
-	delete[] buf;
-
-	return spPacket;
-}
-
-std::shared_ptr<Packet> Packet::receiveFromDgram(int& type, int socket, sockaddr* addr, int* addrlen, int flags) {
-	char buf[UDP_PACKET_BUFFER_SIZE];
-	int bytesRead = recvfrom(socket, buf, UDP_PACKET_BUFFER_SIZE, 0, addr, addrlen); // get just header
-	if (bytesRead == -1) {
-		sock::printLastError("Packet::recvfrom");
-		return nullptr;
-	}
-	char* ptr = buf;
-	uint32_t dataSize;
-	unpackHeader(ptr, dataSize, type);
-	ptr += headerSize();
-
-	std::shared_ptr<Packet> spPacket;
-	switch (type)
-	{
-	//case eMESSAGE: {
-	//	spPacket = std::make_shared<MessagePacket>();
-	//	spPacket->unpackData(ptr, dataSize);
-	//	break;
-	//}
-	case eCONNECT: {
-		spPacket = std::make_shared<ConnectPacket>();
-		spPacket->unpackData(ptr, dataSize);
-		break;
-	}
-	case eDISCONNECT: {
-		spPacket = std::make_shared<DisconnectPacket>();
-		spPacket->unpackData(ptr, dataSize);
-		break;
-	}
-	case eMOVE: {
-		spPacket = std::make_shared<MovePacket>();
-		spPacket->unpackData(ptr, dataSize);
-		break;
-	}
-	default:
-		break;
-	}
-
-	return spPacket;
-
-}
-
-uint32_t Packet::fullSize() {
-		return headerSize() + dataSize();
-	}
-
-uint32_t Packet::headerSize() {
-		return 2 * sizeof(uint32_t);
-	}
-
-void Packet::packHeader(char* buf, const int type) {
-		uint32_t* uintBuf = reinterpret_cast<uint32_t*>(buf);
-		uintBuf[0] = htonl(dataSize());
-		uintBuf[1] = htonl(type);
-	}
-
-void Packet::unpackHeader(const char* buf, uint32_t& size, int& type) {
-		const uint32_t* uintBuf = reinterpret_cast<const uint32_t*>(buf);
-		size = ntohl(uintBuf[0]);
-		type = ntohl(uintBuf[1]);
-	}
-
-// MessagePacket
-//uint32_t MessagePacket::dataSize() {
-//		return sizeof(uint32_t) + id.size() + sizeof(uint32_t) + msg.size();
-//	}
-//
-//void MessagePacket::pack(char* buf) {
-//		packHeader(buf, eMESSAGE); buf += headerSize();
-//		/* data */
-//		uint32_t idSize = htonl(id.size());
-//		memcpy(buf, &idSize, sizeof(uint32_t));    buf += sizeof(uint32_t);
-//		memcpy(buf, id.data(), id.size());         buf += id.size();
-//		uint32_t msgSize = htonl(msg.size());
-//		memcpy(buf, &msgSize, sizeof(uint32_t));   buf += sizeof(uint32_t);
-//		memcpy(buf, msg.data(), msg.size());       buf += msg.size();
-//}
-//
-//void MessagePacket::unpackData(const char* buf, uint32_t size) {
-//		uint32_t idSize = ntohl(reinterpret_cast<const uint32_t*>(buf)[0]); buf += sizeof(uint32_t);
-//		id = std::string(buf, idSize); buf += idSize;
-//		uint32_t msgSize = ntohl(reinterpret_cast<const uint32_t*>(buf)[0]); buf += sizeof(uint32_t);
-//		msg = std::string(buf, msgSize); buf += msgSize;
-//}
-
-// ConnectPacket
-uint32_t ConnectPacket::dataSize() {
-	return username.size();
-}
-
-void ConnectPacket::pack(char* buf) {
-	packHeader(buf, eCONNECT); buf += headerSize();
-	/* data */
-	memcpy(buf, username.data(), username.size());
-}
-
-void ConnectPacket::unpackData(const char* buf, uint32_t size) {
-	username = std::string(buf, size);
-}
-
-// DisconnectPacket
-uint32_t DisconnectPacket::dataSize() {
-	return username.size();
-}
-
-void DisconnectPacket::pack(char* buf) {
-	packHeader(buf, eDISCONNECT); buf += headerSize();
-	/* data */
-	memcpy(buf, username.data(), username.size());
-}
-
-void DisconnectPacket::unpackData(const char* buf, uint32_t size) {
-	username = std::string(buf, size);
-}
-
-// MovePacket
-uint32_t MovePacket::dataSize() {
-	return sizeof(uint32_t) + username.size() + sizeof(glm::mat4);
-}
-
-void MovePacket::pack(char* buf) {
-	packHeader(buf, eMOVE); buf += headerSize();
-	/* data */
-	uint32_t usernameSize = htonl(username.size());
-	memcpy(buf, &usernameSize, sizeof(uint32_t)); buf += sizeof(uint32_t);
-	memcpy(buf, username.data(), username.size()); buf += username.size();
-	htonMat4(transform, buf);
-}
-
-void MovePacket::unpackData(const char* buf, uint32_t size) {
-	uint32_t usernameSize = ntohl(reinterpret_cast<const uint32_t*>(buf)[0]); buf += sizeof(uint32_t);
-	username = std::string(buf, usernameSize); buf += usernameSize;
-	ntohMat4(buf, transform);
-}
 
 namespace client {
 	std::mutex _mTerminate; // controls access to variables for terminating the client
@@ -656,9 +197,11 @@ namespace client {
 			case eCONNECT: {
 				ConnectPacket& packet = *reinterpret_cast<ConnectPacket*>(spPacket.get());
 				std::lock_guard<std::mutex> lk(world.mPlayers);
-				world.players[packet.username] = std::make_shared<Player>(*world.scene); // add newly connected player
 				if (packet.username == network.username) { // set this clients player
-					world.pPlayer = world.players.at(packet.username);
+					setupLocalPlayer(world, packet.username);
+				}
+				else {
+					setupExternalPlayer(world, packet.username);
 				}
 				break;
 			}
@@ -676,6 +219,23 @@ namespace client {
 				}
 				else {
 					printf("%s cannot be moved because that client isn't connected\n", packet.username.c_str());
+				}
+				break;
+			}
+			case eDamage: {
+				DamagePacket& packet = *reinterpret_cast<DamagePacket*>(spPacket.get());
+				std::lock_guard<std::mutex> lk(world.mPlayers);
+				if (world.players.count(packet.username)) {
+					auto spPlayer = world.players.at(packet.username);
+					spPlayer->syncDamage(packet.damage, packet.health);
+				}
+				break;
+			}
+			case eRay: {
+				RayPacket& packet = *reinterpret_cast<RayPacket*>(spPacket.get());
+				std::lock_guard<std::mutex> lk(world.mPlayers);
+				if (std::shared_ptr<Player> spPlayer = world.pPlayer.lock()) {
+					Ray::processRay(packet.origin, packet.direction, world, *spPlayer, *world.players.at(packet.username));
 				}
 				break;
 			}
@@ -760,6 +320,28 @@ namespace client {
 			packet.username = network.username;
 			packet.transform = spPlayer->getTransform();
 			packet.sendToDgram(_serverSocket.dgram, reinterpret_cast<const sockaddr*>(&_serverSocket.addr));
+		}
+	}
+
+	void sendRay(glm::vec3 origin, glm::vec3 direction, std::string username) {
+		std::lock_guard<std::mutex> lk(_mTerminate);
+		if(_isConnected) {
+			RayPacket packet;
+			packet.username = username;
+			packet.origin = origin;
+			packet.direction = direction;
+			packet.sendTo(_serverSocket.stream);
+		}
+	}
+
+	void sendDamage(float damage, Player& player, std::string username) {
+		std::lock_guard<std::mutex> lk(_mTerminate);
+		if (_isConnected) {
+			DamagePacket packet;
+			packet.username = username;
+			packet.damage = damage;
+			packet.health = player.getHealth();
+			packet.sendTo(_serverSocket.stream);
 		}
 	}
 }
@@ -922,6 +504,22 @@ namespace server {
 			for (auto clientSocket : _clients) {
 				if (packet.username != clientSocket.username)
 					packet.sendToDgram(_serverSocket.dgram, reinterpret_cast<const sockaddr*>(&clientSocket.addr));
+			}
+			break;
+		}
+		case eDamage: { // uses stream sockets
+			DamagePacket& packet = *reinterpret_cast<DamagePacket*>(spPacket.get());
+			for (auto clientSocket : _clients) {
+				if (packet.username != clientSocket.username)
+					packet.sendTo(clientSocket.stream);
+			}
+			break;
+		}
+		case eRay: { // uses strem sockets
+			RayPacket& packet = *reinterpret_cast<RayPacket*>(spPacket.get());
+			for (auto clientSocket : _clients) {
+				if (packet.username != clientSocket.username)
+					packet.sendTo(clientSocket.stream);
 			}
 			break;
 		}

@@ -22,16 +22,40 @@ file(GLOB VOD_Objects
     "./src/Objects/*.h"
 )
 
+file(GLOB VOD_Weapons
+    "./src/Objects/Weapons/*.cpp"
+    "./src/Objects/Weapons/*.h"
+)
+
+file(GLOB VOD_Abilities
+    "./src/Objects/Abilities/*.cpp"
+    "./src/Objects/Abilities/*.h"
+)
+
+file(GLOB VOD_PermaAbilities
+    "./src/Objects/PermaAbilities/*.cpp"
+    "./src/Objects/PermaAbilities/*.h"
+)
+
+file(GLOB VOD_Triggers
+    "./src/Objects/Triggers/*.cpp"
+    "./src/Objects/Triggers/*.h"
+)
+
 source_group("Source" FILES ${VOD_SRC})
 source_group("Source/Layers" FILES  ${VOD_Layers})
 source_group("Source/Shares" FILES  ${VOD_Shares})
 source_group("Source/Objects" FILES  ${VOD_Objects})
+source_group("Source/Objects/Weapons" FILES  ${VOD_Weapons})
+source_group("Source/Objects/Abilities" FILES  ${VOD_Abilities})
+source_group("Source/Objects/PermaAbilities" FILES  ${VOD_PermaAbilities})
+source_group("Source/Objects/Triggers" FILES  ${VOD_Triggers})
 
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/lib)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/lib)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/bin)
 
-add_executable(VOD ${VOD_SRC} ${VOD_Shares} ${VOD_Layers} ${VOD_Objects})
+add_executable(VOD ${VOD_SRC} ${VOD_Shares} ${VOD_Layers} ${VOD_Objects} ${VOD_Weapons} ${VOD_Abilities} ${VOD_PermaAbilities} ${VOD_Triggers})
 
 set_property(TARGET VOD PROPERTY CXX_STANDARD 17)
 set_property(TARGET VOD PROPERTY VS_DEBUGGER_WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}")

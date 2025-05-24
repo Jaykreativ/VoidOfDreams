@@ -24,9 +24,10 @@
 	{}
 
 #include "Shares/Controls.h"
+#include "Shares/World.h"
 
-namespace vod {
+void setupLocalPlayer(WorldData& world, std::string username);
 
-}
+void setupExternalPlayer(WorldData& world, std::string username);
 
 void runGame();
