@@ -291,12 +291,12 @@ namespace client {
 	//	}
 	//}
 
-	void sendPlayerMove(NetworkData& network, WorldData& world) {
+	void sendPlayerMove(Player& player) {
 		std::lock_guard<std::mutex> lk(_mTerminate);
-		if(_isConnected) if (std::shared_ptr<Player> spPlayer = world.pPlayer.lock()) {
+		if(_isConnected) {
 			MovePacket packet;
-			packet.username = network.username;
-			packet.transform = spPlayer->getTransform();
+			packet.username = player.getUsername();
+			packet.transform = player.getTransform();
 			packet.sendToDgram(_serverSocket.dgram, reinterpret_cast<const sockaddr*>(&_serverSocket.addr));
 		}
 	}

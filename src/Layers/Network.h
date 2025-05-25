@@ -7,7 +7,7 @@ namespace client {
 	bool isRunning();
 
 	// the world.mPlayers mutex must be locked
-	void sendPlayerMove(NetworkData& network, WorldData& world);
+	void sendPlayerMove(Player& player);
 
 	// the world.mPlayers mutex must be locked
 	void sendRay(glm::vec3 origin, glm::vec3 direction, std::string username);

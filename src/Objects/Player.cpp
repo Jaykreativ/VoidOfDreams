@@ -9,26 +9,23 @@
 #include <string>
 
 Player::Player(Zap::Scene& scene, std::string username, Zap::ActorLoader loader)
-	: m_username(username)
+	: m_scene(scene), m_username(username)
 {
-	loader.flags = loader.flags | Zap::ActorLoader::eReuseActor;
-	m_base = loader.load(std::filesystem::path(ACTOR_DIR) / std::filesystem::path("PlayerBase.zac"), &scene);
-	m_core = loader.load(std::filesystem::path(ACTOR_DIR) / std::filesystem::path("PlayerCore.zac"), &scene);
-	m_hull = loader.load(std::filesystem::path(ACTOR_DIR) / std::filesystem::path("PlayerHull.zac"), &scene);
-	m_hull.cmpRigidDynamic_setAngularDamping(.5);
-	m_hull.cmpRigidDynamic_setLinearDamping(.9);
+	m_base = loader.load(std::filesystem::path(ACTOR_DIR) / std::filesystem::path("PlayerBase.zac"), &m_scene);
 
 	m_camera = Zap::Actor(); // creating a camera to follow player
-	scene.attachActor(m_camera);
+	m_scene.attachActor(m_camera);
 	m_camera.addTransform(glm::mat4(1));
 	m_camera.addCamera();
 }
 
 Player::~Player() {
 	m_base.destroy();
-	m_core.destroy();
-	m_hull.destroy();
 	m_camera.destroy();
+	if (m_active) {
+		m_core.destroy();
+		m_hull.destroy();
+	}
 }
 
 void Player::updateCamera(Controls& controls) {
@@ -36,26 +33,30 @@ void Player::updateCamera(Controls& controls) {
 	glm::vec3 zDir = glm::normalize(transform[2]);
 
 	glm::mat4 offset = glm::mat4(1);
-	switch (controls.cameraMode)
-	{
-	case Controls::eFIRST_PERSON:
-		offset = glm::translate(offset, zDir*1.6f); // offset camera to the front in first person
-		break;
-	case Controls::eTHIRD_PERSON:
-		offset = glm::translate(offset, zDir*-5.f); // offset camera to the back in third person
-		break;
-	default:
-		break;
+	if (m_active) {
+		switch (controls.cameraMode)
+		{
+		case Controls::eFIRST_PERSON:
+			offset = glm::translate(offset, zDir*1.6f); // offset camera to the front in first person
+			break;
+		case Controls::eTHIRD_PERSON:
+			offset = glm::translate(offset, zDir*-5.f); // offset camera to the back in third person
+			break;
+		default:
+			break;
+		}
 	}
 	m_camera.cmpCamera_setOffset(offset);
 	m_camera.cmpTransform_setTransform(m_base.cmpTransform_getTransform());
 }
 
 void Player::updateAnimations(float dt) {
-	m_core.cmpTransform_rotate(-90 * dt, {2, 3, 5});
+	if (m_active) {
+		m_core.cmpTransform_rotate(-90 * dt, {2, 3, 5});
 
-	auto v = m_hull.cmpRigidDynamic_getLinearVelocity();
-	m_hull.cmpRigidDynamic_addTorque(v*0.0001f);
+		auto v = m_hull.cmpRigidDynamic_getLinearVelocity();
+		m_hull.cmpRigidDynamic_addTorque(v*0.0001f);
+	}
 }
 
 void Player::updateInputs(Controls& controls, float dt) {
@@ -96,26 +97,61 @@ void Player::updateInputs(Controls& controls, float dt) {
 	rotMat = glm::rotate(rotMat, mouseDelta.y / 100.f, {1, 0, 0});
 
 	m_base.cmpTransform_setTransform(transform * rotMat);
-	m_hull.cmpRigidDynamic_addForce(m_movementDir * dt * speed);
+	if (m_active) {
+		m_hull.cmpRigidDynamic_addForce(m_movementDir * dt * speed);
+	}
+	else {
+		m_base.cmpTransform_setPos(m_base.cmpTransform_getPos() + m_movementDir * dt * speed);
+	}
 }
 
 void Player::update(Controls& controls, float dt) {
-	glm::vec3 pos = m_hull.cmpTransform_getPos(); // hull determines the position
-	m_core.cmpTransform_setPos(pos);
-	m_base.cmpTransform_setPos(pos);
+	if (m_active) {
+		glm::vec3 pos = m_hull.cmpTransform_getPos(); // hull determines the position
+		m_core.cmpTransform_setPos(pos);
+		m_base.cmpTransform_setPos(pos);
+	}
 
 	updateCamera(controls);
 
-	m_energy = std::min<float>(m_energy, 100);
+	if (m_active) {
+		m_energy = std::min<float>(m_energy, 100);
 
-	m_inventory.update(*this); // update all items in inventory
+		m_inventory.update(*this); // update all items in inventory
 
-	m_energy += (m_energy * 0.1 + 5) * dt;
+		m_energy += (m_energy * 0.1 + 5) * dt;
+		m_spawnProtection -= dt;
+
+		client::sendPlayerMove(*this);
+	}
 }
 
 void Player::damage(float damage) {
+	if (m_spawnProtection > 0)
+		return;
 	m_health -= damage;
+	if (m_health <= 0) {
+		kill();
+		spawn();
+	}
 	client::sendDamage(damage, *this, m_username);
+}
+
+void Player::kill() {
+	if (m_active) {
+		m_core.destroy();
+		m_hull.destroy();
+	}
+	m_active = false;
+}
+
+void Player::spawn(Zap::ActorLoader loader) {
+	loader.flags = loader.flags | Zap::ActorLoader::eReuseActor;
+	m_core = loader.load(std::filesystem::path(ACTOR_DIR) / std::filesystem::path("PlayerCore.zac"), &m_scene);
+	m_hull = loader.load(std::filesystem::path(ACTOR_DIR) / std::filesystem::path("PlayerHull.zac"), &m_scene);
+	m_hull.cmpRigidDynamic_setAngularDamping(.5);
+	m_hull.cmpRigidDynamic_setLinearDamping(.9);
+	m_active = true;
 }
 
 void Player::spendEnergy(float energy) {
