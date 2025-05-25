@@ -48,6 +48,8 @@ public:
 	glm::mat4 getTransform();
 
 	// network interaction/synchronization
+	void syncMove(glm::mat4 transform);
+
 	void syncDamage(float damage, float newHealth);
 
 private:

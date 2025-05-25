@@ -11,6 +11,7 @@
 Player::Player(Zap::Scene& scene, std::string username, Zap::ActorLoader loader)
 	: m_scene(scene), m_username(username)
 {
+	loader.flags = loader.flags | Zap::ActorLoader::eReuseActor;
 	m_base = loader.load(std::filesystem::path(ACTOR_DIR) / std::filesystem::path("PlayerBase.zac"), &m_scene);
 
 	m_camera = Zap::Actor(); // creating a camera to follow player
@@ -197,6 +198,11 @@ void Player::setTransform(glm::mat4 transform) {
 
 glm::mat4 Player::getTransform() {
 	return m_hull.cmpTransform_getTransform();
+}
+
+void Player::syncMove(glm::mat4 transform) {
+	if(m_active)
+		setTransform(transform);
 }
 
 void Player::syncDamage(float damage, float newHealth) {

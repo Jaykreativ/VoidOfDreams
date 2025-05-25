@@ -193,7 +193,7 @@ namespace client {
 				MovePacket& packet = *reinterpret_cast<MovePacket*>(spPacket.get());
 				std::lock_guard<std::mutex> lk(world.mPlayers);
 				if (world.players.count(packet.username)) {
-					world.players.at(packet.username)->setTransform(packet.transform);
+					world.players.at(packet.username)->syncMove(packet.transform);
 				}
 				else {
 					printf("%s cannot be moved because that client isn't connected\n", packet.username.c_str());
