@@ -161,10 +161,10 @@ void Player::spawn(Zap::ActorLoader loader) {
 }
 
 void Player::kill() {
-	localKill();
 	if (m_active) {
 		client::sendPlayerDeath(m_username);
 	}
+	localKill();
 }
 
 void Player::spendEnergy(float energy) {
