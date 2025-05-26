@@ -5,6 +5,10 @@
 #include "Shares/NetworkData.h"
 #include "Shares/Render.h"
 #include "Shares/World.h"
+#include "Objects/Inventory.h"
+#include "Objects/Weapons/Ray.h"
+#include "Objects/PermaAbilities/Dash.h"
+#include "Objects/Triggers/SimpleTrigger.h"
 
 #include "Zap/Zap.h"
 #include "Zap/FileLoader.h"
@@ -65,13 +69,16 @@ void update(WorldData& world, NetworkData& network, Controls& controls, float dt
 	logger::beginRegion("players");
 	{
 		std::lock_guard<std::mutex> lk(world.mPlayers);
-		if (captured) if (std::shared_ptr<Player> spPlayer = world.pPlayer.lock()) {
-			spPlayer->updateInputs(controls, dt);
+		if (std::shared_ptr<Player> spPlayer = world.pPlayer.lock()) {
+			ImGui::Text(("Energy: " + std::to_string(spPlayer->getEnergy())).c_str());
+			ImGui::Text(("Health: " + std::to_string(spPlayer->getHealth())).c_str());
+			if (captured)
+				spPlayer->updateInputs(controls, dt);
 		}
 		for (auto spPlayerPair : world.players) {
 			spPlayerPair.second->updateAnimations(dt);
-			spPlayerPair.second->update(controls);
-		}  
+			spPlayerPair.second->update(controls, dt);
+		}
 	}
 	logger::endRegion();
 
@@ -94,17 +101,6 @@ void update(WorldData& world, NetworkData& network, Controls& controls, float dt
 	ImGui::SameLine();
 	if (ImGui::Button("Third Person"))
 		controls.cameraMode = Controls::eTHIRD_PERSON;
-
-	{
-		std::lock_guard<std::mutex> lk(world.mPlayers);
-		if (captured) if (std::shared_ptr<Player> spPlayer = world.pPlayer.lock()) {
-			spPlayer->updateInputs(controls, dt);
-		}
-		for (auto spPlayerPair : world.players) {
-			spPlayerPair.second->updateAnimations(dt);
-			spPlayerPair.second->update(controls);
-		}
-	}
 
 	drawNetworkInterface(network, world);
 
@@ -167,6 +163,21 @@ void gameLoop(RenderData& render, WorldData& world, NetworkData& network, Contro
 		//logger::cleanTimeline();
 		logger::endFrame();
 	}
+}
+
+void setupLocalPlayer(WorldData& world, std::string username) {
+	world.players[username] = std::make_shared<Player>(*world.scene, username);
+	world.pPlayer = world.players.at(username);
+	if (std::shared_ptr<Player> spPlayer = world.pPlayer.lock()) {
+		spPlayer->getInventory().setItem(std::make_shared<Ray>(world), 0);
+		spPlayer->getInventory().setItem(std::make_shared<SimpleTrigger>(ImGuiMouseButton_Left), 1);
+		spPlayer->getInventory().setItem(std::make_shared<Dash>(), 2);
+		spPlayer->getInventory().setItem(std::make_shared<SimpleTrigger>(ImGuiKey_LeftShift), 3);
+	}
+}
+
+void setupExternalPlayer(WorldData& world, std::string username) {
+	world.players[username] = std::make_shared<Player>(*world.scene, username);
 }
 
 void setupWorld(WorldData& world) {
