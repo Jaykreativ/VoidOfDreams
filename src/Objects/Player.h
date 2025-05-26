@@ -21,9 +21,9 @@ public:
 
 	void damage(float damage);
 
-	void kill();
-
 	void spawn(Zap::ActorLoader loader = Zap::ActorLoader());
+
+	void kill();
 
 	void spendEnergy(float energy);
 
@@ -48,6 +48,10 @@ public:
 	glm::mat4 getTransform();
 
 	// network interaction/synchronization
+	void syncSpawn();
+
+	void syncDeath();
+
 	void syncMove(glm::mat4 transform);
 
 	void syncDamage(float damage, float newHealth);
@@ -72,4 +76,8 @@ private:
 	float m_spawnProtection = 5;
 
 	void updateCamera(Controls& controls);
+
+	void localSpawn(Zap::ActorLoader& loader);
+
+	void localKill();
 };

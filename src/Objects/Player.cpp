@@ -135,10 +135,19 @@ void Player::damage(float damage) {
 		kill();
 		spawn();
 	}
-	client::sendDamage(damage, *this, m_username);
+	client::sendPlayerDamage(damage, *this, m_username);
 }
 
-void Player::kill() {
+void Player::localSpawn(Zap::ActorLoader& loader) {
+	loader.flags = loader.flags | Zap::ActorLoader::eReuseActor;
+	m_core = loader.load(std::filesystem::path(ACTOR_DIR) / std::filesystem::path("PlayerCore.zac"), &m_scene);
+	m_hull = loader.load(std::filesystem::path(ACTOR_DIR) / std::filesystem::path("PlayerHull.zac"), &m_scene);
+	m_hull.cmpRigidDynamic_setAngularDamping(.5);
+	m_hull.cmpRigidDynamic_setLinearDamping(.9);
+	m_active = true;
+}
+
+void Player::localKill() {
 	if (m_active) {
 		m_core.destroy();
 		m_hull.destroy();
@@ -147,12 +156,15 @@ void Player::kill() {
 }
 
 void Player::spawn(Zap::ActorLoader loader) {
-	loader.flags = loader.flags | Zap::ActorLoader::eReuseActor;
-	m_core = loader.load(std::filesystem::path(ACTOR_DIR) / std::filesystem::path("PlayerCore.zac"), &m_scene);
-	m_hull = loader.load(std::filesystem::path(ACTOR_DIR) / std::filesystem::path("PlayerHull.zac"), &m_scene);
-	m_hull.cmpRigidDynamic_setAngularDamping(.5);
-	m_hull.cmpRigidDynamic_setLinearDamping(.9);
-	m_active = true;
+	localSpawn(loader);
+	client::sendPlayerSpawn(m_username);
+}
+
+void Player::kill() {
+	localKill();
+	if (m_active) {
+		client::sendPlayerDeath(m_username);
+	}
 }
 
 void Player::spendEnergy(float energy) {
@@ -198,6 +210,15 @@ void Player::setTransform(glm::mat4 transform) {
 
 glm::mat4 Player::getTransform() {
 	return m_hull.cmpTransform_getTransform();
+}
+
+void Player::syncSpawn() {
+	Zap::ActorLoader loader;
+	localSpawn(loader);
+}
+
+void Player::syncDeath() {
+	localKill();
 }
 
 void Player::syncMove(glm::mat4 transform) {
