@@ -483,12 +483,17 @@ namespace server {
 			client.username = packet.username;
 			printf("%s joined the server\n", packet.username.c_str());
 
-			for (auto otherClient : _clients) {
+			for (auto& otherClient : _clients) {
 				packet.sendTo(otherClient.socket.stream); // tell all clients(including the new one) that a new player joined
 				if (otherClient.socket.stream != client.socket.stream) {
 					ConnectPacket connectPacket;
 					connectPacket.username = otherClient.username;
 					connectPacket.sendTo(client.socket.stream); // send the new client all clients that where already present
+					if (otherClient.active) {
+						SpawnPacket spawnPacket;
+						spawnPacket.username = otherClient.username;
+						spawnPacket.sendTo(client.socket.stream); // send the new client all active players to spawn in
+					}
 				}
 			}
 
@@ -511,7 +516,7 @@ namespace server {
 			} // prevent multiple disconnects
 
 			printf("%s left the server\n", packet.username.c_str());
-			for (auto otherClient : _clients) {
+			for (auto& otherClient : _clients) {
 				if (otherClient.socket.stream != client.socket.stream)
 					packet.sendTo(otherClient.socket.stream);
 			}
@@ -519,7 +524,7 @@ namespace server {
 		}
 		case eMOVE: { // uses dgram sockets
 			MovePacket& packet = *reinterpret_cast<MovePacket*>(spPacket.get());
-			for (auto otherClient : _clients) {
+			for (auto& otherClient : _clients) {
 				if (packet.username != otherClient.username)
 					packet.sendToDgram(_serverSocket.dgram, reinterpret_cast<const sockaddr*>(&otherClient.socket.addr));
 			}
@@ -527,7 +532,7 @@ namespace server {
 		}
 		case eDamage: { // uses stream sockets
 			DamagePacket& packet = *reinterpret_cast<DamagePacket*>(spPacket.get());
-			for (auto otherClient : _clients) {
+			for (auto& otherClient : _clients) {
 				if (packet.username != otherClient.username)
 					packet.sendTo(otherClient.socket.stream);
 			}
@@ -535,23 +540,27 @@ namespace server {
 		}
 		case eSpawn: { // uses stream sockets
 			SpawnPacket& packet = *reinterpret_cast<SpawnPacket*>(spPacket.get());
-			for (auto otherClient : _clients) {
+			for (auto& otherClient : _clients) {
 				if (packet.username != otherClient.username)
 					packet.sendTo(otherClient.socket.stream);
+				else
+					otherClient.active = true; // if its the spawned player, mark as activated for future connects
 			}
 			break;
 		}
 		case eDeath: { // uses stream sockets
 			DeathPacket& packet = *reinterpret_cast<DeathPacket*>(spPacket.get());
-			for (auto otherClient : _clients) {
+			for (auto& otherClient : _clients) {
 				if (packet.username != otherClient.username)
 					packet.sendTo(otherClient.socket.stream);
+				else
+					otherClient.active = true; // if its the killed player, mark as inactive for future connects
 			}
 			break;
 		}
 		case eRay: { // uses strem sockets
 			RayPacket& packet = *reinterpret_cast<RayPacket*>(spPacket.get());
-			for (auto otherClient : _clients) {
+			for (auto& otherClient : _clients) {
 				if (packet.username != otherClient.username)
 					packet.sendTo(otherClient.socket.stream);
 			}
