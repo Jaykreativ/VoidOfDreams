@@ -17,9 +17,16 @@ public:
 
 	void updateInputs(Controls& controls, float dt);
 
-	void update(Controls& controls, float dt);
+	// only this clients player is updated
+	void updateMechanics(Controls& controls, float dt);
+
+	void update(float dt);
 
 	void damage(float damage);
+
+	void spawn(Zap::ActorLoader loader = Zap::ActorLoader());
+
+	void kill();
 
 	void spendEnergy(float energy);
 
@@ -44,9 +51,17 @@ public:
 	glm::mat4 getTransform();
 
 	// network interaction/synchronization
+	void syncSpawn();
+
+	void syncDeath();
+
+	void syncMove(glm::mat4 transform);
+
 	void syncDamage(float damage, float newHealth);
 
 private:
+	bool m_active = false;
+
 	Zap::Actor m_base; // this is the actual transform of the player
 	Zap::Actor m_core; // the bright core in the centre
 	Zap::Actor m_hull; // the rotating hull
@@ -58,8 +73,15 @@ private:
 	float m_energy = 100;
 
 	std::string m_username;
+	Zap::Scene& m_scene;
 
 	glm::vec3 m_movementDir = { 0, 0, 0 };
+	float m_spawnProtection = 5;
+	float m_spawnTimeout = 5;
 
 	void updateCamera(Controls& controls);
+
+	void localSpawn(Zap::ActorLoader& loader);
+
+	void localKill();
 };

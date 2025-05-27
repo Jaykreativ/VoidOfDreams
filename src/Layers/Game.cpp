@@ -72,12 +72,19 @@ void update(WorldData& world, NetworkData& network, Controls& controls, float dt
 		if (std::shared_ptr<Player> spPlayer = world.pPlayer.lock()) {
 			ImGui::Text(("Energy: " + std::to_string(spPlayer->getEnergy())).c_str());
 			ImGui::Text(("Health: " + std::to_string(spPlayer->getHealth())).c_str());
+			spPlayer->updateMechanics(controls, dt);
 			if (captured)
 				spPlayer->updateInputs(controls, dt);
+			if (ImGui::IsKeyPressed(ImGuiKey_R)) {
+				spPlayer->kill();
+				spPlayer->spawn();
+			}
+			if (ImGui::IsKeyPressed(ImGuiKey_K))
+				spPlayer->kill();
 		}
 		for (auto spPlayerPair : world.players) {
 			spPlayerPair.second->updateAnimations(dt);
-			spPlayerPair.second->update(controls, dt);
+			spPlayerPair.second->update(dt);
 		}
 	}
 	logger::endRegion();
@@ -143,8 +150,6 @@ void gameLoop(RenderData& render, WorldData& world, NetworkData& network, Contro
 				render.pbRender->disable();
 				ImGui::GetBackgroundDrawList()->AddRectFilled({ 0, 0 }, ImGui::GetMainViewport()->Size, ImGui::GetColorU32(render.pbRender->clearColor)); // improvised clear
 			}
-
-			client::sendPlayerMove(network, world);
 		}
 		logger::endRegion();
 

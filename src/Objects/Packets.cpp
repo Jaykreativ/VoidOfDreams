@@ -103,6 +103,16 @@ std::shared_ptr<Packet> Packet::receiveFrom(int& type, int socket, int flags) {
 		spPacket->unpackData(buf, dataSize);
 		break;
 	}
+	case eSpawn: {
+		spPacket = std::make_shared<SpawnPacket>();
+		spPacket->unpackData(buf, dataSize);
+		break;
+	}
+	case eDeath: {
+		spPacket = std::make_shared<DeathPacket>();
+		spPacket->unpackData(buf, dataSize);
+		break;
+	}
 	case eRay: {
 		spPacket = std::make_shared<RayPacket>();
 		spPacket->unpackData(buf, dataSize);
@@ -153,6 +163,16 @@ std::shared_ptr<Packet> Packet::receiveFromDgram(int& type, int socket, sockaddr
 	}
 	case eDamage: {
 		spPacket = std::make_shared<DamagePacket>();
+		spPacket->unpackData(buf, dataSize);
+		break;
+	}
+	case eSpawn: {
+		spPacket = std::make_shared<SpawnPacket>();
+		spPacket->unpackData(buf, dataSize);
+		break;
+	}
+	case eDeath: {
+		spPacket = std::make_shared<DeathPacket>();
 		spPacket->unpackData(buf, dataSize);
 		break;
 	}
@@ -278,6 +298,36 @@ void DamagePacket::unpackData(const char* buf, uint32_t size) {
 	username = unpackString(buf);
 	damage = ntohf(reinterpret_cast<const uint32_t*>(buf)[0]);
 	health = ntohf(reinterpret_cast<const uint32_t*>(buf)[1]);
+}
+
+// SpawnPacket
+uint32_t SpawnPacket::dataSize() {
+	return sizeof(uint32_t) + username.size();
+}
+
+void SpawnPacket::pack(char* buf) {
+	packHeader(buf, eSpawn); buf += headerSize();
+	/* data */
+	packString(buf, username);
+}
+
+void SpawnPacket::unpackData(const char* buf, uint32_t size) {
+	username = unpackString(buf);
+}
+
+// DeathPacket
+uint32_t DeathPacket::dataSize() {
+	return sizeof(uint32_t) + username.size();
+}
+
+void DeathPacket::pack(char* buf) {
+	packHeader(buf, eDeath); buf += headerSize();
+	/* data */
+	packString(buf, username);
+}
+
+void DeathPacket::unpackData(const char* buf, uint32_t size) {
+	username = unpackString(buf);
 }
 
 // RayPacket
