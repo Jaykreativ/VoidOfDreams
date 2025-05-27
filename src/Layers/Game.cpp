@@ -72,6 +72,7 @@ void update(WorldData& world, NetworkData& network, Controls& controls, float dt
 		if (std::shared_ptr<Player> spPlayer = world.pPlayer.lock()) {
 			ImGui::Text(("Energy: " + std::to_string(spPlayer->getEnergy())).c_str());
 			ImGui::Text(("Health: " + std::to_string(spPlayer->getHealth())).c_str());
+			spPlayer->updateMechanics(controls, dt);
 			if (captured)
 				spPlayer->updateInputs(controls, dt);
 			if (ImGui::IsKeyPressed(ImGuiKey_R)) {
@@ -83,7 +84,7 @@ void update(WorldData& world, NetworkData& network, Controls& controls, float dt
 		}
 		for (auto spPlayerPair : world.players) {
 			spPlayerPair.second->updateAnimations(dt);
-			spPlayerPair.second->update(controls, dt);
+			spPlayerPair.second->update(dt);
 		}
 	}
 	logger::endRegion();

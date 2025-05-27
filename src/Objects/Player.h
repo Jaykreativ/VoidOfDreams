@@ -17,7 +17,10 @@ public:
 
 	void updateInputs(Controls& controls, float dt);
 
-	void update(Controls& controls, float dt);
+	// only this clients player is updated
+	void updateMechanics(Controls& controls, float dt);
+
+	void update(float dt);
 
 	void damage(float damage);
 
@@ -74,6 +77,7 @@ private:
 
 	glm::vec3 m_movementDir = { 0, 0, 0 };
 	float m_spawnProtection = 5;
+	float m_spawnTimeout = 5;
 
 	void updateCamera(Controls& controls);
 

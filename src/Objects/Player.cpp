@@ -106,24 +106,32 @@ void Player::updateInputs(Controls& controls, float dt) {
 	}
 }
 
-void Player::update(Controls& controls, float dt) {
-	if (m_active) {
-		glm::vec3 pos = m_hull.cmpTransform_getPos(); // hull determines the position
-		m_core.cmpTransform_setPos(pos);
-		m_base.cmpTransform_setPos(pos);
-	}
-
+void Player::updateMechanics(Controls& controls, float dt) {
 	updateCamera(controls);
-
 	if (m_active) {
 		m_energy = std::min<float>(m_energy, 100);
 
 		m_inventory.update(*this); // update all items in inventory
 
 		m_energy += (m_energy * 0.1 + 5) * dt;
+		m_energy = std::min<float>(m_energy, 100.f);
 		m_spawnProtection -= dt;
 
 		client::sendPlayerMove(*this);
+	}
+	else {
+		m_spawnTimeout -= dt;
+		if (m_spawnTimeout < 0)
+			spawn();
+		ImGui::Text(std::to_string(m_spawnTimeout).c_str());
+	}
+}
+
+void Player::update(float dt) {
+	if (m_active) {
+		glm::vec3 pos = m_hull.cmpTransform_getPos(); // hull determines the position
+		m_core.cmpTransform_setPos(pos);
+		m_base.cmpTransform_setPos(pos);
 	}
 }
 
@@ -133,7 +141,6 @@ void Player::damage(float damage) {
 	m_health -= damage;
 	if (m_health <= 0) {
 		kill();
-		spawn();
 	}
 	client::sendPlayerDamage(damage, *this, m_username);
 }
@@ -157,11 +164,13 @@ void Player::localKill() {
 
 void Player::spawn(Zap::ActorLoader loader) {
 	localSpawn(loader);
+	m_spawnProtection = 5;
 	client::sendPlayerSpawn(m_username);
 }
 
 void Player::kill() {
 	if (m_active) {
+		m_spawnTimeout = 5;
 		client::sendPlayerDeath(m_username);
 	}
 	localKill();
