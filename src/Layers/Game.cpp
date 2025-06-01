@@ -23,8 +23,6 @@ void drawHud(Player& player) {
 	ImGui::SetNextWindowSize(ImGui::GetIO().DisplaySize);
 	ImGui::SetNextWindowPos({0, 0});
 	ImGui::Begin("Hud", nullptr, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoDocking | ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoFocusOnAppearing);
-	ImGui::Text(("Energy: " + std::to_string(player.getEnergy())).c_str());
-	ImGui::Text(("Health: " + std::to_string(player.getHealth())).c_str());
 	auto* draw = ImGui::GetWindowDrawList();
 
 	// crosshair
@@ -46,11 +44,23 @@ void drawHud(Player& player) {
 		glm::vec2 healthMid = offset + glm::vec2(size / 4.f, size / 2.f);
 		glm::vec2 energyMid = offset + glm::vec2(size*3.f/4.f, size/2.f);
 		glm::vec2 rectVec = glm::vec2(size/2.5f, size) / 2.f;
+		auto* font = ImGui::GetFont();
+
+		// health bar
 		ImU32 healthColor = ImGui::GetColorU32({ 0.9, 0.1, 0.1, 1 });
-		draw->AddRectFilled(healthMid-rectVec+glm::vec2(0, (1-player.getHealth() / player.getMaxHealth())*size), healthMid + rectVec, healthColor);
+		draw->AddRectFilled(healthMid - rectVec+glm::vec2(0, (1-player.getHealth() / player.getMaxHealth())*size), healthMid + rectVec, healthColor);
+		std::string strHealth = std::to_string((uint32_t)std::clamp<float>(std::ceil(player.getHealth()), 0, player.getMaxHealth()));
+		float healthTextX = font->CalcTextSizeA(font->FontSize, size / 2.f, 0, strHealth.c_str(), strHealth.c_str() + strHealth.size()).x;
+		draw->AddText(glm::vec2(healthMid.x - healthTextX / 2.f, offset.y + size), 0xFFFFFFFF, strHealth.c_str(), strHealth.c_str() + strHealth.size());
+
+		// energy bar
 		ImU32 energyColor = ImGui::GetColorU32({ 0.9, 0.9, 0.9, 1 });
-		draw->AddRectFilled(energyMid -rectVec+glm::vec2(0, (1-player.getEnergy() / player.getMaxEnergy())*size), energyMid + rectVec, energyColor);
+		draw->AddRectFilled(energyMid - rectVec+glm::vec2(0, (1-player.getEnergy() / player.getMaxEnergy())*size), energyMid + rectVec, energyColor);
+		std::string strEnergy = std::to_string((uint32_t)std::clamp<float>(std::ceil(player.getEnergy()), 0, player.getMaxEnergy()));
+		float energyTextX = font->CalcTextSizeA(font->FontSize, size / 2.f, 0, strEnergy.c_str(), strEnergy.c_str() + strEnergy.size()).x;
+		draw->AddText(glm::vec2(energyMid.x - energyTextX / 2.f, offset.y + size), 0xFFFFFFFF, strEnergy.c_str(), strEnergy.c_str() + strEnergy.size());
 	}
+
 	//{
 	//	float size = 100*hudScale;
 	//	glm::vec2 offset = {ImGui::GetWindowSize().x - size*1.1, size*0.1};
