@@ -151,6 +151,8 @@ void Player::localSpawn(Zap::ActorLoader& loader) {
 	m_hull = loader.load(std::filesystem::path(ACTOR_DIR) / std::filesystem::path("PlayerHull.zac"), &m_scene);
 	m_hull.cmpRigidDynamic_setAngularDamping(.5);
 	m_hull.cmpRigidDynamic_setLinearDamping(.9);
+	m_energy = getMaxEnergy();
+	m_health = getMaxHealth();
 	m_active = true;
 }
 
