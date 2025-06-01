@@ -215,7 +215,7 @@ namespace client {
 				MovePacket& packet = *reinterpret_cast<MovePacket*>(spPacket.get());
 				std::lock_guard<std::mutex> lk(world.mPlayers);
 				if (world.players.count(packet.username)) {
-					world.players.at(packet.username)->setTransform(packet.transform);
+					world.players.at(packet.username)->syncMove(packet.transform);
 				}
 				else {
 					printf("%s cannot be moved because that client isn't connected\n", packet.username.c_str());
@@ -228,6 +228,24 @@ namespace client {
 				if (world.players.count(packet.username)) {
 					auto spPlayer = world.players.at(packet.username);
 					spPlayer->syncDamage(packet.damage, packet.health);
+				}
+				break;
+			}
+			case eSpawn: {
+				DamagePacket& packet = *reinterpret_cast<DamagePacket*>(spPacket.get());
+				std::lock_guard<std::mutex> lk(world.mPlayers);
+				if (world.players.count(packet.username)) {
+					auto spPlayer = world.players.at(packet.username);
+					spPlayer->syncSpawn();
+				}
+				break;
+			}
+			case eDeath: {
+				DamagePacket& packet = *reinterpret_cast<DamagePacket*>(spPacket.get());
+				std::lock_guard<std::mutex> lk(world.mPlayers);
+				if (world.players.count(packet.username)) {
+					auto spPlayer = world.players.at(packet.username);
+					spPlayer->syncDeath();
 				}
 				break;
 			}
@@ -313,13 +331,42 @@ namespace client {
 	//	}
 	//}
 
-	void sendPlayerMove(NetworkData& network, WorldData& world) {
+	void sendPlayerMove(Player& player) {
 		std::lock_guard<std::mutex> lk(_mTerminate);
-		if(_isConnected) if (std::shared_ptr<Player> spPlayer = world.pPlayer.lock()) {
+		if(_isConnected) {
 			MovePacket packet;
-			packet.username = network.username;
-			packet.transform = spPlayer->getTransform();
+			packet.username = player.getUsername();
+			packet.transform = player.getTransform();
 			packet.sendToDgram(_serverSocket.dgram, reinterpret_cast<const sockaddr*>(&_serverSocket.addr));
+		}
+	}
+
+	void sendPlayerSpawn(std::string username) {
+		std::lock_guard<std::mutex> lk(_mTerminate);
+		if(_isConnected) {
+			SpawnPacket packet;
+			packet.username = username;
+			packet.sendTo(_serverSocket.stream);
+		}
+	}
+
+	void sendPlayerDeath(std::string username) {
+		std::lock_guard<std::mutex> lk(_mTerminate);
+		if(_isConnected) {
+			DeathPacket packet;
+			packet.username = username;
+			packet.sendTo(_serverSocket.stream);
+		}
+	}
+
+	void sendPlayerDamage(float damage, Player& player, std::string username) {
+		std::lock_guard<std::mutex> lk(_mTerminate);
+		if (_isConnected) {
+			DamagePacket packet;
+			packet.username = username;
+			packet.damage = damage;
+			packet.health = player.getHealth();
+			packet.sendTo(_serverSocket.stream);
 		}
 	}
 
@@ -330,17 +377,6 @@ namespace client {
 			packet.username = username;
 			packet.origin = origin;
 			packet.direction = direction;
-			packet.sendTo(_serverSocket.stream);
-		}
-	}
-
-	void sendDamage(float damage, Player& player, std::string username) {
-		std::lock_guard<std::mutex> lk(_mTerminate);
-		if (_isConnected) {
-			DamagePacket packet;
-			packet.username = username;
-			packet.damage = damage;
-			packet.health = player.getHealth();
 			packet.sendTo(_serverSocket.stream);
 		}
 	}
@@ -376,9 +412,14 @@ namespace server {
 	std::thread _thread;
 
 	SocketData _serverSocket;
+	struct ClientData {
+		SocketData socket;
+		std::string username;
+		bool active = false;
+	};
 	// this stores all current users
-	std::vector<SocketData> _clients = {};
-	int _eraseOffset = 0; // used in disconnect soeckt because 
+	std::vector<ClientData> _clients = {};
+	int _eraseOffset = 0; // used in disconnect socket
 
 	// the file descriptors used in the poll command
 	// (#0:tcp server)
@@ -401,7 +442,7 @@ namespace server {
 			exit(sock::lastError());
 		}
 		socketData.addr = clientAddr;
-		_clients.push_back(socketData);
+		_clients.push_back({ socketData });
 
 		pollfd clientPollfd; // only for stream clients
 		clientPollfd.fd = socketData.stream;
@@ -413,7 +454,7 @@ namespace server {
 	}
 
 	void disconnectClient(int index) {
-		SocketData socket = _clients[index];
+		SocketData socket = _clients[index].socket;
 		printf("client disconnected: %s\n", sock::addrToPresentation(reinterpret_cast<sockaddr*>(&socket.addr)).c_str());
 
 		if (sock::closeSocket(socket.stream) < 0) {
@@ -426,7 +467,7 @@ namespace server {
 		_eraseOffset++;
 	}
 
-	void handlePacket(SocketData& socket, std::shared_ptr<Packet> spPacket, int type, int clientIndex) {
+	void handlePacket(ClientData& client, std::shared_ptr<Packet> spPacket, int type, int clientIndex) {
 		if (!spPacket.get()) {
 			disconnectClient(clientIndex);
 			return;
@@ -444,8 +485,8 @@ namespace server {
 			ConnectPacket& packet = *reinterpret_cast<ConnectPacket*>(spPacket.get());
 			{
 				bool nameTaken = false;
-				for (const auto& client : _clients)
-					if (client.username == packet.username) {
+				for (const auto& itClient : _clients)
+					if (itClient.username == packet.username) {
 						nameTaken = true;
 						break;
 					}
@@ -453,7 +494,7 @@ namespace server {
 					printf("%s already present, wont be accepted\n", packet.username.c_str());
 					int i = 0;
 					for (const auto& comp : _clients) {
-						if (comp.stream == socket.stream) {
+						if (comp.socket.stream == client.socket.stream) {
 							disconnectClient(i);
 						}
 						i++;
@@ -462,15 +503,20 @@ namespace server {
 				}
 			} // prevent multiple usernames
 
-			socket.username = packet.username;
+			client.username = packet.username;
 			printf("%s joined the server\n", packet.username.c_str());
 
-			for (auto clientSocket : _clients) {
-				packet.sendTo(clientSocket.stream); // tell all clients(including the new one) that a new player joined
-				if (clientSocket.stream != socket.stream) {
+			for (auto& otherClient : _clients) {
+				packet.sendTo(otherClient.socket.stream); // tell all clients(including the new one) that a new player joined
+				if (otherClient.socket.stream != client.socket.stream) {
 					ConnectPacket connectPacket;
-					connectPacket.username = clientSocket.username;
-					connectPacket.sendTo(socket.stream); // send the new client all clients that where already present
+					connectPacket.username = otherClient.username;
+					connectPacket.sendTo(client.socket.stream); // send the new client all clients that where already present
+					if (otherClient.active) {
+						SpawnPacket spawnPacket;
+						spawnPacket.username = otherClient.username;
+						spawnPacket.sendTo(client.socket.stream); // send the new client all active players to spawn in
+					}
 				}
 			}
 
@@ -481,8 +527,8 @@ namespace server {
 
 			{
 				bool nameTaken = false;
-				for (const auto& client : _clients)
-					if (client.username == packet.username) {
+				for (const auto& itClient : _clients)
+					if (itClient.username == packet.username) {
 						nameTaken = true;
 						break;
 					}
@@ -493,33 +539,53 @@ namespace server {
 			} // prevent multiple disconnects
 
 			printf("%s left the server\n", packet.username.c_str());
-			for (auto clientSocket : _clients) {
-				if (clientSocket.stream != socket.stream)
-					packet.sendTo(clientSocket.stream);
+			for (auto& otherClient : _clients) {
+				if (otherClient.socket.stream != client.socket.stream)
+					packet.sendTo(otherClient.socket.stream);
 			}
 			break;
 		}
 		case eMOVE: { // uses dgram sockets
 			MovePacket& packet = *reinterpret_cast<MovePacket*>(spPacket.get());
-			for (auto clientSocket : _clients) {
-				if (packet.username != clientSocket.username)
-					packet.sendToDgram(_serverSocket.dgram, reinterpret_cast<const sockaddr*>(&clientSocket.addr));
+			for (auto& otherClient : _clients) {
+				if (packet.username != otherClient.username)
+					packet.sendToDgram(_serverSocket.dgram, reinterpret_cast<const sockaddr*>(&otherClient.socket.addr));
 			}
 			break;
 		}
 		case eDamage: { // uses stream sockets
 			DamagePacket& packet = *reinterpret_cast<DamagePacket*>(spPacket.get());
-			for (auto clientSocket : _clients) {
-				if (packet.username != clientSocket.username)
-					packet.sendTo(clientSocket.stream);
+			for (auto& otherClient : _clients) {
+				if (packet.username != otherClient.username)
+					packet.sendTo(otherClient.socket.stream);
+			}
+			break;
+		}
+		case eSpawn: { // uses stream sockets
+			SpawnPacket& packet = *reinterpret_cast<SpawnPacket*>(spPacket.get());
+			for (auto& otherClient : _clients) {
+				if (packet.username != otherClient.username)
+					packet.sendTo(otherClient.socket.stream);
+				else
+					otherClient.active = true; // if its the spawned player, mark as activated for future connects
+			}
+			break;
+		}
+		case eDeath: { // uses stream sockets
+			DeathPacket& packet = *reinterpret_cast<DeathPacket*>(spPacket.get());
+			for (auto& otherClient : _clients) {
+				if (packet.username != otherClient.username)
+					packet.sendTo(otherClient.socket.stream);
+				else
+					otherClient.active = true; // if its the killed player, mark as inactive for future connects
 			}
 			break;
 		}
 		case eRay: { // uses strem sockets
 			RayPacket& packet = *reinterpret_cast<RayPacket*>(spPacket.get());
-			for (auto clientSocket : _clients) {
-				if (packet.username != clientSocket.username)
-					packet.sendTo(clientSocket.stream);
+			for (auto& otherClient : _clients) {
+				if (packet.username != otherClient.username)
+					packet.sendTo(otherClient.socket.stream);
 			}
 			break;
 		}
@@ -535,15 +601,15 @@ namespace server {
 
 		int type;
 		auto spPacket = Packet::receiveFromDgram(type, _serverSocket.dgram, reinterpret_cast<sockaddr*>(&addr), &addrlen);
-		SocketData addrOnly;
-		addrOnly.addr = addr;
+		ClientData addrOnly;
+		addrOnly.socket.addr = addr;
 		handlePacket(addrOnly, spPacket, type, clientIndex); // for dgram packets only their origin address is known while the sockets are unknown
 	}
 
-	void recvClient(SocketData& socket, int clientIndex) {
+	void recvClient(ClientData& client, int clientIndex) {
 		int type;
-		auto spPacket = Packet::receiveFrom(type, socket.stream);
-		handlePacket(socket, spPacket, type, clientIndex);
+		auto spPacket = Packet::receiveFrom(type, client.socket.stream);
+		handlePacket(client, spPacket, type, clientIndex);
 	}
 
 	void handlePoll(int pollCount) {
@@ -588,8 +654,8 @@ namespace server {
 			sock::printLastError("Server close(serverSocket.stream)");
 		if (sock::closeSocket(_serverSocket.dgram) == -1)
 			sock::printLastError("Server close(serverSocket.dgram)");
-		for (const auto& socket : _clients)
-			if (sock::closeSocket(socket.stream) == -1)
+		for (const auto& client : _clients)
+			if (sock::closeSocket(client.socket.stream) == -1)
 				sock::printLastError("Server close(clientSocket)");
 
 		_pollfds.clear();
