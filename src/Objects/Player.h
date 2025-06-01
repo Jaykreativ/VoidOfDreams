@@ -32,7 +32,11 @@ public:
 
 	float getHealth();
 
+	float getMaxHealth();
+
 	float getEnergy();
+
+	float getMaxEnergy();
 
 	PlayerInventory& getInventory();
 

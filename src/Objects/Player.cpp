@@ -184,8 +184,16 @@ float Player::getHealth() {
 	return m_health;
 }
 
+float Player::getMaxHealth() {
+	return 100;
+}
+
 float Player::getEnergy() {
 	return m_energy;
+}
+
+float Player::getMaxEnergy() {
+	return 100;
 }
 
 PlayerInventory& Player::getInventory() {
