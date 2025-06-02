@@ -40,7 +40,7 @@ void Ray::processRay(glm::vec3 origin, glm::vec3 direction, WorldData& world, Pl
 	Zap::Scene::RaycastOutput out = {};
 	RayFilter filter;
 	filter.excludedActor = senderPlayer.getPhysicsActor();
-	if (world.scene->raycast(origin, direction, 1000, &out, &filter)) {
+	if (world.game.spScene->raycast(origin, direction, 1000, &out, &filter)) {
 		if (out.actor == checkPlayer.getPhysicsActor()) {
 			checkPlayer.damage(_damage);
 		}

@@ -11,10 +11,22 @@
 #include <memory>
 #include <mutex>
 
+struct MainMenuWorldData {
+	std::shared_ptr<Zap::Scene> spScene;
+	std::shared_ptr<Player> spPlayer;
+};
+
+struct GameWorldData {
+	std::shared_ptr<Zap::Scene> spScene;
+	std::unordered_map<std::string, std::shared_ptr<Player>> players = {};
+};
+
 struct WorldData {
-	Zap::Scene* scene;
+	std::weak_ptr<Zap::Scene> wpScene;
 
 	std::mutex mPlayers;
-	std::weak_ptr<Player> pPlayer;
-	std::unordered_map<std::string, std::shared_ptr<Player>> players = {};
+	std::weak_ptr<Player> wpPlayer;
+
+	GameWorldData game = {};
+	MainMenuWorldData mainMenu = {};
 };

@@ -55,7 +55,7 @@ void Player::updateAnimations(float dt) {
 	m_core.cmpTransform_rotate(-90 * dt, {2, 3, 5});
 
 	auto v = m_hull.cmpRigidDynamic_getLinearVelocity();
-	m_hull.cmpRigidDynamic_addTorque(v*0.0001f);
+	m_hull.cmpRigidDynamic_addTorque(v*dt*0.1f);
 }
 
 void Player::updateInputs(Controls& controls, float dt) {

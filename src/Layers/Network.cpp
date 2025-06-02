@@ -149,7 +149,7 @@ namespace client {
 
 		{ // delete all players as the client is being terminated
 			std::lock_guard<std::mutex> lk(world.mPlayers);
-			world.players.clear();
+			world.game.players.clear();
 		}
 
 		printf("client done\n");
@@ -186,14 +186,14 @@ namespace client {
 			case eDISCONNECT: {
 				DisconnectPacket& packet = *reinterpret_cast<DisconnectPacket*>(spPacket.get());
 				std::lock_guard<std::mutex> lk(world.mPlayers);
-				world.players.erase(packet.username); // delete the disconnected player
+				world.game.players.erase(packet.username); // delete the disconnected player
 				break;
 			}
 			case eMOVE: {
 				MovePacket& packet = *reinterpret_cast<MovePacket*>(spPacket.get());
 				std::lock_guard<std::mutex> lk(world.mPlayers);
-				if (world.players.count(packet.username)) {
-					world.players.at(packet.username)->setTransform(packet.transform);
+				if (world.game.players.count(packet.username)) {
+					world.game.players.at(packet.username)->setTransform(packet.transform);
 				}
 				else {
 					printf("%s cannot be moved because that client isn't connected\n", packet.username.c_str());
@@ -203,8 +203,8 @@ namespace client {
 			case eDamage: {
 				DamagePacket& packet = *reinterpret_cast<DamagePacket*>(spPacket.get());
 				std::lock_guard<std::mutex> lk(world.mPlayers);
-				if (world.players.count(packet.username)) {
-					auto spPlayer = world.players.at(packet.username);
+				if (world.game.players.count(packet.username)) {
+					auto spPlayer = world.game.players.at(packet.username);
 					spPlayer->syncDamage(packet.damage, packet.health);
 				}
 				break;
@@ -212,8 +212,8 @@ namespace client {
 			case eRay: {
 				RayPacket& packet = *reinterpret_cast<RayPacket*>(spPacket.get());
 				std::lock_guard<std::mutex> lk(world.mPlayers);
-				if (std::shared_ptr<Player> spPlayer = world.pPlayer.lock()) {
-					Ray::processRay(packet.origin, packet.direction, world, *spPlayer, *world.players.at(packet.username));
+				if (std::shared_ptr<Player> spPlayer = world.wpPlayer.lock()) {
+					Ray::processRay(packet.origin, packet.direction, world, *spPlayer, *world.game.players.at(packet.username));
 				}
 				break;
 			}
@@ -293,7 +293,7 @@ namespace client {
 
 	void sendPlayerMove(NetworkData& network, WorldData& world) {
 		std::lock_guard<std::mutex> lk(_mTerminate);
-		if(_isConnected) if (std::shared_ptr<Player> spPlayer = world.pPlayer.lock()) {
+		if(_isConnected) if (std::shared_ptr<Player> spPlayer = world.wpPlayer.lock()) {
 			MovePacket packet;
 			packet.username = network.username;
 			packet.transform = spPlayer->getTransform();

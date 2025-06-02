@@ -63,22 +63,66 @@ void drawNetworkInterface(NetworkData& network, WorldData& world) {
 	}
 }
 
+void updateMainMenu(WorldData& world, Controls& controls, float dt, Zap::Window& window) {
+	static bool captured = false;
+
+	logger::beginRegion("players");
+	{
+		if (captured) {
+			world.mainMenu.spPlayer->updateInputs(controls, dt);
+		}
+		world.mainMenu.spPlayer->updateAnimations(dt);
+		world.mainMenu.spPlayer->update(controls, dt);
+	}
+	logger::endRegion();
+
+	logger::beginRegion("gui");
+	bool wasCaptured = captured;
+	if (wasCaptured)
+		ImGui::BeginDisabled();
+
+	if (ImGui::Button("Capture")) { // use imgui to capture mouse because there is no menu implemented yet
+		glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+		captured = true;
+	}
+	if (captured && ImGui::IsKeyPressed(ImGuiKey_Escape)) {
+		glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
+		captured = false;
+	}
+
+	if (ImGui::Button("First Person"))
+		controls.cameraMode = Controls::eFIRST_PERSON;
+	ImGui::SameLine();
+	if (ImGui::Button("Third Person"))
+		controls.cameraMode = Controls::eTHIRD_PERSON;
+
+	ImGui::Begin("Frame Profile");
+	logger::drawFrameProfileImGui();
+	ImGui::End();
+
+	logger::endRegion();
+
+	if (wasCaptured)
+		ImGui::EndDisabled();
+
+}
+
 void update(WorldData& world, NetworkData& network, Controls& controls, float dt, Zap::Window& window) {
+	updateMainMenu(world, controls, dt, window);
+	return;
 	static bool captured = false;
 
 	logger::beginRegion("players");
 	{
 		std::lock_guard<std::mutex> lk(world.mPlayers);
-		if (std::shared_ptr<Player> spPlayer = world.pPlayer.lock()) {
-			ImGui::Text(("Energy: " + std::to_string(spPlayer->getEnergy())).c_str());
-			ImGui::Text(("Health: " + std::to_string(spPlayer->getHealth())).c_str());
-			if (captured)
-				spPlayer->updateInputs(controls, dt);
+		if (captured) if (std::shared_ptr<Player> spPlayer = world.wpPlayer.lock()) {
+			spPlayer->updateInputs(controls, dt);
 		}
-		for (auto spPlayerPair : world.players) {
+		for (auto spPlayerPair : world.game.players) {
 			spPlayerPair.second->updateAnimations(dt);
 			spPlayerPair.second->update(controls, dt);
-		}
+		} 
+		client::sendPlayerMove(network, world);
 	}
 	logger::endRegion();
 
@@ -128,23 +172,23 @@ void gameLoop(RenderData& render, WorldData& world, NetworkData& network, Contro
 		update(world, network, controls, deltaTime, *render.window);
 
 		{
-			std::lock_guard<std::mutex> lk(world.mPlayers);
-			if (std::shared_ptr<Player> spPlayer = world.pPlayer.lock()) { // enable rendering only if player is selected
-				logger::beginRegion("engine");
-				render.pbRender->updateCamera(spPlayer->getCamera());
-				render.pbRender->enable();
-				world.scene->update();
-				logger::endRegion();
-				logger::beginRegion("simulation");
-				world.scene->simulate(deltaTime);
-				logger::endRegion();
+			if (std::shared_ptr<Zap::Scene> spScene = world.wpScene.lock()) { // update scene only if present
+				std::lock_guard<std::mutex> lk(world.mPlayers);
+				if (std::shared_ptr<Player> spPlayer = world.wpPlayer.lock()) { // enable rendering only if player is selected
+					logger::beginRegion("engine");
+					render.pbRender->updateCamera(spPlayer->getCamera());
+					render.pbRender->enable();
+					spScene->update();
+					logger::endRegion();
+					logger::beginRegion("simulation");
+					spScene->simulate(deltaTime);
+					logger::endRegion();
+				}
+				else {
+					render.pbRender->disable();
+					ImGui::GetBackgroundDrawList()->AddRectFilled({ 0, 0 }, ImGui::GetMainViewport()->Size, ImGui::GetColorU32(render.pbRender->clearColor)); // improvised clear
+				}
 			}
-			else {
-				render.pbRender->disable();
-				ImGui::GetBackgroundDrawList()->AddRectFilled({ 0, 0 }, ImGui::GetMainViewport()->Size, ImGui::GetColorU32(render.pbRender->clearColor)); // improvised clear
-			}
-
-			client::sendPlayerMove(network, world);
 		}
 		logger::endRegion();
 
@@ -166,9 +210,9 @@ void gameLoop(RenderData& render, WorldData& world, NetworkData& network, Contro
 }
 
 void setupLocalPlayer(WorldData& world, std::string username) {
-	world.players[username] = std::make_shared<Player>(*world.scene, username);
-	world.pPlayer = world.players.at(username);
-	if (std::shared_ptr<Player> spPlayer = world.pPlayer.lock()) {
+	world.game.players[username] = std::make_shared<Player>(*world.game.spScene, username);
+	world.wpPlayer = world.game.players.at(username);
+	if (std::shared_ptr<Player> spPlayer = world.wpPlayer.lock()) {
 		spPlayer->getInventory().setItem(std::make_shared<Ray>(world), 0);
 		spPlayer->getInventory().setItem(std::make_shared<SimpleTrigger>(ImGuiMouseButton_Left), 1);
 		spPlayer->getInventory().setItem(std::make_shared<Dash>(), 2);
@@ -177,14 +221,26 @@ void setupLocalPlayer(WorldData& world, std::string username) {
 }
 
 void setupExternalPlayer(WorldData& world, std::string username) {
-	world.players[username] = std::make_shared<Player>(*world.scene, username);
+	world.game.players[username] = std::make_shared<Player>(*world.game.spScene, username);
+}
+
+void setupMainMenuWorld(WorldData& world) {
+	Zap::ActorLoader loader;
+	loader.flags |= Zap::ActorLoader::eReuseActor;
+	loader.load("Actors/Light.zac", world.mainMenu.spScene.get());
+	loader.load("Actors/Cube.zac", world.mainMenu.spScene.get());
+	world.mainMenu.spPlayer = std::make_shared<Player>(*world.mainMenu.spScene.get(), "user", loader);
+	world.mainMenu.spPlayer->setTransform(glm::mat4(1));
+	world.wpPlayer = world.mainMenu.spPlayer;
 }
 
 void setupWorld(WorldData& world) {
 	Zap::ActorLoader loader;
-	loader.load((std::string)"Actors/Light.zac", world.scene);  // Loading actor from file, they can be changed using the editor
-	loader.load((std::string)"Actors/Light2.zac", world.scene); // All actors can be changed at runtime
-	loader.load((std::string)"Actors/Cube.zac", world.scene);}
+	loader.flags |= Zap::ActorLoader::eReuseActor;
+	loader.load((std::string)"Actors/Light.zac", world.game.spScene.get());  // Loading actor from file, they can be changed using the editor
+	loader.load((std::string)"Actors/Light2.zac", world.game.spScene.get()); // All actors can be changed at runtime
+	loader.load((std::string)"Actors/Cube.zac", world.game.spScene.get());
+}
 
 void resize(Zap::ResizeEvent& eventParams, void* customParams) {
 	Zap::PBRenderer* pbRender = reinterpret_cast<Zap::PBRenderer*>(customParams);
@@ -202,14 +258,18 @@ void runGame() {
 
 	Zap::SceneDesc desc{};
 	desc.gravity = { 0, 0, 0 };
-	world.scene = new Zap::Scene();
-	world.scene->init(desc);
+	world.game.spScene = std::make_shared<Zap::Scene>();
+	world.game.spScene->init(desc);
+	world.mainMenu.spScene = std::make_shared<Zap::Scene>();
+	world.mainMenu.spScene->init(desc);
+	world.wpScene = world.mainMenu.spScene;
 
 	render.renderer = new Zap::Renderer();
-	render.pbRender = new Zap::PBRenderer(world.scene);
+	render.pbRender = new Zap::PBRenderer(world.mainMenu.spScene.get());
 	render.pGui = new Zap::Gui();
 
 	setupWorld(world);
+	setupMainMenuWorld(world);
 
 	render.renderer->setTarget(render.window);
 	render.renderer->addRenderTask(render.pbRender);
@@ -219,11 +279,13 @@ void runGame() {
 	render.window->getResizeEventHandler()->addCallback(resize, render.pbRender); // give the window access to the pbRender task to resize its viewport
 	render.pGui->initImGui(render.window);
 
+#ifdef _DEBUG
 	static bool areShadersCompiled = false;
 	if (!areShadersCompiled) {
 		vk::Shader::compile("Zap/Shader/src/", { "PBRShader.vert", "PBRShader.frag" }, { "./" });
 		areShadersCompiled = true;
 	}
+#endif
 
 	render.renderer->init();
 	render.renderer->beginRecord(); // define the actual rendering structure
@@ -238,15 +300,13 @@ void runGame() {
 	terminateClient(network, world); // terminate networking if still running
 	terminateServer();
 
-	world.players.clear();
-
 	render.renderer->destroy();
 	delete render.renderer;
 	render.pGui->destroyImGui();
 	delete render.pGui;
 	delete render.pbRender;
-	world.scene->destroy();
-	delete world.scene;
 	render.window->getResizeEventHandler()->removeCallback(resize, render.pbRender);
 	delete render.window;
+	world.game.spScene->destroy();
+	world.mainMenu.spScene->destroy();
 }
