@@ -17,6 +17,68 @@
 
 #include <chrono>
 
+void drawHud(Player& player) {
+	float hudScale = 1;
+
+	ImGui::SetNextWindowSize(ImGui::GetIO().DisplaySize);
+	ImGui::SetNextWindowPos({0, 0});
+	ImGui::Begin("Hud", nullptr, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoDocking | ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoFocusOnAppearing);
+	auto* draw = ImGui::GetWindowDrawList();
+
+	// crosshair
+	{
+		glm::vec2 middle = glm::vec2(ImGui::GetWindowSize()) / 2.f;
+		float size = 25*hudScale;
+		float thickness = 2*hudScale;
+		ImU32 color = ImGui::GetColorU32({1, 1, 1, 1});
+		glm::vec2 xVec = glm::vec2(size, thickness) / 2.f;
+		draw->AddRectFilled(middle-xVec, middle+xVec, color);
+		glm::vec2 yVec = glm::vec2(thickness, size) / 2.f;
+		draw->AddRectFilled(middle-yVec, middle+yVec, color);
+	}
+
+	// health + energy bar
+	{
+		float size = 100 * hudScale;
+		glm::vec2 offset = glm::vec2(ImGui::GetWindowSize().x - size * 1.1, size * 0.1);
+		glm::vec2 healthMid = offset + glm::vec2(size / 4.f, size / 2.f);
+		glm::vec2 energyMid = offset + glm::vec2(size*3.f/4.f, size/2.f);
+		glm::vec2 rectVec = glm::vec2(size/2.5f, size) / 2.f;
+		auto* font = ImGui::GetFont();
+
+		// health bar
+		ImU32 healthColor = ImGui::GetColorU32({ 0.9, 0.1, 0.1, 1 });
+		draw->AddRectFilled(healthMid - rectVec+glm::vec2(0, (1-player.getHealth() / player.getMaxHealth())*size), healthMid + rectVec, healthColor);
+		std::string strHealth = std::to_string((uint32_t)std::clamp<float>(std::ceil(player.getHealth()), 0, player.getMaxHealth()));
+		float healthTextX = font->CalcTextSizeA(font->FontSize, size / 2.f, 0, strHealth.c_str(), strHealth.c_str() + strHealth.size()).x;
+		draw->AddText(glm::vec2(healthMid.x - healthTextX / 2.f, offset.y + size), 0xFFFFFFFF, strHealth.c_str(), strHealth.c_str() + strHealth.size());
+
+		// energy bar
+		ImU32 energyColor = ImGui::GetColorU32({ 0.9, 0.9, 0.9, 1 });
+		draw->AddRectFilled(energyMid - rectVec+glm::vec2(0, (1-player.getEnergy() / player.getMaxEnergy())*size), energyMid + rectVec, energyColor);
+		std::string strEnergy = std::to_string((uint32_t)std::clamp<float>(std::ceil(player.getEnergy()), 0, player.getMaxEnergy()));
+		float energyTextX = font->CalcTextSizeA(font->FontSize, size / 2.f, 0, strEnergy.c_str(), strEnergy.c_str() + strEnergy.size()).x;
+		draw->AddText(glm::vec2(energyMid.x - energyTextX / 2.f, offset.y + size), 0xFFFFFFFF, strEnergy.c_str(), strEnergy.c_str() + strEnergy.size());
+	}
+
+	//{
+	//	float size = 100*hudScale;
+	//	glm::vec2 offset = {ImGui::GetWindowSize().x - size*1.1, size*0.1};
+	//	glm::vec2 points[] = {
+	//		(glm::vec2(sin(glm::pi<float>() * 0 / 5), cos(glm::pi<float>() * 0 / 5)) - 1.f) / -2.f,
+	//		(glm::vec2(sin(glm::pi<float>() * 2 / 5), cos(glm::pi<float>() * 2 / 5)) - 1.f) / -2.f,
+	//		(glm::vec2(sin(glm::pi<float>() * 4 / 5), cos(glm::pi<float>() * 4 / 5)) - 1.f) / -2.f,
+	//		(glm::vec2(sin(glm::pi<float>() * 6 / 5), cos(glm::pi<float>() * 6 / 5)) - 1.f) / -2.f,
+	//		(glm::vec2(sin(glm::pi<float>() * 8 / 5), cos(glm::pi<float>() * 8 / 5)) - 1.f) / -2.f
+	//	};
+	//	for (size_t i = 0; i < 5; i++)
+	//		points[i] = points[i] * size + offset;
+	//	draw->AddConvexPolyFilled(reinterpret_cast<ImVec2*>(points), 5, 0xFFFFFFFF);
+	//}
+
+	ImGui::End();
+}
+
 void drawNetworkInterface(NetworkData& network, WorldData& world) {
 	bool serverRunning = server::isRunning();
 	bool clientRunning = client::isRunning();
@@ -118,6 +180,7 @@ void update(WorldData& world, NetworkData& network, Controls& controls, float dt
 		if (captured) if (std::shared_ptr<Player> spPlayer = world.wpPlayer.lock()) {
 			spPlayer->updateInputs(controls, dt);
 			spPlayer->updateMechanics(controls, dt);
+			drawHud(*spPlayer.get());
 		}
 		for (auto spPlayerPair : world.game.players) {
 			spPlayerPair.second->updateAnimations(dt);
