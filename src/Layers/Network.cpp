@@ -578,6 +578,12 @@ namespace server {
 
 		int type;
 		auto spPacket = Packet::receiveFromDgram(type, _serverSocket.dgram, reinterpret_cast<sockaddr*>(&addr), &addrlen);
+		
+		// update saved address
+		for (auto& client : _clients)
+			if (client.username == spPacket->username)
+				client.socket.addr = addr;
+
 		ClientData addrOnly;
 		addrOnly.socket.addr = addr;
 		handlePacket(addrOnly, spPacket, type, clientIndex); // for dgram packets only their origin address is known while the sockets are unknown
