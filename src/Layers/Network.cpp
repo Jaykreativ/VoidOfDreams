@@ -15,30 +15,7 @@
 #include <cstring>
 #include <stdio.h>
 
-#ifdef _WIN32 // windows specific socket include
-
-#include <WinSock2.h>
-#include <WS2tcpip.h>
-
-#elif __linux__
-
-#include <sys/socket.h>
-#include <sys/types.h>
-#include <netdb.h>
-#include <unistd.h>
-#include <arpa/inet.h>
-#include <netinet/in.h>
-#include <poll.h>
-
-typedef in_addr IN_ADDR;
-typedef in6_addr IN6_ADDR;
-
-#endif 
-
-#define UDP_PACKET_BUFFER_SIZE 1472
-
 struct SocketData { // combine the socket and its address into one type, cause they're always needed when using both tcp and udp.
-	std::string username;
 	int stream;
 	int dgram;
 	sockaddr_storage addr; // the udp address
@@ -601,6 +578,12 @@ namespace server {
 
 		int type;
 		auto spPacket = Packet::receiveFromDgram(type, _serverSocket.dgram, reinterpret_cast<sockaddr*>(&addr), &addrlen);
+		
+		// update saved address
+		for (auto& client : _clients)
+			if (client.username == spPacket->username)
+				client.socket.addr = addr;
+
 		ClientData addrOnly;
 		addrOnly.socket.addr = addr;
 		handlePacket(addrOnly, spPacket, type, clientIndex); // for dgram packets only their origin address is known while the sockets are unknown
