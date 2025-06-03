@@ -25,6 +25,11 @@
 
 #include "Shares/Controls.h"
 #include "Shares/World.h"
+#include "Shares/Render.h"
+
+void switchToMainMenu(WorldData& world, RenderData& render);
+
+void switchToGame(WorldData& world, RenderData& render);
 
 void setupLocalPlayer(WorldData& world, std::string username);
 

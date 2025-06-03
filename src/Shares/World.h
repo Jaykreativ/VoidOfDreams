@@ -11,6 +11,11 @@
 #include <memory>
 #include <mutex>
 
+enum WorldStatus {
+	eGAME = 0x1,
+	eMAIN_MENU = 0x2
+};
+
 struct MainMenuWorldData {
 	std::shared_ptr<Zap::Scene> spScene;
 	std::shared_ptr<Player> spPlayer;
@@ -22,6 +27,8 @@ struct GameWorldData {
 };
 
 struct WorldData {
+	WorldStatus status = eMAIN_MENU; // start in main menu
+
 	std::weak_ptr<Zap::Scene> wpScene;
 
 	std::mutex mPlayers;

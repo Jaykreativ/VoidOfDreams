@@ -125,7 +125,7 @@ void drawNetworkInterface(NetworkData& network, WorldData& world) {
 	}
 }
 
-void updateMainMenu(WorldData& world, Controls& controls, float dt, Zap::Window& window) {
+void updateMainMenu(WorldData& world, RenderData& render, Controls& controls, float dt, Zap::Window& window) {
 	static bool captured = false;
 
 	logger::beginRegion("players");
@@ -142,6 +142,9 @@ void updateMainMenu(WorldData& world, Controls& controls, float dt, Zap::Window&
 	bool wasCaptured = captured;
 	if (wasCaptured)
 		ImGui::BeginDisabled();
+
+	if (ImGui::Button("Game"))
+		switchToGame(world, render);
 
 	if (ImGui::Button("Capture")) { // use imgui to capture mouse because there is no menu implemented yet
 		glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
@@ -169,9 +172,7 @@ void updateMainMenu(WorldData& world, Controls& controls, float dt, Zap::Window&
 
 }
 
-void update(WorldData& world, NetworkData& network, Controls& controls, float dt, Zap::Window& window) {
-	//updateMainMenu(world, controls, dt, window);
-	//return;
+void update(WorldData& world, RenderData& render, NetworkData& network, Controls& controls, float dt, Zap::Window& window) {
 	static bool captured = false;
 
 	logger::beginRegion("players");
@@ -232,7 +233,17 @@ void gameLoop(RenderData& render, WorldData& world, NetworkData& network, Contro
 		auto startFrame = std::chrono::high_resolution_clock::now();
 
 		logger::beginRegion("update");
-		update(world, network, controls, deltaTime, *render.window);
+		switch (world.status)
+		{
+		case eGAME:
+			update(world, render, network, controls, deltaTime, *render.window);
+			break;
+		case eMAIN_MENU:
+			updateMainMenu(world, render, controls, deltaTime, *render.window);
+			break;
+		default:
+			break;
+		}
 
 		{
 			if (std::shared_ptr<Zap::Scene> spScene = world.wpScene.lock()) { // update scene only if present
@@ -270,6 +281,20 @@ void gameLoop(RenderData& render, WorldData& world, NetworkData& network, Contro
 		//logger::cleanTimeline();
 		logger::endFrame();
 	}
+}
+
+void switchToMainMenu(WorldData& world, RenderData& render) {
+	world.wpScene = world.mainMenu.spScene;
+	world.wpPlayer = world.mainMenu.spPlayer;
+	render.pbRender->changeScene(world.mainMenu.spScene.get());
+	world.status = eMAIN_MENU;
+}
+
+void switchToGame(WorldData& world, RenderData& render) {
+	world.wpScene = world.game.spScene;
+	world.wpPlayer.reset();
+	render.pbRender->changeScene(world.game.spScene.get());
+	world.status = eGAME;
 }
 
 void setupLocalPlayer(WorldData& world, std::string username) {
@@ -326,7 +351,7 @@ void runGame() {
 	world.game.spScene->init(desc);
 	world.mainMenu.spScene = std::make_shared<Zap::Scene>();
 	world.mainMenu.spScene->init(desc);
-	world.wpScene = world.game.spScene; // set active scene
+	world.wpScene = world.mainMenu.spScene; // set active scene
 
 	render.renderer = new Zap::Renderer();
 	if(auto spScene = world.wpScene.lock())
