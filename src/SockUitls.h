@@ -117,9 +117,10 @@ namespace sock {
 	}
 	inline std::string addrToPresentation(sockaddr* sa) {
 		if (sa->sa_family == AF_INET) {
-			return addrToPresentationIPv4(reinterpret_cast<sockaddr_in*>(sa)->sin_addr);
+			return addrToPresentationIPv4(reinterpret_cast<sockaddr_in*>(sa)->sin_addr) + ":" + std::to_string(reinterpret_cast<sockaddr_in*>(sa)->sin_port);
 		}
-		return addrToPresentationIPv6(reinterpret_cast<sockaddr_in6*>(sa)->sin6_addr);
+		return addrToPresentationIPv6(reinterpret_cast<sockaddr_in6*>(sa)->sin6_addr) + " port: " + std::to_string(reinterpret_cast<sockaddr_in6*>(sa)->sin6_port);
+		
 	}
 
 	inline int cmpAddr(const sockaddr* a, const sockaddr* b) {
