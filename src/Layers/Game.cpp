@@ -108,8 +108,8 @@ void updateMainMenu(WorldData& world, Controls& controls, float dt, Zap::Window&
 }
 
 void update(WorldData& world, NetworkData& network, Controls& controls, float dt, Zap::Window& window) {
-	updateMainMenu(world, controls, dt, window);
-	return;
+	//updateMainMenu(world, controls, dt, window);
+	//return;
 	static bool captured = false;
 
 	logger::beginRegion("players");
@@ -117,12 +117,12 @@ void update(WorldData& world, NetworkData& network, Controls& controls, float dt
 		std::lock_guard<std::mutex> lk(world.mPlayers);
 		if (captured) if (std::shared_ptr<Player> spPlayer = world.wpPlayer.lock()) {
 			spPlayer->updateInputs(controls, dt);
+			spPlayer->updateMechanics(controls, dt);
 		}
 		for (auto spPlayerPair : world.game.players) {
 			spPlayerPair.second->updateAnimations(dt);
 			spPlayerPair.second->update(controls, dt);
 		} 
-		client::sendPlayerMove(network, world);
 	}
 	logger::endRegion();
 
@@ -230,6 +230,7 @@ void setupMainMenuWorld(WorldData& world) {
 	loader.load("Actors/Light.zac", world.mainMenu.spScene.get());
 	loader.load("Actors/Cube.zac", world.mainMenu.spScene.get());
 	world.mainMenu.spPlayer = std::make_shared<Player>(*world.mainMenu.spScene.get(), "user", loader);
+	world.mainMenu.spPlayer->spawn();
 	world.mainMenu.spPlayer->setTransform(glm::mat4(1));
 	world.wpPlayer = world.mainMenu.spPlayer;
 }
@@ -262,10 +263,11 @@ void runGame() {
 	world.game.spScene->init(desc);
 	world.mainMenu.spScene = std::make_shared<Zap::Scene>();
 	world.mainMenu.spScene->init(desc);
-	world.wpScene = world.mainMenu.spScene;
+	world.wpScene = world.game.spScene; // set active scene
 
 	render.renderer = new Zap::Renderer();
-	render.pbRender = new Zap::PBRenderer(world.mainMenu.spScene.get());
+	if(auto spScene = world.wpScene.lock())
+		render.pbRender = new Zap::PBRenderer(spScene.get());
 	render.pGui = new Zap::Gui();
 
 	setupWorld(world);
@@ -307,6 +309,7 @@ void runGame() {
 	delete render.pbRender;
 	render.window->getResizeEventHandler()->removeCallback(resize, render.pbRender);
 	delete render.window;
+	world.mainMenu.spPlayer->localKill();
 	world.game.spScene->destroy();
 	world.mainMenu.spScene->destroy();
 }
