@@ -30,6 +30,10 @@ public:
 
 	void spendEnergy(float energy);
 
+	bool isWeaponMode();
+
+	bool isAbilityMode();
+
 	float getHealth();
 
 	float getMaxHealth();

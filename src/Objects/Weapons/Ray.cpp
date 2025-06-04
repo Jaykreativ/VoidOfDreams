@@ -29,7 +29,7 @@ public:
 };
 
 void Ray::update(Player& player, PlayerInventory::iterator iterator) {
-	if (m_isTriggered && (player.getEnergy() >= _energyCost)) {
+	if (m_isTriggered && player.isWeaponMode() && (player.getEnergy() >= _energyCost)) {
 		client::sendRay(player.getTransform()[3], player.getCameraTransform()[2], player.getUsername());
 		player.spendEnergy(_energyCost);
 	}

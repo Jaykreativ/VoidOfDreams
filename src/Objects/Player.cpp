@@ -193,6 +193,14 @@ void Player::spendEnergy(float energy) {
 	m_energy -= energy;
 }
 
+bool Player::isWeaponMode() {
+	return m_mode == eWEAPON;
+}
+
+bool Player::isAbilityMode() {
+	return m_mode == eABILITY;
+}
+
 float Player::getHealth() {
 	return m_health;
 }
