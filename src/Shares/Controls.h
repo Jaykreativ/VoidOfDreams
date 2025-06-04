@@ -9,6 +9,7 @@ struct Controls {
 	ImGuiKey moveRight = ImGuiKey_D;
 	ImGuiKey moveUp = ImGuiKey_Space;
 	ImGuiKey moveDown = ImGuiKey_C;
+	ImGuiMouseButton switchMode = ImGuiMouseButton_Middle;
 
 	float mouseVerticalSensitivity = 1;
 	float mouseHorizontalSensitivity = 1;

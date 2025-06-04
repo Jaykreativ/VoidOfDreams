@@ -104,9 +104,20 @@ void Player::updateInputs(Controls& controls, float dt) {
 	else {
 		m_base.cmpTransform_setPos(m_base.cmpTransform_getPos() + m_movementDir * dt * speed);
 	}
+
+	if (ImGui::IsMouseClicked(controls.switchMode)) {
+		if (m_mode == eWEAPON)
+			m_mode = eABILITY;
+		else
+			m_mode = eWEAPON;
+	}
 }
 
 void Player::updateMechanics(Controls& controls, float dt) {
+	if (m_mode == eWEAPON)
+		controls.cameraMode = Controls::eFIRST_PERSON;
+	else
+		controls.cameraMode = Controls::eTHIRD_PERSON;
 	updateCamera(controls);
 	if (m_active) {
 		m_energy = std::min<float>(m_energy, 100);

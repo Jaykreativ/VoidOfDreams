@@ -66,6 +66,11 @@ public:
 private:
 	bool m_active = false;
 
+	enum Mode {
+		eWEAPON = 0x0,
+		eABILITY = 0x1
+	} m_mode = eWEAPON;
+
 	Zap::Actor m_base; // this is the actual transform of the player
 	Zap::Actor m_core; // the bright core in the centre
 	Zap::Actor m_hull; // the rotating hull
