@@ -106,6 +106,8 @@ void Player::updateInputs(Controls& controls, float dt) {
 	}
 
 	if (ImGui::IsMouseClicked(controls.switchMode)) {
+		spendEnergy(10);
+		m_energy = std::max<float>(m_energy, 0);
 		if (m_mode == eWEAPON)
 			m_mode = eABILITY;
 		else
