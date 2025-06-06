@@ -195,8 +195,13 @@ void update(WorldData& world, RenderData& render, NetworkData& network, Controls
 	if (wasCaptured)
 		ImGui::BeginDisabled();
 
-	if (ImGui::Button("MainMenu"))
+	if (ImGui::Button("MainMenu")) {
+		if(client::isRunning())
+			terminateClient(network, world);
+		if (server::isRunning())
+			terminateServer();
 		switchToMainMenu(world, render);
+	}
 
 	if (ImGui::Button("Capture")) { // use imgui to capture mouse because there is no menu implemented yet
 		glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
