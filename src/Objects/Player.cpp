@@ -153,9 +153,20 @@ void Player::damage(float damage) {
 		return;
 	m_health -= damage;
 	if (m_health <= 0) {
+		client::sendPlayerDamage(damage + m_health, m_health, m_username, "");
 		kill();
 	}
-	client::sendPlayerDamage(damage, *this, m_username);
+	client::sendPlayerDamage(damage, m_health, m_username, "");
+}
+
+void Player::damage(float damage, const Player& damager) {
+	if (m_spawnProtection > 0)
+		return;
+	m_health -= damage;
+	if (m_health <= 0) {
+		kill(damager);
+	}
+	client::sendPlayerDamage(damage, m_health, m_username, damager.m_username);
 }
 
 void Player::localSpawn(Zap::ActorLoader& loader) {
@@ -173,6 +184,7 @@ void Player::localKill() {
 	if (m_active) {
 		m_core.destroy();
 		m_hull.destroy();
+		m_deaths++;
 	}
 	m_active = false;
 }
@@ -186,7 +198,15 @@ void Player::spawn(Zap::ActorLoader loader) {
 void Player::kill() {
 	if (m_active) {
 		m_spawnTimeout = 5;
-		client::sendPlayerDeath(m_username);
+		client::sendPlayerDeath(m_username, "");
+	}
+	localKill();
+}
+
+void Player::kill(const Player& killer) {
+	if (m_active) {
+		m_spawnTimeout = 5;
+		client::sendPlayerDeath(m_username, killer.m_username);
 	}
 	localKill();
 }
@@ -217,6 +237,18 @@ float Player::getEnergy() {
 
 float Player::getMaxEnergy() {
 	return 100;
+}
+
+uint32_t Player::getKills() {
+	return m_kills;
+}
+
+uint32_t Player::getDeaths() {
+	return m_deaths;
+}
+
+float Player::getDamage() {
+	return m_damage;
 }
 
 PlayerInventory& Player::getInventory() {
@@ -260,12 +292,17 @@ void Player::syncSpawn() {
 void Player::syncDeath() {
 	localKill();
 }
+void Player::syncDeath(Player& killer) {
+	localKill();
+	killer.m_kills++;
+}
 
 void Player::syncMove(glm::mat4 transform) {
 	if(m_active)
 		setTransform(transform);
 }
 
-void Player::syncDamage(float damage, float newHealth) {
+void Player::syncDamage(Player& damager, float damage, float newHealth) {
 	m_health = newHealth;
+	damager.m_damage += damage;
 }

@@ -132,8 +132,9 @@ void update(WorldData& world, NetworkData& network, Controls& controls, float dt
 	{
 		std::lock_guard<std::mutex> lk(world.mPlayers);
 		if (std::shared_ptr<Player> spPlayer = world.pPlayer.lock()) {
-			ImGui::Text(("Energy: " + std::to_string(spPlayer->getEnergy())).c_str());
-			ImGui::Text(("Health: " + std::to_string(spPlayer->getHealth())).c_str());
+			ImGui::Text("Kills: %lu", spPlayer->getKills());
+			ImGui::Text("Deaths: %lu", spPlayer->getDeaths());
+			ImGui::Text("Damage: %f", spPlayer->getDamage());
 			spPlayer->updateMechanics(controls, dt);
 			if (captured)
 				spPlayer->updateInputs(controls, dt);

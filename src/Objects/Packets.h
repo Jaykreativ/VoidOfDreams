@@ -144,6 +144,7 @@ class DamagePacket : public Packet {
 	friend class Packet;
 public:
 	//data
+	std::string usernameDamager = "";
 	float damage = 0;
 	float health = 0;
 
@@ -176,6 +177,7 @@ class DeathPacket : public Packet {
 	friend class Packet;
 public:
 	//data
+	std::string usernameKiller = "";
 
 protected:
 	uint32_t dataSize();

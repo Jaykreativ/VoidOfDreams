@@ -277,12 +277,13 @@ void MovePacket::unpackData(const char* buf, uint32_t size) {
 
 // DamagePacket
 uint32_t DamagePacket::dataSize() {
-	return 2*sizeof(float);
+	return usernameDamager.size() + sizeof(uint32_t) + 2*sizeof(float);
 }
 
 void DamagePacket::pack(char* buf) {
 	packGeneralData(buf, eDamage);
 	/* data */
+	packString(buf, usernameDamager);
 	uint32_t nDamage = htonf(damage);
 	memcpy(buf, &nDamage, sizeof(uint32_t)); buf += sizeof(uint32_t);
 	uint32_t nHealth = htonf(health);
@@ -290,6 +291,7 @@ void DamagePacket::pack(char* buf) {
 }
 
 void DamagePacket::unpackData(const char* buf, uint32_t size) {
+	usernameDamager = unpackString(buf);
 	damage = ntohf(reinterpret_cast<const uint32_t*>(buf)[0]);
 	health = ntohf(reinterpret_cast<const uint32_t*>(buf)[1]);
 }
@@ -308,15 +310,18 @@ void SpawnPacket::unpackData(const char* buf, uint32_t size) {}
 
 // DeathPacket
 uint32_t DeathPacket::dataSize() {
-	return 0;
+	return usernameKiller.size() + sizeof(uint32_t);
 }
 
 void DeathPacket::pack(char* buf) {
 	packGeneralData(buf, eDeath);
 	/* data */
+	packString(buf, usernameKiller);
 }
 
-void DeathPacket::unpackData(const char* buf, uint32_t size) {}
+void DeathPacket::unpackData(const char* buf, uint32_t size) {
+	usernameKiller = unpackString(buf);
+}
 
 // RayPacket
 uint32_t RayPacket::dataSize() {

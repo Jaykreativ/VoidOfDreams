@@ -23,10 +23,12 @@ public:
 	void update(float dt);
 
 	void damage(float damage);
+	void damage(float damage, const Player& damager);
 
 	void spawn(Zap::ActorLoader loader = Zap::ActorLoader());
 
 	void kill();
+	void kill(const Player& killer);
 
 	void spendEnergy(float energy);
 
@@ -41,6 +43,12 @@ public:
 	float getEnergy();
 
 	float getMaxEnergy();
+
+	uint32_t getKills();
+
+	uint32_t getDeaths();
+
+	float getDamage();
 
 	PlayerInventory& getInventory();
 
@@ -62,10 +70,11 @@ public:
 	void syncSpawn();
 
 	void syncDeath();
+	void syncDeath(Player& killer);
 
 	void syncMove(glm::mat4 transform);
 
-	void syncDamage(float damage, float newHealth);
+	void syncDamage(Player& damager, float damage, float newHealth);
 
 private:
 	bool m_active = false;
@@ -84,6 +93,10 @@ private:
 
 	float m_health = 100;
 	float m_energy = 100;
+
+	uint32_t m_kills = 0;
+	uint32_t m_deaths = 0;
+	float m_damage = 0;
 
 	std::string m_username;
 	Zap::Scene& m_scene;

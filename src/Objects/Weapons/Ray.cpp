@@ -42,7 +42,7 @@ void Ray::processRay(glm::vec3 origin, glm::vec3 direction, WorldData& world, Pl
 	filter.excludedActor = senderPlayer.getPhysicsActor();
 	if (world.scene->raycast(origin, direction, 1000, &out, &filter)) {
 		if (out.actor == checkPlayer.getPhysicsActor()) {
-			checkPlayer.damage(_damage);
+			checkPlayer.damage(_damage, senderPlayer);
 		}
 	}
 }

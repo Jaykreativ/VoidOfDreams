@@ -202,9 +202,10 @@ namespace client {
 			case eDamage: {
 				DamagePacket& packet = *reinterpret_cast<DamagePacket*>(spPacket.get());
 				std::lock_guard<std::mutex> lk(world.mPlayers);
-				if (world.players.count(packet.username)) {
+				if (world.players.count(packet.username) && world.players.count(packet.usernameDamager)) {
 					auto spPlayer = world.players.at(packet.username);
-					spPlayer->syncDamage(packet.damage, packet.health);
+					auto spDamager = world.players.at(packet.usernameDamager);
+					spPlayer->syncDamage(*spDamager, packet.damage, packet.health);
 				}
 				break;
 			}
@@ -218,11 +219,16 @@ namespace client {
 				break;
 			}
 			case eDeath: {
-				DamagePacket& packet = *reinterpret_cast<DamagePacket*>(spPacket.get());
+				DeathPacket& packet = *reinterpret_cast<DeathPacket*>(spPacket.get());
 				std::lock_guard<std::mutex> lk(world.mPlayers);
 				if (world.players.count(packet.username)) {
 					auto spPlayer = world.players.at(packet.username);
-					spPlayer->syncDeath();
+					if (world.players.count(packet.usernameKiller)) {
+						auto spKiller = world.players.at(packet.usernameKiller);
+						spPlayer->syncDeath(*spKiller);
+					}
+					else
+						spPlayer->syncDeath();
 				}
 				break;
 			}
@@ -327,22 +333,24 @@ namespace client {
 		}
 	}
 
-	void sendPlayerDeath(std::string username) {
+	void sendPlayerDeath(std::string username, std::string usernameKiller) {
 		std::lock_guard<std::mutex> lk(_mTerminate);
 		if(_isConnected) {
 			DeathPacket packet;
 			packet.username = username;
+			packet.usernameKiller = usernameKiller;
 			packet.sendTo(_serverSocket.stream);
 		}
 	}
 
-	void sendPlayerDamage(float damage, Player& player, std::string username) {
+	void sendPlayerDamage(float damage, float health, std::string username, std::string usernameDamager) {
 		std::lock_guard<std::mutex> lk(_mTerminate);
 		if (_isConnected) {
 			DamagePacket packet;
 			packet.username = username;
+			packet.usernameDamager = usernameDamager;
 			packet.damage = damage;
-			packet.health = player.getHealth();
+			packet.health = health;
 			packet.sendTo(_serverSocket.stream);
 		}
 	}
