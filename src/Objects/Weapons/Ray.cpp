@@ -10,11 +10,9 @@ const float _damage = 10;
 
 const std::filesystem::path _beamModel = "Models/Cube.obj";
 
-Ray::Beam::Beam(WorldData& world, glm::vec3 origin, glm::vec3 direction)
-	: m_world(world), m_origin(origin), m_direction(direction)
+Ray::Beam::Beam(WorldData& world, glm::vec3 origin, glm::vec3 direction, float length)
+	: m_world(world)
 {
-	float beamLength = 10;
-
 	Zap::ModelLoader loader;
 	auto model = loader.load(_beamModel);
 	world.scene->attachActor(m_actor);
@@ -25,11 +23,11 @@ Ray::Beam::Beam(WorldData& world, glm::vec3 origin, glm::vec3 direction)
 		mat.setEmissive({1, 1, 1, 10});
 		m_actor.cmpModel_setMaterial(mat);
 	}
-	m_actor.cmpTransform_setPos(origin + direction*(beamLength/2.f + 2));
+	m_actor.cmpTransform_setPos(origin + direction*(length/2.f));
 	float angle = acos(glm::dot(direction, glm::vec3(1, 0, 0))/glm::length(direction));
 	glm::vec3 cross = glm::cross(direction, glm::vec3(1, 0, 0));
 	m_actor.cmpTransform_rotate(glm::degrees(-angle), cross);
-	m_actor.cmpTransform_setScale(beamLength/2.f, .025, .025);
+	m_actor.cmpTransform_setScale(length /2.f, .025, .025);
 
 	m_animation = std::make_shared<BeamAnimation>(*this);
 	world.animations.push_back(m_animation);
@@ -86,7 +84,13 @@ void Ray::update(Player& player, PlayerInventory::iterator iterator) {
 		player.spendEnergy(_energyCost);
 
 		// shoot beam
-		m_world.rayBeams.push_back(std::make_unique<Beam>(m_world, origin, direction));
+		Zap::Scene::RaycastOutput out = {};
+		RayFilter filter;
+		filter.excludedActor = player.getPhysicsActor();
+		if (m_world.scene->raycast(origin, direction, 1000, &out, &filter))
+			m_world.rayBeams.push_back(std::make_unique<Beam>(m_world, origin, direction, out.distance));
+		else
+			m_world.rayBeams.push_back(std::make_unique<Beam>(m_world, origin, direction, 1000));
 		m_alternateSide = !m_alternateSide;
 	}
 	m_isTriggered = false; // one time trigger
@@ -100,5 +104,8 @@ void Ray::processRay(glm::vec3 origin, glm::vec3 direction, WorldData& world, Pl
 		if (out.actor == checkPlayer.getPhysicsActor()) {
 			checkPlayer.damage(_damage, senderPlayer);
 		}
+		world.rayBeams.push_back(std::make_unique<Beam>(world, origin, direction, out.distance));
 	}
+	else
+		world.rayBeams.push_back(std::make_unique<Beam>(world, origin, direction, 1000));
 }

@@ -19,14 +19,12 @@ public:
 
 	class Beam {
 	public:
-		Beam(WorldData& world, glm::vec3 origin, glm::vec3 direction);
+		Beam(WorldData& world, glm::vec3 origin, glm::vec3 direction, float length);
 		~Beam();
 
 	private:
 		WorldData& m_world;
 		Zap::Actor m_actor;
-		glm::vec3 m_origin;
-		glm::vec3 m_direction;
 
 		class BeamAnimation : public Animation {
 		public:
