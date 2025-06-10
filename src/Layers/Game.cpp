@@ -154,16 +154,14 @@ void update(WorldData& world, NetworkData& network, Controls& controls, float dt
 	logger::endRegion();
 
 	logger::beginRegion("animations");
-	size_t i = 0;
-	for (auto wpAnimation : world.animations) {
-		if (auto spAnimation = wpAnimation.lock()) {
+	for (size_t i = 0; i < world.animations.size(); i++) {
+		if (auto spAnimation = world.animations[i].lock()) {
 			spAnimation->update(dt);
 		}
 		else {
 			world.animations.erase(world.animations.begin() + i);
 			i--;
 		}
-		i++;
 	}
 	logger::endRegion();
 
