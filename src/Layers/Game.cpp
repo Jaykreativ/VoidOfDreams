@@ -320,6 +320,7 @@ void runGame() {
 	terminateServer();
 
 	world.players.clear();
+	world.rayBeams.clear();
 
 	render.renderer->destroy();
 	delete render.renderer;

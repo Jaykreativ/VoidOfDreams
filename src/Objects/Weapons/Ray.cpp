@@ -3,20 +3,40 @@
 #include "Layers/Network.h"
 
 #include "Zap/Scene/Actor.h"
+#include "Zap/Scene/Material.h"
 
 const float _energyCost = 10;
 const float _damage = 10;
 
+const std::filesystem::path _beamModel = "Models/Cube.obj";
+
 Ray::Beam::Beam(WorldData& world, glm::vec3 origin, glm::vec3 direction)
 	: m_world(world), m_origin(origin), m_direction(direction)
 {
-	printf("new beam!!\n");
+	float beamLength = 10;
+
+	Zap::ModelLoader loader;
+	auto model = loader.load(_beamModel);
+	world.scene->attachActor(m_actor);
+	m_actor.addTransform();
+	m_actor.addModel(model);
+	{
+		Zap::Material mat;
+		mat.setEmissive({1, 1, 1, 10});
+		m_actor.cmpModel_setMaterial(mat);
+	}
+	m_actor.cmpTransform_setPos(origin + direction*(beamLength/2.f));
+	float angle = acos(glm::dot(direction, glm::vec3(1, 0, 0))/glm::length(direction));
+	glm::vec3 cross = glm::cross(direction, glm::vec3(1, 0, 0));
+	m_actor.cmpTransform_rotate(glm::degrees(-angle), cross);
+	m_actor.cmpTransform_setScale(10, .025, .025);
+
 	m_animation = std::make_shared<BeamAnimation>(*this);
 	world.animations.push_back(m_animation);
 }
 
 Ray::Beam::~Beam() {
-	printf("beam gone\n");
+	m_actor.destroy();
 }
 
 void Ray::Beam::BeamAnimation::removeFromWorld() {
@@ -32,7 +52,7 @@ Ray::Beam::BeamAnimation::BeamAnimation(Ray::Beam& beam)
 {}
 
 void Ray::Beam::BeamAnimation::update(float dt) {
-	if (timeFactor() > 0.9f)
+	if (timeFactor() > 0.99f)
 		removeFromWorld();
 	addDeltaTime(dt);
 }
