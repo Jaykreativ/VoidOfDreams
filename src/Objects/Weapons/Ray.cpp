@@ -7,6 +7,36 @@
 const float _energyCost = 10;
 const float _damage = 10;
 
+Ray::Beam::Beam(WorldData& world, glm::vec3 origin, glm::vec3 direction)
+	: m_world(world), m_origin(origin), m_direction(direction)
+{
+	printf("new beam!!\n");
+	m_animation = std::make_shared<BeamAnimation>(*this);
+	world.animations.push_back(m_animation);
+}
+
+Ray::Beam::~Beam() {
+	printf("beam gone\n");
+}
+
+void Ray::Beam::BeamAnimation::removeFromWorld() {
+	for (auto it = m_beam.m_world.rayBeams.begin(); it != m_beam.m_world.rayBeams.end(); ++it)
+		if (it->get() == &m_beam) {
+			m_beam.m_world.rayBeams.erase(it);
+			break;
+		}
+}
+
+Ray::Beam::BeamAnimation::BeamAnimation(Ray::Beam& beam)
+	: Animation(1), m_beam(beam)
+{}
+
+void Ray::Beam::BeamAnimation::update(float dt) {
+	if (timeFactor() > 0.9f)
+		removeFromWorld();
+	addDeltaTime(dt);
+}
+
 Ray::Ray(WorldData& world)
 	: m_world(world)
 {}
@@ -30,8 +60,13 @@ public:
 
 void Ray::update(Player& player, PlayerInventory::iterator iterator) {
 	if (m_isTriggered && player.isWeaponMode() && (player.getEnergy() >= _energyCost)) {
-		client::sendRay(player.getTransform()[3], player.getCameraTransform()[2], player.getUsername());
+		glm::vec3 origin = player.getTransform()[3];
+		glm::vec3 direction = player.getCameraTransform()[2];
+		client::sendRay(origin, direction, player.getUsername());
 		player.spendEnergy(_energyCost);
+
+		// shoot beam
+		m_world.rayBeams.push_back(std::make_unique<Beam>(m_world, origin, direction));
 	}
 	m_isTriggered = false; // one time trigger
 }

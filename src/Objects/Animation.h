@@ -2,6 +2,8 @@
 
 class Animation {
 public:
+	Animation(float duration);
+
 	// starts the animation
 	void play();
 

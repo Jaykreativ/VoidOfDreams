@@ -2,6 +2,10 @@
 
 #include <algorithm>
 
+Animation::Animation(float duration)
+	: m_duration(duration)
+{}
+
 void Animation::play() {
 	m_active = true;
 }
