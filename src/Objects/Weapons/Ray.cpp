@@ -25,11 +25,11 @@ Ray::Beam::Beam(WorldData& world, glm::vec3 origin, glm::vec3 direction)
 		mat.setEmissive({1, 1, 1, 10});
 		m_actor.cmpModel_setMaterial(mat);
 	}
-	m_actor.cmpTransform_setPos(origin + direction*(beamLength/2.f));
+	m_actor.cmpTransform_setPos(origin + direction*(beamLength/2.f + 2));
 	float angle = acos(glm::dot(direction, glm::vec3(1, 0, 0))/glm::length(direction));
 	glm::vec3 cross = glm::cross(direction, glm::vec3(1, 0, 0));
 	m_actor.cmpTransform_rotate(glm::degrees(-angle), cross);
-	m_actor.cmpTransform_setScale(10, .025, .025);
+	m_actor.cmpTransform_setScale(beamLength/2.f, .025, .025);
 
 	m_animation = std::make_shared<BeamAnimation>(*this);
 	world.animations.push_back(m_animation);
@@ -48,7 +48,7 @@ void Ray::Beam::BeamAnimation::removeFromWorld() {
 }
 
 Ray::Beam::BeamAnimation::BeamAnimation(Ray::Beam& beam)
-	: Animation(1), m_beam(beam)
+	: Animation(.1f), m_beam(beam)
 {}
 
 void Ray::Beam::BeamAnimation::update(float dt) {
@@ -80,13 +80,14 @@ public:
 
 void Ray::update(Player& player, PlayerInventory::iterator iterator) {
 	if (m_isTriggered && player.isWeaponMode() && (player.getEnergy() >= _energyCost)) {
-		glm::vec3 origin = player.getTransform()[3];
+		glm::vec3 origin = player.getTransform()[3] + (m_alternateSide-.5f)*2*player.getTransform()[0];
 		glm::vec3 direction = player.getCameraTransform()[2];
 		client::sendRay(origin, direction, player.getUsername());
 		player.spendEnergy(_energyCost);
 
 		// shoot beam
 		m_world.rayBeams.push_back(std::make_unique<Beam>(m_world, origin, direction));
+		m_alternateSide = !m_alternateSide;
 	}
 	m_isTriggered = false; // one time trigger
 }
