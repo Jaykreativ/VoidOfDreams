@@ -70,6 +70,51 @@ private:
 	float m_fullEnergy;
 };
 
+class HudCrosshairKillAnimation : public Animation {
+public:
+	HudCrosshairKillAnimation()
+		: Animation(1)
+	{}
+
+	void update(float dt) override {
+		auto* draw = ImGui::GetWindowDrawList();
+		glm::vec4 normColor = ImGui::ColorConvertU32ToFloat4(_hud.crosshairColor);
+		ImU32 color = ImGui::GetColorU32(glm::vec4(glm::vec3(normColor), (1-timeFactor())));
+		draw->AddCircle(_hud.crosshairMiddle, _hud.crosshairSize*(1.2+timeFactor()*10), color);
+		addDeltaTime(dt);
+	}
+};
+
+class HudCrosshairDamageAnimation : public Animation {
+public:
+	HudCrosshairDamageAnimation()
+		: Animation(1)
+	{}
+
+	void update(float dt) override {
+		auto* draw = ImGui::GetWindowDrawList();
+		glm::vec4 normColor = ImGui::ColorConvertU32ToFloat4(_hud.crosshairColor);
+		ImU32 color = ImGui::GetColorU32(glm::vec4(glm::vec3(normColor), (1-timeFactor())));
+		
+		for (size_t i = 0; i < 4; i++) {
+			glm::mat4 rotMat = glm::rotate(glm::mat4(1), glm::radians<float>(45+90*i), glm::vec3(0, 0, 1));
+			glm::vec2 rect[4] = {
+				glm::vec2(-_hud.crosshairSize * (1 + timeFactor()), -_hud.crosshairThickness) * .5f,
+				glm::vec2(-_hud.crosshairSize * .5 * (1 + timeFactor()), -_hud.crosshairThickness)*.5f,
+				glm::vec2(-_hud.crosshairSize * .5 * (1 + timeFactor()), _hud.crosshairThickness)*.5f,
+				glm::vec2(-_hud.crosshairSize * (1 + timeFactor()), _hud.crosshairThickness)*.5f
+			};
+			for (size_t j = 0; j < 4; j++) {
+				rect[j] = glm::vec4(rect[j], 0, 1) * rotMat;
+				rect[j] += _hud.crosshairMiddle;
+			}
+			draw->AddConvexPolyFilled(reinterpret_cast<ImVec2*>(rect), 4, color);
+
+			addDeltaTime(dt);
+		}
+	}
+};
+
 void drawHud(Player& player, float dt) {
 	ImGui::SetNextWindowSize(ImGui::GetIO().DisplaySize);
 	ImGui::SetNextWindowPos({0, 0});
@@ -111,6 +156,11 @@ void drawHud(Player& player, float dt) {
 		float energyTextX = font->CalcTextSizeA(font->FontSize, _hud.statBarSize / 2.f, 0, strEnergy.c_str(), strEnergy.c_str() + strEnergy.size()).x;
 		draw->AddText(glm::vec2(_hud.energyMid.x - energyTextX / 2.f, _hud.statBarOffset.y + _hud.statBarSize), 0xFFFFFFFF, strEnergy.c_str(), strEnergy.c_str() + strEnergy.size());
 	}
+
+	if(player.hasKilled())
+		_hud.animations.push_back(std::make_unique<HudCrosshairKillAnimation>());
+	if (player.hasDoneDamage())
+		_hud.animations.push_back(std::make_unique<HudCrosshairDamageAnimation>());
 
 	if (_hud.lastHealth > player.getHealth())
 		_hud.animations.push_back(std::make_unique<HudDamageAnimation>(player.getHealth(), _hud.lastHealth, player.getMaxHealth()));
