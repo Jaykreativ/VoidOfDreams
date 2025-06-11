@@ -111,11 +111,6 @@ namespace client {
 
 		_isConnected = true;
 
-		//if (bind(_serverSocket.dgram, serverInfo->ai_addr, serverInfo->ai_addrlen) < 0) { // bind dgram socket to same port as 
-		//	sock::printLastError("bind");
-		//	exit(sock::lastError());
-		//}
-
 		_pollfds[0].fd = _serverSocket.stream; // init poll stream
 		_pollfds[0].events = POLLIN;
 		_pollfds[0].revents = 0;
@@ -178,8 +173,16 @@ namespace client {
 					setupLocalPlayer(world, packet.username);
 				}
 				else {
+					printf("%s connected\n", packet.username);
 					setupExternalPlayer(world, packet.username);
 				}
+				break;
+			}
+			case eUDP_CONNECT: {
+				UDPConnectPacket udpConnectPacket;
+				udpConnectPacket.username = network.username;
+				udpConnectPacket.sendToDgram(_serverSocket.dgram, reinterpret_cast<const sockaddr*>(&_serverSocket.addr));
+				printf("send udp address\n");
 				break;
 			}
 			case eDISCONNECT: {
@@ -210,7 +213,7 @@ namespace client {
 				break;
 			}
 			case eSpawn: {
-				DamagePacket& packet = *reinterpret_cast<DamagePacket*>(spPacket.get());
+				SpawnPacket& packet = *reinterpret_cast<SpawnPacket*>(spPacket.get());
 				std::lock_guard<std::mutex> lk(world.mPlayers);
 				if (world.players.count(packet.username)) {
 					auto spPlayer = world.players.at(packet.username);
@@ -491,6 +494,9 @@ namespace server {
 			client.username = packet.username;
 			printf("%s joined the server\n", packet.username.c_str());
 
+			UDPConnectPacket udpConnectPacket;
+			udpConnectPacket.username = client.username;
+			udpConnectPacket.sendTo(client.socket.stream); // send the udpConnect packet over tcp, because the udp address is not yet valid
 			for (auto& otherClient : _clients) {
 				packet.sendTo(otherClient.socket.stream); // tell all clients(including the new one) that a new player joined
 				if (otherClient.socket.stream != client.socket.stream) {
@@ -505,6 +511,10 @@ namespace server {
 				}
 			}
 
+			break;
+		}
+		case eUDP_CONNECT: {
+			printf("received UDP address\n");
 			break;
 		}
 		case eDISCONNECT: { // uses stream sockets

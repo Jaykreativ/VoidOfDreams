@@ -17,6 +17,7 @@ enum PacketType {
 	eDamage = 5,
 	eSpawn = 6,
 	eDeath = 7,
+	eUDP_CONNECT = 8,
 	eRay = 100
 };
 
@@ -95,6 +96,21 @@ protected:
 //};
 
 class ConnectPacket : public Packet {
+	friend class Packet;
+public:
+	// data
+
+protected:
+	uint32_t dataSize();
+
+	// packs the data into the given buffer, buffer needs to have the same size as packet.fullSize()
+	void pack(char* buf);
+
+	// takes just the data part
+	void unpackData(const char* buf, uint32_t size);
+};
+
+class UDPConnectPacket : public Packet {
 	friend class Packet;
 public:
 	// data

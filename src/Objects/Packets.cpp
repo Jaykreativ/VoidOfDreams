@@ -89,6 +89,10 @@ std::shared_ptr<Packet> Packet::receiveFrom(int& type, int socket, int flags) {
 		spPacket = std::make_shared<ConnectPacket>();
 		break;
 	}
+	case eUDP_CONNECT: {
+		spPacket = std::make_shared<UDPConnectPacket>();
+		break;
+	}
 	case eDISCONNECT: {
 		spPacket = std::make_shared<DisconnectPacket>();
 		break;
@@ -145,6 +149,10 @@ std::shared_ptr<Packet> Packet::receiveFromDgram(int& type, int socket, sockaddr
 		//}
 	case eCONNECT: {
 		spPacket = std::make_shared<ConnectPacket>();
+		break;
+	}
+	case eUDP_CONNECT: {
+		spPacket = std::make_shared<UDPConnectPacket>();
 		break;
 	}
 	case eDISCONNECT: {
@@ -247,6 +255,18 @@ void ConnectPacket::pack(char* buf) {
 }
 
 void ConnectPacket::unpackData(const char* buf, uint32_t size) {}
+
+// UDPConnectPacket
+uint32_t UDPConnectPacket::dataSize() {
+	return 0;
+}
+
+void UDPConnectPacket::pack(char* buf) {
+	packGeneralData(buf, eUDP_CONNECT);
+	/* data */
+}
+
+void UDPConnectPacket::unpackData(const char* buf, uint32_t size) {}
 
 // DisconnectPacket
 uint32_t DisconnectPacket::dataSize() {
