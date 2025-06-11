@@ -14,6 +14,9 @@ public:
 	// sets the internal timer to 0
 	void reset();
 
+	// returns true if the timer is equal to the duration
+	bool isDone();
+
 	// needs to be called somewhere in the main loop
 	virtual void update(float dt) = 0;
 

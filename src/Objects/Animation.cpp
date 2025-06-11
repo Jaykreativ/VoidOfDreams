@@ -18,6 +18,10 @@ void Animation::reset() {
 	m_timer = 0;
 }
 
+bool Animation::isDone() {
+	return m_timer > m_duration;
+}
+
 bool Animation::isPlaying() {
 	return m_active;
 }
