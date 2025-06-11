@@ -71,8 +71,6 @@ private:
 };
 
 void drawHud(Player& player, float dt) {
-	float hudScale = 1;
-
 	ImGui::SetNextWindowSize(ImGui::GetIO().DisplaySize);
 	ImGui::SetNextWindowPos({0, 0});
 	ImGui::Begin("Hud", nullptr, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoDocking | ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoFocusOnAppearing);
@@ -81,8 +79,8 @@ void drawHud(Player& player, float dt) {
 	// crosshair
 	{
 		_hud.crosshairMiddle = glm::vec2(ImGui::GetWindowSize()) / 2.f;
-		_hud.crosshairSize = 25*hudScale;
-		_hud.crosshairThickness = 2*hudScale;
+		_hud.crosshairSize = 25* _hud.scale;
+		_hud.crosshairThickness = 2* _hud.scale;
 		_hud.crosshairColor = ImGui::GetColorU32({1, 1, 1, 1});
 		glm::vec2 xVec = glm::vec2(_hud.crosshairSize, _hud.crosshairThickness) / 2.f;
 		draw->AddRectFilled(_hud.crosshairMiddle -xVec, _hud.crosshairMiddle +xVec, _hud.crosshairColor);
@@ -92,7 +90,7 @@ void drawHud(Player& player, float dt) {
 
 	// health + energy bar
 	{
-		_hud.statBarSize = 100 * hudScale;
+		_hud.statBarSize = 100 * _hud.scale;
 		_hud.statBarOffset = glm::vec2(ImGui::GetWindowSize().x - _hud.statBarSize * 1.1, _hud.statBarSize * 0.1);
 		_hud.healthMid = _hud.statBarOffset + glm::vec2(_hud.statBarSize / 4.f, _hud.statBarSize / 2.f);
 		_hud.energyMid = _hud.statBarOffset + glm::vec2(_hud.statBarSize *3.f/4.f, _hud.statBarSize /2.f);
