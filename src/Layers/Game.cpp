@@ -5,6 +5,7 @@
 #include "Shares/NetworkData.h"
 #include "Shares/Render.h"
 #include "Shares/World.h"
+#include "Shares/Hud.h"
 #include "Objects/Inventory.h"
 #include "Objects/Weapons/Ray.h"
 #include "Objects/PermaAbilities/Dash.h"
@@ -17,7 +18,59 @@
 
 #include <chrono>
 
-void drawHud(Player& player) {
+static HudData _hud = {};
+
+class HudDamageAnimation : public Animation {
+public:
+	HudDamageAnimation(float minHealth, float maxHealth, float fullHealth)
+		: Animation(.5f), m_minHealth(minHealth), m_maxHealth(maxHealth), m_fullHealth(fullHealth)
+	{}
+
+	void update(float dt) override {
+		auto* draw = ImGui::GetWindowDrawList();
+		glm::vec2 min = _hud.healthMid - _hud.statBarHalfExtents + glm::vec2(0, (1 - m_maxHealth / m_fullHealth) * _hud.statBarSize);
+		glm::vec2 max = _hud.healthMid + _hud.statBarHalfExtents - glm::vec2(0, m_minHealth / m_fullHealth * _hud.statBarSize);
+		glm::vec2 mid = (min + max) / 2.f;
+		glm::vec2 extents = max - mid;
+		draw->AddRectFilled(
+			mid - extents * (1 - timeFactor()),
+			mid + extents * (1 - timeFactor()),
+			_hud.healthColor);
+		addDeltaTime(dt);
+	}
+
+private:
+	float m_minHealth;
+	float m_maxHealth;
+	float m_fullHealth;
+};
+
+class HudEnergyAnimation : public Animation {
+public:
+	HudEnergyAnimation(float minEnergy, float maxEnergy, float fullEnergy)
+		: Animation(.25f), m_minEnergy(minEnergy), m_maxEnergy(maxEnergy), m_fullEnergy(fullEnergy)
+	{}
+
+	void update(float dt) override {
+		auto* draw = ImGui::GetWindowDrawList();
+		glm::vec2 min = _hud.energyMid - _hud.statBarHalfExtents + glm::vec2(0, (1 - m_maxEnergy / m_fullEnergy) * _hud.statBarSize);
+		glm::vec2 max = _hud.energyMid + _hud.statBarHalfExtents - glm::vec2(0, m_minEnergy / m_fullEnergy * _hud.statBarSize);
+		glm::vec2 mid = (min + max) / 2.f;
+		glm::vec2 extents = max - mid;
+		draw->AddRectFilled(
+			mid - extents * (1 - timeFactor()),
+			mid + extents * (1 - timeFactor()),
+			_hud.energyColor);
+		addDeltaTime(dt);
+	}
+
+private:
+	float m_minEnergy;
+	float m_maxEnergy;
+	float m_fullEnergy;
+};
+
+void drawHud(Player& player, float dt) {
 	float hudScale = 1;
 
 	ImGui::SetNextWindowSize(ImGui::GetIO().DisplaySize);
@@ -27,38 +80,55 @@ void drawHud(Player& player) {
 
 	// crosshair
 	{
-		glm::vec2 middle = glm::vec2(ImGui::GetWindowSize()) / 2.f;
-		float size = 25*hudScale;
-		float thickness = 2*hudScale;
-		ImU32 color = ImGui::GetColorU32({1, 1, 1, 1});
-		glm::vec2 xVec = glm::vec2(size, thickness) / 2.f;
-		draw->AddRectFilled(middle-xVec, middle+xVec, color);
-		glm::vec2 yVec = glm::vec2(thickness, size) / 2.f;
-		draw->AddRectFilled(middle-yVec, middle+yVec, color);
+		_hud.crosshairMiddle = glm::vec2(ImGui::GetWindowSize()) / 2.f;
+		_hud.crosshairSize = 25*hudScale;
+		_hud.crosshairThickness = 2*hudScale;
+		_hud.crosshairColor = ImGui::GetColorU32({1, 1, 1, 1});
+		glm::vec2 xVec = glm::vec2(_hud.crosshairSize, _hud.crosshairThickness) / 2.f;
+		draw->AddRectFilled(_hud.crosshairMiddle -xVec, _hud.crosshairMiddle +xVec, _hud.crosshairColor);
+		glm::vec2 yVec = glm::vec2(_hud.crosshairThickness, _hud.crosshairSize) / 2.f;
+		draw->AddRectFilled(_hud.crosshairMiddle -yVec, _hud.crosshairMiddle +yVec, _hud.crosshairColor);
 	}
 
 	// health + energy bar
 	{
-		float size = 100 * hudScale;
-		glm::vec2 offset = glm::vec2(ImGui::GetWindowSize().x - size * 1.1, size * 0.1);
-		glm::vec2 healthMid = offset + glm::vec2(size / 4.f, size / 2.f);
-		glm::vec2 energyMid = offset + glm::vec2(size*3.f/4.f, size/2.f);
-		glm::vec2 rectVec = glm::vec2(size/2.5f, size) / 2.f;
+		_hud.statBarSize = 100 * hudScale;
+		_hud.statBarOffset = glm::vec2(ImGui::GetWindowSize().x - _hud.statBarSize * 1.1, _hud.statBarSize * 0.1);
+		_hud.healthMid = _hud.statBarOffset + glm::vec2(_hud.statBarSize / 4.f, _hud.statBarSize / 2.f);
+		_hud.energyMid = _hud.statBarOffset + glm::vec2(_hud.statBarSize *3.f/4.f, _hud.statBarSize /2.f);
+		_hud.statBarHalfExtents = glm::vec2(_hud.statBarSize /2.5f, _hud.statBarSize) / 2.f;
 		auto* font = ImGui::GetFont();
 
 		// health bar
-		ImU32 healthColor = ImGui::GetColorU32({ 0.9, 0.1, 0.1, 1 });
-		draw->AddRectFilled(healthMid - rectVec+glm::vec2(0, (1-player.getHealth() / player.getMaxHealth())*size), healthMid + rectVec, healthColor);
+		_hud.healthColor = ImGui::GetColorU32({ 0.9, 0.1, 0.1, 1 });
+		draw->AddRectFilled(_hud.healthMid - _hud.statBarHalfExtents +glm::vec2(0, (1-player.getHealth() / player.getMaxHealth())* _hud.statBarSize), _hud.healthMid + _hud.statBarHalfExtents, _hud.healthColor);
 		std::string strHealth = std::to_string((uint32_t)std::clamp<float>(std::ceil(player.getHealth()), 0, player.getMaxHealth()));
-		float healthTextX = font->CalcTextSizeA(font->FontSize, size / 2.f, 0, strHealth.c_str(), strHealth.c_str() + strHealth.size()).x;
-		draw->AddText(glm::vec2(healthMid.x - healthTextX / 2.f, offset.y + size), 0xFFFFFFFF, strHealth.c_str(), strHealth.c_str() + strHealth.size());
+		float healthTextX = font->CalcTextSizeA(font->FontSize, _hud.statBarSize / 2.f, 0, strHealth.c_str(), strHealth.c_str() + strHealth.size()).x;
+		draw->AddText(glm::vec2(_hud.healthMid.x - healthTextX / 2.f, _hud.statBarOffset.y + _hud.statBarSize), 0xFFFFFFFF, strHealth.c_str(), strHealth.c_str() + strHealth.size());
 
 		// energy bar
-		ImU32 energyColor = ImGui::GetColorU32({ 0.9, 0.9, 0.9, 1 });
-		draw->AddRectFilled(energyMid - rectVec+glm::vec2(0, (1-player.getEnergy() / player.getMaxEnergy())*size), energyMid + rectVec, energyColor);
+		_hud.energyColor = ImGui::GetColorU32({ 0.9, 0.9, 0.9, 1 });
+		draw->AddRectFilled(_hud.energyMid - _hud.statBarHalfExtents +glm::vec2(0, (1-player.getEnergy() / player.getMaxEnergy())* _hud.statBarSize), _hud.energyMid + _hud.statBarHalfExtents, _hud.energyColor);
 		std::string strEnergy = std::to_string((uint32_t)std::clamp<float>(std::ceil(player.getEnergy()), 0, player.getMaxEnergy()));
-		float energyTextX = font->CalcTextSizeA(font->FontSize, size / 2.f, 0, strEnergy.c_str(), strEnergy.c_str() + strEnergy.size()).x;
-		draw->AddText(glm::vec2(energyMid.x - energyTextX / 2.f, offset.y + size), 0xFFFFFFFF, strEnergy.c_str(), strEnergy.c_str() + strEnergy.size());
+		float energyTextX = font->CalcTextSizeA(font->FontSize, _hud.statBarSize / 2.f, 0, strEnergy.c_str(), strEnergy.c_str() + strEnergy.size()).x;
+		draw->AddText(glm::vec2(_hud.energyMid.x - energyTextX / 2.f, _hud.statBarOffset.y + _hud.statBarSize), 0xFFFFFFFF, strEnergy.c_str(), strEnergy.c_str() + strEnergy.size());
+	}
+
+	if (_hud.lastHealth > player.getHealth())
+		_hud.animations.push_back(std::make_unique<HudDamageAnimation>(player.getHealth(), _hud.lastHealth, player.getMaxHealth()));
+	_hud.lastHealth = player.getHealth();
+
+	if (_hud.lastEnergy > player.getEnergy())
+		_hud.animations.push_back(std::make_unique<HudEnergyAnimation>(player.getEnergy(), _hud.lastEnergy, player.getMaxEnergy()));
+	_hud.lastEnergy = player.getEnergy();
+
+	for (size_t i = 0; i < _hud.animations.size(); i++) {
+		if (_hud.animations[i]->isDone()) {
+			_hud.animations.erase(_hud.animations.begin() + i);
+			i--;
+		}
+		else
+			_hud.animations[i]->update(dt);
 	}
 
 	//{
@@ -144,7 +214,7 @@ void update(WorldData& world, NetworkData& network, Controls& controls, float dt
 			}
 			if (ImGui::IsKeyPressed(ImGuiKey_K))
 				spPlayer->kill();
-			drawHud(*spPlayer);
+			drawHud(*spPlayer, dt);
 		}
 		for (auto spPlayerPair : world.players) {
 			spPlayerPair.second->updateAnimations(dt);
