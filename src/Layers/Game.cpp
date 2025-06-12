@@ -330,6 +330,7 @@ void gameLoop(RenderData& render, WorldData& world, NetworkData& network, Contro
 
 		{
 			std::lock_guard<std::mutex> lk(world.mPlayers);
+			std::lock_guard<std::mutex> lk2(world.mScene);
 			if (std::shared_ptr<Player> spPlayer = world.pPlayer.lock()) { // enable rendering only if player is selected
 				logger::beginRegion("engine");
 				render.pbRender->updateCamera(spPlayer->getCamera());
@@ -365,7 +366,10 @@ void gameLoop(RenderData& render, WorldData& world, NetworkData& network, Contro
 }
 
 void setupLocalPlayer(WorldData& world, std::string username) {
-	world.players[username] = std::make_shared<Player>(*world.scene, username);
+	{
+		std::lock_guard<std::mutex> lk(world.mScene);
+		world.players[username] = std::make_shared<Player>(*world.scene, username);
+	}
 	world.pPlayer = world.players.at(username);
 	if (std::shared_ptr<Player> spPlayer = world.pPlayer.lock()) {
 		spPlayer->getInventory().setItem(std::make_shared<Ray>(world), 0);
@@ -376,6 +380,7 @@ void setupLocalPlayer(WorldData& world, std::string username) {
 }
 
 void setupExternalPlayer(WorldData& world, std::string username) {
+	std::lock_guard<std::mutex> lk(world.mScene);
 	world.players[username] = std::make_shared<Player>(*world.scene, username);
 }
 

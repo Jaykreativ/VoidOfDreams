@@ -14,6 +14,7 @@
 #include <mutex>
 
 struct WorldData {
+	std::mutex mScene;
 	Zap::Scene* scene;
 
 	std::vector<std::weak_ptr<Animation>> animations;

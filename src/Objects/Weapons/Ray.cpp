@@ -15,6 +15,7 @@ Ray::Beam::Beam(WorldData& world, glm::vec3 origin, glm::vec3 direction, float l
 {
 	Zap::ModelLoader loader;
 	auto model = loader.load(_beamModel);
+	std::lock_guard<std::mutex> lk(world.mScene);
 	world.scene->attachActor(m_actor);
 	m_actor.addTransform();
 	m_actor.addModel(model);
@@ -87,7 +88,12 @@ void Ray::update(Player& player, PlayerInventory::iterator iterator) {
 		Zap::Scene::RaycastOutput out = {};
 		RayFilter filter;
 		filter.excludedActor = player.getPhysicsActor();
-		if (m_world.scene->raycast(origin, direction, 1000, &out, &filter))
+		bool hit = false;
+		{
+			std::lock_guard<std::mutex> lk(m_world.mScene);
+			hit = m_world.scene->raycast(origin, direction, 1000, &out, &filter);
+		}
+		if (hit)
 			m_world.rayBeams.push_back(std::make_unique<Beam>(m_world, origin, direction, out.distance));
 		else
 			m_world.rayBeams.push_back(std::make_unique<Beam>(m_world, origin, direction, 1000));
@@ -100,7 +106,12 @@ void Ray::processRay(glm::vec3 origin, glm::vec3 direction, WorldData& world, Pl
 	Zap::Scene::RaycastOutput out = {};
 	RayFilter filter;
 	filter.excludedActor = senderPlayer.getPhysicsActor();
-	if (world.scene->raycast(origin, direction, 1000, &out, &filter)) {
+	bool hit = false;
+	{
+		std::lock_guard<std::mutex> lk(world.mScene);
+		hit = world.scene->raycast(origin, direction, 1000, &out, &filter);
+	}
+	if (hit) {
 		if (out.actor == checkPlayer.getPhysicsActor()) {
 			checkPlayer.damage(_damage, senderPlayer);
 		}
