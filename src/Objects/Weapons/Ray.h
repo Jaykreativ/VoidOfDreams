@@ -43,5 +43,5 @@ public:
 private:
 	WorldData& m_world;
 
-	int m_alternateSide;
+	int m_alternateSide = 0;
 };
