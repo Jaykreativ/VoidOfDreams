@@ -91,12 +91,12 @@ void Ray::update(Player& player, PlayerInventory::iterator iterator) {
 		bool hit = false;
 		{
 			std::lock_guard<std::mutex> lk(m_world.mScene);
-			hit = m_world.scene->raycast(origin, direction, 1000, &out, &filter);
+			hit = m_world.scene->raycast(origin, glm::normalize(direction), 1000, &out, &filter);
 		}
 		if (hit)
-			m_world.rayBeams.push_back(std::make_unique<Beam>(m_world, origin, direction, out.distance));
+			m_world.rayBeams.push_back(std::make_unique<Beam>(m_world, origin, glm::normalize(direction), out.distance));
 		else
-			m_world.rayBeams.push_back(std::make_unique<Beam>(m_world, origin, direction, 1000));
+			m_world.rayBeams.push_back(std::make_unique<Beam>(m_world, origin, glm::normalize(direction), 1000));
 		m_alternateSide = !m_alternateSide;
 	}
 	m_isTriggered = false; // one time trigger
@@ -109,7 +109,7 @@ void Ray::processRay(glm::vec3 origin, glm::vec3 direction, WorldData& world, Pl
 	bool hit = false;
 	{
 		std::lock_guard<std::mutex> lk(world.mScene);
-		hit = world.scene->raycast(origin, direction, 1000, &out, &filter);
+		hit = world.scene->raycast(origin, glm::normalize(direction), 1000, &out, &filter);
 	}
 	if (hit) {
 		if (out.actor == checkPlayer.getPhysicsActor()) {
