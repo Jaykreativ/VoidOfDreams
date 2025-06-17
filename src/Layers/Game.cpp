@@ -243,6 +243,18 @@ void drawNetworkInterface(NetworkData& network, WorldData& world) {
 	}
 }
 
+void drawServerInterface(NetworkData& network) {
+	ImGui::Begin("Server");
+	if (server::isRunning()) {
+		std::lock_guard<std::mutex> lk(network.mServer);
+		for (auto& name : network.playerList)
+			ImGui::Text(name.c_str());
+	}
+	else
+		ImGui::Text("You're not the host, only the host can see this window");
+	ImGui::End();
+}
+
 void update(WorldData& world, NetworkData& network, Controls& controls, float dt, Zap::Window& window) {
 	static bool captured = false;
 
@@ -304,6 +316,7 @@ void update(WorldData& world, NetworkData& network, Controls& controls, float dt
 		controls.cameraMode = Controls::eTHIRD_PERSON;
 
 	drawNetworkInterface(network, world);
+	drawServerInterface(network);
 
 	ImGui::Begin("Frame Profile");
 	logger::drawFrameProfileImGui();

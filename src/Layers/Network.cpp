@@ -272,7 +272,7 @@ namespace client {
 		return true;
 	}
 
-	void receiverLoop(NetworkData network, WorldData* world) {
+	void receiverLoop(NetworkData* network, WorldData* world) {
 		while (true) {
 			{ // stop
 				std::lock_guard<std::mutex> lk(_mTerminate);
@@ -286,7 +286,7 @@ namespace client {
 				exit(sock::lastError());
 			}
 			if (didPoll) {
-				if (!handlePoll(network, *world)) {
+				if (!handlePoll(*network, *world)) {
 					break;
 				}
 			}
@@ -377,7 +377,7 @@ bool runClient(NetworkData& network, WorldData& world) {
 	}
 	client::_shouldStop = false;
 	//client::sender = std::thread(client::senderLoop, network, &world);
-	client::_receiver = std::thread(client::receiverLoop, network, &world);
+	client::_receiver = std::thread(client::receiverLoop, &network, &world);
 	return true;
 }
 
@@ -664,6 +664,7 @@ namespace server {
 	}
 
 	SocketData getServerSocket(NetworkData& network) {
+		std::lock_guard<std::mutex> lk(network.mNetwork);
 		SocketData socketData;
 
 		addrinfo hints;
@@ -731,8 +732,8 @@ namespace server {
 		return socketData;
 	}
 
-	void loop(NetworkData network) {
-		_serverSocket = getServerSocket(network);
+	void loop(NetworkData* network) {
+		_serverSocket = getServerSocket(*network);
 		printf("server running\n");
 
 		while (true) {
@@ -753,6 +754,13 @@ namespace server {
 			}
 
 			handlePoll(pollCount);
+
+			{
+				std::lock_guard<std::mutex> lk(network->mServer);
+				network->playerList.resize(_clients.size());
+				for (size_t i = 0; i < _clients.size(); i++)
+					network->playerList[i] = _clients[i].username;
+			}
 		}
 
 		freeResources();
@@ -761,13 +769,13 @@ namespace server {
 	}
 }
 
-void runServer(NetworkData network) {
+void runServer(NetworkData& network) {
 	if (server::_isRunning)
 		return;
 	server::_isRunning = true;
 
 	server::_shouldStop = false;
-	server::_thread = std::thread(server::loop, network);
+	server::_thread = std::thread(server::loop, &network);
 }
 
 void terminateServer() {
