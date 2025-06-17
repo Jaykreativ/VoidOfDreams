@@ -58,6 +58,8 @@ namespace client {
 			return true;
 		client::_isRunning = true;
 
+		std::lock_guard<std::mutex> lk(network.mNetwork);
+
 		addrinfo hints;
 		addrinfo* serverInfo;
 
@@ -133,6 +135,7 @@ namespace client {
 		client::_isRunning = false;
 
 		if (_isConnected) {
+			std::lock_guard<std::mutex> lk(network.mNetwork);
 			DisconnectPacket disconnectPacket;
 			disconnectPacket.username = network.username;
 			disconnectPacket.sendTo(_serverSocket.stream);
@@ -173,7 +176,7 @@ namespace client {
 					setupLocalPlayer(world, packet.username);
 				}
 				else {
-					printf("%s connected\n", packet.username);
+					printf("%s connected\n", packet.username.c_str());
 					setupExternalPlayer(world, packet.username);
 				}
 				break;
@@ -650,7 +653,7 @@ namespace server {
 	}
 
 	// free all resources
-	void freeResources() {
+	void freeResources(NetworkData& network) {
 		if (sock::closeSocket(_serverSocket.stream) == -1)
 			sock::printLastError("Server close(serverSocket.stream)");
 		if (sock::closeSocket(_serverSocket.dgram) == -1)
@@ -661,6 +664,8 @@ namespace server {
 
 		_pollfds.clear();
 		_clients.clear();
+		std::lock_guard<std::mutex> lk(network.mServer);
+		network.playerList.clear();
 	}
 
 	SocketData getServerSocket(NetworkData& network) {
@@ -763,7 +768,7 @@ namespace server {
 			}
 		}
 
-		freeResources();
+		freeResources(*network);
 
 		printf("server done\n");
 	}
