@@ -1,12 +1,19 @@
 #pragma once
 
 #include <string>
+#include <thread>
+#include <mutex>
+#include <vector>
 
 struct NetworkData {
+	std::mutex mNetwork;
 	std::string username = "user"; // this username serves as an id for the client
 	std::string port = "12525";
-	std::string ip = "127.0.0.1";
+	std::string ip = "zap.internet-box.ch";
+
+	std::mutex mServer;
+	std::vector<std::string> playerList;
 
 	// server specific
-	int backlog = 10;
+	const int backlog = 10;
 };

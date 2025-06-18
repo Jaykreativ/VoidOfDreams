@@ -103,9 +103,23 @@ void Player::updateInputs(Controls& controls, float dt) {
 	else {
 		m_base.cmpTransform_setPos(m_base.cmpTransform_getPos() + m_movementDir * dt * speed);
 	}
+
+	if (ImGui::IsMouseClicked(controls.switchMode)) {
+		spendEnergy(10);
+		m_energy = std::max<float>(m_energy, 0);
+		if (m_mode == eWEAPON)
+			m_mode = eABILITY;
+		else
+			m_mode = eWEAPON;
+	}
 }
 
 void Player::updateMechanics(Controls& controls, float dt) {
+	if (m_mode == eWEAPON)
+		controls.cameraMode = Controls::eFIRST_PERSON;
+	else
+		controls.cameraMode = Controls::eTHIRD_PERSON;
+	updateCamera(controls);
 	if (m_active) {
 		m_energy = std::min<float>(m_energy, 100);
 
@@ -131,7 +145,9 @@ void Player::update(Controls& controls, float dt) {
 		m_core.cmpTransform_setPos(pos);
 		m_base.cmpTransform_setPos(pos);
 	}
-	updateCamera(controls);
+
+	m_events = m_recordEvents;
+	m_recordEvents = eNONE;
 }
 
 void Player::damage(float damage) {
@@ -139,9 +155,21 @@ void Player::damage(float damage) {
 		return;
 	m_health -= damage;
 	if (m_health <= 0) {
+		client::sendPlayerDamage(damage + m_health, m_health, m_username, "");
 		kill();
 	}
-	client::sendPlayerDamage(damage, *this, m_username);
+	client::sendPlayerDamage(damage, m_health, m_username, "");
+}
+
+void Player::damage(float damage, const Player& damager) {
+	if (m_spawnProtection > 0)
+		return;
+	m_health -= damage;
+	m_recordEvents |= eDAMAGE_TAKEN;
+	if (m_health <= 0) {
+		kill(damager);
+	}
+	client::sendPlayerDamage(damage, m_health, m_username, damager.m_username);
 }
 
 void Player::localSpawn(Zap::ActorLoader& loader) {
@@ -152,6 +180,7 @@ void Player::localSpawn(Zap::ActorLoader& loader) {
 	m_hull.cmpRigidDynamic_setLinearDamping(.9);
 	m_energy = getMaxEnergy();
 	m_health = getMaxHealth();
+	m_recordEvents |= eSPAWN;
 	m_active = true;
 }
 
@@ -159,6 +188,8 @@ void Player::localKill() {
 	if (m_active) {
 		m_core.destroy();
 		m_hull.destroy();
+		m_deaths++;
+		m_recordEvents |= eDEATH;
 	}
 	m_active = false;
 }
@@ -172,13 +203,30 @@ void Player::spawn(Zap::ActorLoader loader) {
 void Player::kill() {
 	if (m_active) {
 		m_spawnTimeout = 5;
-		client::sendPlayerDeath(m_username);
+		client::sendPlayerDeath(m_username, "");
+	}
+	localKill();
+}
+
+void Player::kill(const Player& killer) {
+	if (m_active) {
+		m_spawnTimeout = 5;
+		client::sendPlayerDeath(m_username, killer.m_username);
 	}
 	localKill();
 }
 
 void Player::spendEnergy(float energy) {
 	m_energy -= energy;
+	m_recordEvents |= eENERGY_SPENT;
+}
+
+bool Player::isWeaponMode() {
+	return m_mode == eWEAPON;
+}
+
+bool Player::isAbilityMode() {
+	return m_mode == eABILITY;
 }
 
 float Player::getHealth() {
@@ -195,6 +243,18 @@ float Player::getEnergy() {
 
 float Player::getMaxEnergy() {
 	return 100;
+}
+
+uint32_t Player::getKills() {
+	return m_kills;
+}
+
+uint32_t Player::getDeaths() {
+	return m_deaths;
+}
+
+float Player::getDamage() {
+	return m_damage;
 }
 
 PlayerInventory& Player::getInventory() {
@@ -230,6 +290,13 @@ glm::mat4 Player::getTransform() {
 	return m_hull.cmpTransform_getTransform();
 }
 
+bool Player::hasTakenDamage() { return ZP_IS_FLAG_ENABLED(m_events, eDAMAGE_TAKEN); }
+bool Player::hasSpentEnergy() { return ZP_IS_FLAG_ENABLED(m_events, eENERGY_SPENT); }
+bool Player::hasDied()        { return ZP_IS_FLAG_ENABLED(m_events, eDEATH); }
+bool Player::hasSpawned()     { return ZP_IS_FLAG_ENABLED(m_events, eSPAWN); }
+bool Player::hasDoneDamage()  { return ZP_IS_FLAG_ENABLED(m_events, eDAMAGE_DONE); }
+bool Player::hasKilled()      { return ZP_IS_FLAG_ENABLED(m_events, eKILL); }
+
 void Player::syncSpawn() {
 	Zap::ActorLoader loader;
 	localSpawn(loader);
@@ -238,12 +305,19 @@ void Player::syncSpawn() {
 void Player::syncDeath() {
 	localKill();
 }
+void Player::syncDeath(Player& killer) {
+	localKill();
+	killer.m_kills++;
+	killer.m_recordEvents |= eKILL;
+}
 
 void Player::syncMove(glm::mat4 transform) {
 	if(m_active)
 		setTransform(transform);
 }
 
-void Player::syncDamage(float damage, float newHealth) {
+void Player::syncDamage(Player& damager, float damage, float newHealth) {
 	m_health = newHealth;
+	damager.m_damage += damage;
+	damager.m_recordEvents |= eDAMAGE_DONE;
 }

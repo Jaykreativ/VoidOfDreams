@@ -17,11 +17,16 @@ enum PacketType {
 	eDamage = 5,
 	eSpawn = 6,
 	eDeath = 7,
+	eUDP_CONNECT = 8,
 	eRay = 100
 };
 
 class Packet {
 public:
+	// general data
+	// all packets have this data
+	std::string username = "";
+
 	// send this packet to the specified socket
 	// socket has to be a stream socket or a connected dgram socket
 	void sendTo(int socket, int flags = 0);
@@ -44,6 +49,8 @@ protected:
 
 	static uint32_t headerSize();
 
+	uint32_t generalDataSize();
+
 	virtual uint32_t dataSize() = 0;
 
 	// packs just the header
@@ -51,8 +58,17 @@ protected:
 	void packHeader(char* buf, const int type);
 
 	// takes just the header
-	// returns the size of the data stored in the packet
+	// returns the size of the data stored in the packet and the type of packet
 	static void unpackHeader(const char* buf, uint32_t& size, int& type);
+
+	// packs data present in all packets including the header
+	// automatically moves the pointer
+	void packGeneralData(char*& buf, const int type);
+	
+	// unpacks data present in all packets including the header
+	// returns the size of the data stored in the packet and the type of packet
+	// automatically moves the pointer
+	void unpackGeneralData(const char*& buf);
 
 	// takes the pointer to a buffer and fills it with the packed packet
 	// should use packHeader
@@ -62,12 +78,27 @@ protected:
 	virtual void unpackData(const char* buf, uint32_t size) = 0;
 };
 
-class MessagePacket : public Packet {
+//class MessagePacket : public Packet {
+//	friend class Packet;
+//public:
+//	// data
+//	std::string id = "";
+//	std::string msg = "";
+//
+//protected:
+//	uint32_t dataSize();
+//
+//	// packs the data into the given buffer, buffer needs to have the same size as packet.fullSize()
+//	void pack(char* buf);
+//
+//	// takes just the data part
+//	void unpackData(const char* buf, uint32_t size);
+//};
+
+class ConnectPacket : public Packet {
 	friend class Packet;
 public:
 	// data
-	std::string id = "";
-	std::string msg = "";
 
 protected:
 	uint32_t dataSize();
@@ -79,11 +110,10 @@ protected:
 	void unpackData(const char* buf, uint32_t size);
 };
 
-class ConnectPacket : public Packet {
+class UDPConnectPacket : public Packet {
 	friend class Packet;
 public:
 	// data
-	std::string username = "";
 
 protected:
 	uint32_t dataSize();
@@ -99,7 +129,6 @@ class DisconnectPacket : public Packet {
 	friend class Packet;
 public:
 	// data
-	std::string username = "";
 
 protected:
 	uint32_t dataSize();
@@ -115,7 +144,6 @@ class MovePacket : public Packet {
 	friend class Packet;
 public:
 	// data
-	std::string username = "";
 	glm::mat4 transform = glm::mat4(1);
 
 protected:
@@ -132,7 +160,7 @@ class DamagePacket : public Packet {
 	friend class Packet;
 public:
 	//data
-	std::string username = "";
+	std::string usernameDamager = "";
 	float damage = 0;
 	float health = 0;
 
@@ -150,7 +178,6 @@ class SpawnPacket : public Packet {
 	friend class Packet;
 public:
 	//data
-	std::string username = "";
 
 protected:
 	uint32_t dataSize();
@@ -166,7 +193,7 @@ class DeathPacket : public Packet {
 	friend class Packet;
 public:
 	//data
-	std::string username = "";
+	std::string usernameKiller = "";
 
 protected:
 	uint32_t dataSize();
@@ -178,12 +205,11 @@ protected:
 	void unpackData(const char* buf, uint32_t size);
 };
 
-// Item Packets
+// Item Packetsgit 
 class RayPacket : public Packet {
 	friend class Packet;
 public:
 	//data
-	std::string username = "";
 	glm::vec3 origin = { 0, 0, 0 };
 	glm::vec3 direction = { 0, 0, 0 };
 

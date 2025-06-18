@@ -20,6 +20,7 @@ std::string unpackString(const char*& buf) {
 void Packet::sendTo(int socket, int flags) {
 	uint32_t len = fullSize();
 	char* buf = new char[len];
+	auto* delBuf = buf;
 	pack(buf);
 
 	uint32_t offset = 0;
@@ -27,12 +28,12 @@ void Packet::sendTo(int socket, int flags) {
 		int bytesSent = send(socket, buf + offset, len - offset, 0);
 		if (bytesSent == -1) {
 			sock::printLastError("Packet::send");
-			delete[] buf;
+			delete[] delBuf;
 			return;
 		}
 		offset += bytesSent;
 	}
-	delete[] buf;
+	delete[] delBuf;
 }
 
 void Packet::sendToDgram(int socket, const sockaddr* addr, int flags) {
@@ -68,6 +69,7 @@ std::shared_ptr<Packet> Packet::receiveFrom(int& type, int socket, int flags) {
 	delete[] buf;
 
 	buf = new char[dataSize];
+	const char* constBuf = buf;
 	bytesRead = recv(socket, buf, dataSize, 0); // get just data
 	if (bytesRead == -1) {
 		sock::printLastError("Packet::recv data");
@@ -85,42 +87,41 @@ std::shared_ptr<Packet> Packet::receiveFrom(int& type, int socket, int flags) {
 		//}
 	case eCONNECT: {
 		spPacket = std::make_shared<ConnectPacket>();
-		spPacket->unpackData(buf, dataSize);
+		break;
+	}
+	case eUDP_CONNECT: {
+		spPacket = std::make_shared<UDPConnectPacket>();
 		break;
 	}
 	case eDISCONNECT: {
 		spPacket = std::make_shared<DisconnectPacket>();
-		spPacket->unpackData(buf, dataSize);
 		break;
 	}
 	case eMOVE: {
 		spPacket = std::make_shared<MovePacket>();
-		spPacket->unpackData(buf, dataSize);
 		break;
 	}
 	case eDamage: {
 		spPacket = std::make_shared<DamagePacket>();
-		spPacket->unpackData(buf, dataSize);
 		break;
 	}
 	case eSpawn: {
 		spPacket = std::make_shared<SpawnPacket>();
-		spPacket->unpackData(buf, dataSize);
 		break;
 	}
 	case eDeath: {
 		spPacket = std::make_shared<DeathPacket>();
-		spPacket->unpackData(buf, dataSize);
 		break;
 	}
 	case eRay: {
 		spPacket = std::make_shared<RayPacket>();
-		spPacket->unpackData(buf, dataSize);
 		break;
 	}
 	default:
 		break;
 	}
+	spPacket->unpackGeneralData(constBuf);
+	spPacket->unpackData(constBuf, dataSize-spPacket->generalDataSize());
 	delete[] buf;
 
 	return spPacket;
@@ -128,15 +129,15 @@ std::shared_ptr<Packet> Packet::receiveFrom(int& type, int socket, int flags) {
 
 std::shared_ptr<Packet> Packet::receiveFromDgram(int& type, int socket, sockaddr* addr, int* addrlen, int flags) {
 	char buf[UDP_PACKET_BUFFER_SIZE];
+	const char* constBuf = buf;
 	int bytesRead = recvfrom(socket, buf, UDP_PACKET_BUFFER_SIZE, 0, addr, addrlen); // get just header
 	if (bytesRead == -1) {
 		sock::printLastError("Packet::recvfrom");
 		return nullptr;
 	}
-	char* ptr = buf;
 	uint32_t dataSize;
-	unpackHeader(ptr, dataSize, type);
-	ptr += headerSize();
+	unpackHeader(constBuf, dataSize, type);
+	constBuf += headerSize();
 
 	std::shared_ptr<Packet> spPacket;
 	switch (type)
@@ -148,58 +149,60 @@ std::shared_ptr<Packet> Packet::receiveFromDgram(int& type, int socket, sockaddr
 		//}
 	case eCONNECT: {
 		spPacket = std::make_shared<ConnectPacket>();
-		spPacket->unpackData(ptr, dataSize);
+		break;
+	}
+	case eUDP_CONNECT: {
+		spPacket = std::make_shared<UDPConnectPacket>();
 		break;
 	}
 	case eDISCONNECT: {
 		spPacket = std::make_shared<DisconnectPacket>();
-		spPacket->unpackData(ptr, dataSize);
 		break;
 	}
 	case eMOVE: {
 		spPacket = std::make_shared<MovePacket>();
-		spPacket->unpackData(ptr, dataSize);
 		break;
 	}
 	case eDamage: {
 		spPacket = std::make_shared<DamagePacket>();
-		spPacket->unpackData(buf, dataSize);
 		break;
 	}
 	case eSpawn: {
 		spPacket = std::make_shared<SpawnPacket>();
-		spPacket->unpackData(buf, dataSize);
 		break;
 	}
 	case eDeath: {
 		spPacket = std::make_shared<DeathPacket>();
-		spPacket->unpackData(buf, dataSize);
 		break;
 	}
 	case eRay: {
 		spPacket = std::make_shared<RayPacket>();
-		spPacket->unpackData(buf, dataSize);
 		break;
 	}
 	default:
 		break;
 	}
-
+	spPacket->unpackGeneralData(constBuf);
+	spPacket->unpackData(constBuf, dataSize - spPacket->generalDataSize());
 	return spPacket;
 
 }
 
 uint32_t Packet::fullSize() {
-	return headerSize() + dataSize();
+	return headerSize() + generalDataSize() + dataSize();
 }
 
 uint32_t Packet::headerSize() {
 	return 2 * sizeof(uint32_t);
 }
 
+uint32_t Packet::generalDataSize() {
+	return sizeof(uint32_t) + username.size();
+}
+
 void Packet::packHeader(char* buf, const int type) {
 	uint32_t* uintBuf = reinterpret_cast<uint32_t*>(buf);
-	uintBuf[0] = htonl(dataSize());
+	uintBuf[0] = htonl(generalDataSize() + dataSize());
 	uintBuf[1] = htonl(type);
 }
 
@@ -207,6 +210,15 @@ void Packet::unpackHeader(const char* buf, uint32_t& size, int& type) {
 	const uint32_t* uintBuf = reinterpret_cast<const uint32_t*>(buf);
 	size = ntohl(uintBuf[0]);
 	type = ntohl(uintBuf[1]);
+}
+
+void Packet::packGeneralData(char*& buf, const int type) {
+	packHeader(buf, type); buf += headerSize();
+	packString(buf, username);
+}
+
+void Packet::unpackGeneralData(const char*& buf) {
+	username = unpackString(buf);
 }
 
 // MessagePacket
@@ -234,60 +246,64 @@ void Packet::unpackHeader(const char* buf, uint32_t& size, int& type) {
 
 // ConnectPacket
 uint32_t ConnectPacket::dataSize() {
-	return username.size();
+	return 0;
 }
 
 void ConnectPacket::pack(char* buf) {
-	packHeader(buf, eCONNECT); buf += headerSize();
+	packGeneralData(buf, eCONNECT);
 	/* data */
-	memcpy(buf, username.data(), username.size());
 }
 
-void ConnectPacket::unpackData(const char* buf, uint32_t size) {
-	username = std::string(buf, size);
+void ConnectPacket::unpackData(const char* buf, uint32_t size) {}
+
+// UDPConnectPacket
+uint32_t UDPConnectPacket::dataSize() {
+	return 0;
 }
+
+void UDPConnectPacket::pack(char* buf) {
+	packGeneralData(buf, eUDP_CONNECT);
+	/* data */
+}
+
+void UDPConnectPacket::unpackData(const char* buf, uint32_t size) {}
 
 // DisconnectPacket
 uint32_t DisconnectPacket::dataSize() {
-	return username.size();
+	return 0;
 }
 
 void DisconnectPacket::pack(char* buf) {
-	packHeader(buf, eDISCONNECT); buf += headerSize();
+	packGeneralData(buf, eDISCONNECT);
 	/* data */
-	memcpy(buf, username.data(), username.size());
 }
 
-void DisconnectPacket::unpackData(const char* buf, uint32_t size) {
-	username = std::string(buf, size);
-}
+void DisconnectPacket::unpackData(const char* buf, uint32_t size) {}
 
 // MovePacket
 uint32_t MovePacket::dataSize() {
-	return sizeof(uint32_t) + username.size() + sizeof(glm::mat4);
+	return sizeof(glm::mat4);
 }
 
 void MovePacket::pack(char* buf) {
-	packHeader(buf, eMOVE); buf += headerSize();
+	packGeneralData(buf, eMOVE);
 	/* data */
-	packString(buf, username);
 	sock::htonMat4(transform, buf);
 }
 
 void MovePacket::unpackData(const char* buf, uint32_t size) {
-	username = unpackString(buf);
 	sock::ntohMat4(buf, transform);
 }
 
 // DamagePacket
 uint32_t DamagePacket::dataSize() {
-	return sizeof(uint32_t) + username.size() + 2*sizeof(float);
+	return usernameDamager.size() + sizeof(uint32_t) + 2*sizeof(float);
 }
 
 void DamagePacket::pack(char* buf) {
-	packHeader(buf, eDamage); buf += headerSize();
+	packGeneralData(buf, eDamage);
 	/* data */
-	packString(buf, username);
+	packString(buf, usernameDamager);
 	uint32_t nDamage = htonf(damage);
 	memcpy(buf, &nDamage, sizeof(uint32_t)); buf += sizeof(uint32_t);
 	uint32_t nHealth = htonf(health);
@@ -295,56 +311,51 @@ void DamagePacket::pack(char* buf) {
 }
 
 void DamagePacket::unpackData(const char* buf, uint32_t size) {
-	username = unpackString(buf);
+	usernameDamager = unpackString(buf);
 	damage = ntohf(reinterpret_cast<const uint32_t*>(buf)[0]);
 	health = ntohf(reinterpret_cast<const uint32_t*>(buf)[1]);
 }
 
 // SpawnPacket
 uint32_t SpawnPacket::dataSize() {
-	return sizeof(uint32_t) + username.size();
+	return 0;
 }
 
 void SpawnPacket::pack(char* buf) {
-	packHeader(buf, eSpawn); buf += headerSize();
+	packGeneralData(buf, eSpawn);
 	/* data */
-	packString(buf, username);
 }
 
-void SpawnPacket::unpackData(const char* buf, uint32_t size) {
-	username = unpackString(buf);
-}
+void SpawnPacket::unpackData(const char* buf, uint32_t size) {}
 
 // DeathPacket
 uint32_t DeathPacket::dataSize() {
-	return sizeof(uint32_t) + username.size();
+	return usernameKiller.size() + sizeof(uint32_t);
 }
 
 void DeathPacket::pack(char* buf) {
-	packHeader(buf, eDeath); buf += headerSize();
+	packGeneralData(buf, eDeath);
 	/* data */
-	packString(buf, username);
+	packString(buf, usernameKiller);
 }
 
 void DeathPacket::unpackData(const char* buf, uint32_t size) {
-	username = unpackString(buf);
+	usernameKiller = unpackString(buf);
 }
 
 // RayPacket
 uint32_t RayPacket::dataSize() {
-	return sizeof(uint32_t) + username.size() + 2*sizeof(glm::vec3);
+	return 2*sizeof(glm::vec3);
 }
 
 void RayPacket::pack(char* buf) {
-	packHeader(buf, eRay); buf += headerSize();
+	packGeneralData(buf, eRay);
 	/* data */
-	packString(buf, username);
 	sock::htonVec3(origin, buf); buf += sizeof(glm::vec3);
 	sock::htonVec3(direction, buf);
 }
 
 void RayPacket::unpackData(const char* buf, uint32_t size) {
-	username = unpackString(buf);
 	sock::ntohVec3(buf, origin); buf += sizeof(glm::vec3);
 	sock::ntohVec3(buf, direction);
 }

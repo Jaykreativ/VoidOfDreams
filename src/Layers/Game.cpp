@@ -5,6 +5,7 @@
 #include "Shares/NetworkData.h"
 #include "Shares/Render.h"
 #include "Shares/World.h"
+#include "Shares/Hud.h"
 #include "Objects/Inventory.h"
 #include "Objects/Weapons/Ray.h"
 #include "Objects/PermaAbilities/Dash.h"
@@ -17,9 +18,104 @@
 
 #include <chrono>
 
-void drawHud(Player& player) {
-	float hudScale = 1;
+static HudData _hud = {};
 
+class HudDamageAnimation : public Animation {
+public:
+	HudDamageAnimation(float minHealth, float maxHealth, float fullHealth)
+		: Animation(.5f), m_minHealth(minHealth), m_maxHealth(maxHealth), m_fullHealth(fullHealth)
+	{}
+
+	void update(float dt) override {
+		auto* draw = ImGui::GetWindowDrawList();
+		glm::vec2 min = _hud.healthMid - _hud.statBarHalfExtents + glm::vec2(0, (1 - m_maxHealth / m_fullHealth) * _hud.statBarSize);
+		glm::vec2 max = _hud.healthMid + _hud.statBarHalfExtents - glm::vec2(0, m_minHealth / m_fullHealth * _hud.statBarSize);
+		glm::vec2 mid = (min + max) / 2.f;
+		glm::vec2 extents = max - mid;
+		draw->AddRectFilled(
+			mid - extents * (1 - timeFactor()),
+			mid + extents * (1 - timeFactor()),
+			_hud.healthColor);
+		addDeltaTime(dt);
+	}
+
+private:
+	float m_minHealth;
+	float m_maxHealth;
+	float m_fullHealth;
+};
+
+class HudEnergyAnimation : public Animation {
+public:
+	HudEnergyAnimation(float minEnergy, float maxEnergy, float fullEnergy)
+		: Animation(.25f), m_minEnergy(minEnergy), m_maxEnergy(maxEnergy), m_fullEnergy(fullEnergy)
+	{}
+
+	void update(float dt) override {
+		auto* draw = ImGui::GetWindowDrawList();
+		glm::vec2 min = _hud.energyMid - _hud.statBarHalfExtents + glm::vec2(0, (1 - m_maxEnergy / m_fullEnergy) * _hud.statBarSize);
+		glm::vec2 max = _hud.energyMid + _hud.statBarHalfExtents - glm::vec2(0, m_minEnergy / m_fullEnergy * _hud.statBarSize);
+		glm::vec2 mid = (min + max) / 2.f;
+		glm::vec2 extents = max - mid;
+		draw->AddRectFilled(
+			mid - extents * (1 - timeFactor()),
+			mid + extents * (1 - timeFactor()),
+			_hud.energyColor);
+		addDeltaTime(dt);
+	}
+
+private:
+	float m_minEnergy;
+	float m_maxEnergy;
+	float m_fullEnergy;
+};
+
+class HudCrosshairKillAnimation : public Animation {
+public:
+	HudCrosshairKillAnimation()
+		: Animation(1)
+	{}
+
+	void update(float dt) override {
+		auto* draw = ImGui::GetWindowDrawList();
+		glm::vec4 normColor = ImGui::ColorConvertU32ToFloat4(_hud.crosshairColor);
+		ImU32 color = ImGui::GetColorU32(glm::vec4(glm::vec3(normColor), (1-timeFactor())));
+		draw->AddCircle(_hud.crosshairMiddle, _hud.crosshairSize*(1.2+timeFactor()*10), color);
+		addDeltaTime(dt);
+	}
+};
+
+class HudCrosshairDamageAnimation : public Animation {
+public:
+	HudCrosshairDamageAnimation()
+		: Animation(1)
+	{}
+
+	void update(float dt) override {
+		auto* draw = ImGui::GetWindowDrawList();
+		glm::vec4 normColor = ImGui::ColorConvertU32ToFloat4(_hud.crosshairColor);
+		ImU32 color = ImGui::GetColorU32(glm::vec4(glm::vec3(normColor), (1-timeFactor())));
+		
+		for (size_t i = 0; i < 4; i++) {
+			glm::mat4 rotMat = glm::rotate(glm::mat4(1), glm::radians<float>(45+90*i), glm::vec3(0, 0, 1));
+			glm::vec2 rect[4] = {
+				glm::vec2(-_hud.crosshairSize * (1 + timeFactor()), -_hud.crosshairThickness) * .5f,
+				glm::vec2(-_hud.crosshairSize * .5 * (1 + timeFactor()), -_hud.crosshairThickness)*.5f,
+				glm::vec2(-_hud.crosshairSize * .5 * (1 + timeFactor()), _hud.crosshairThickness)*.5f,
+				glm::vec2(-_hud.crosshairSize * (1 + timeFactor()), _hud.crosshairThickness)*.5f
+			};
+			for (size_t j = 0; j < 4; j++) {
+				rect[j] = glm::vec4(rect[j], 0, 1) * rotMat;
+				rect[j] += _hud.crosshairMiddle;
+			}
+			draw->AddConvexPolyFilled(reinterpret_cast<ImVec2*>(rect), 4, color);
+
+			addDeltaTime(dt);
+		}
+	}
+};
+
+void drawHud(Player& player, float dt) {
 	ImGui::SetNextWindowSize(ImGui::GetIO().DisplaySize);
 	ImGui::SetNextWindowPos({0, 0});
 	ImGui::Begin("Hud", nullptr, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoDocking | ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoFocusOnAppearing);
@@ -27,38 +123,60 @@ void drawHud(Player& player) {
 
 	// crosshair
 	{
-		glm::vec2 middle = glm::vec2(ImGui::GetWindowSize()) / 2.f;
-		float size = 25*hudScale;
-		float thickness = 2*hudScale;
-		ImU32 color = ImGui::GetColorU32({1, 1, 1, 1});
-		glm::vec2 xVec = glm::vec2(size, thickness) / 2.f;
-		draw->AddRectFilled(middle-xVec, middle+xVec, color);
-		glm::vec2 yVec = glm::vec2(thickness, size) / 2.f;
-		draw->AddRectFilled(middle-yVec, middle+yVec, color);
+		_hud.crosshairMiddle = glm::vec2(ImGui::GetWindowSize()) / 2.f;
+		_hud.crosshairSize = 25* _hud.scale;
+		_hud.crosshairThickness = 2* _hud.scale;
+		_hud.crosshairColor = ImGui::GetColorU32({1, 1, 1, 1});
+		glm::vec2 xVec = glm::vec2(_hud.crosshairSize, _hud.crosshairThickness) / 2.f;
+		draw->AddRectFilled(_hud.crosshairMiddle -xVec, _hud.crosshairMiddle +xVec, _hud.crosshairColor);
+		glm::vec2 yVec = glm::vec2(_hud.crosshairThickness, _hud.crosshairSize) / 2.f;
+		draw->AddRectFilled(_hud.crosshairMiddle -yVec, _hud.crosshairMiddle +yVec, _hud.crosshairColor);
 	}
 
 	// health + energy bar
 	{
-		float size = 100 * hudScale;
-		glm::vec2 offset = glm::vec2(ImGui::GetWindowSize().x - size * 1.1, size * 0.1);
-		glm::vec2 healthMid = offset + glm::vec2(size / 4.f, size / 2.f);
-		glm::vec2 energyMid = offset + glm::vec2(size*3.f/4.f, size/2.f);
-		glm::vec2 rectVec = glm::vec2(size/2.5f, size) / 2.f;
+		_hud.statBarSize = 100 * _hud.scale;
+		_hud.statBarOffset = glm::vec2(ImGui::GetWindowSize().x - _hud.statBarSize * 1.1, _hud.statBarSize * 0.1);
+		_hud.healthMid = _hud.statBarOffset + glm::vec2(_hud.statBarSize / 4.f, _hud.statBarSize / 2.f);
+		_hud.energyMid = _hud.statBarOffset + glm::vec2(_hud.statBarSize *3.f/4.f, _hud.statBarSize /2.f);
+		_hud.statBarHalfExtents = glm::vec2(_hud.statBarSize /2.5f, _hud.statBarSize) / 2.f;
 		auto* font = ImGui::GetFont();
 
 		// health bar
-		ImU32 healthColor = ImGui::GetColorU32({ 0.9, 0.1, 0.1, 1 });
-		draw->AddRectFilled(healthMid - rectVec+glm::vec2(0, (1-player.getHealth() / player.getMaxHealth())*size), healthMid + rectVec, healthColor);
+		_hud.healthColor = ImGui::GetColorU32({ 0.9, 0.1, 0.1, 1 });
+		draw->AddRectFilled(_hud.healthMid - _hud.statBarHalfExtents +glm::vec2(0, (1-player.getHealth() / player.getMaxHealth())* _hud.statBarSize), _hud.healthMid + _hud.statBarHalfExtents, _hud.healthColor);
 		std::string strHealth = std::to_string((uint32_t)std::clamp<float>(std::ceil(player.getHealth()), 0, player.getMaxHealth()));
-		float healthTextX = font->CalcTextSizeA(font->FontSize, size / 2.f, 0, strHealth.c_str(), strHealth.c_str() + strHealth.size()).x;
-		draw->AddText(glm::vec2(healthMid.x - healthTextX / 2.f, offset.y + size), 0xFFFFFFFF, strHealth.c_str(), strHealth.c_str() + strHealth.size());
+		float healthTextX = font->CalcTextSizeA(font->FontSize, _hud.statBarSize / 2.f, 0, strHealth.c_str(), strHealth.c_str() + strHealth.size()).x;
+		draw->AddText(glm::vec2(_hud.healthMid.x - healthTextX / 2.f, _hud.statBarOffset.y + _hud.statBarSize), 0xFFFFFFFF, strHealth.c_str(), strHealth.c_str() + strHealth.size());
 
 		// energy bar
-		ImU32 energyColor = ImGui::GetColorU32({ 0.9, 0.9, 0.9, 1 });
-		draw->AddRectFilled(energyMid - rectVec+glm::vec2(0, (1-player.getEnergy() / player.getMaxEnergy())*size), energyMid + rectVec, energyColor);
+		_hud.energyColor = ImGui::GetColorU32({ 0.9, 0.9, 0.9, 1 });
+		draw->AddRectFilled(_hud.energyMid - _hud.statBarHalfExtents +glm::vec2(0, (1-player.getEnergy() / player.getMaxEnergy())* _hud.statBarSize), _hud.energyMid + _hud.statBarHalfExtents, _hud.energyColor);
 		std::string strEnergy = std::to_string((uint32_t)std::clamp<float>(std::ceil(player.getEnergy()), 0, player.getMaxEnergy()));
-		float energyTextX = font->CalcTextSizeA(font->FontSize, size / 2.f, 0, strEnergy.c_str(), strEnergy.c_str() + strEnergy.size()).x;
-		draw->AddText(glm::vec2(energyMid.x - energyTextX / 2.f, offset.y + size), 0xFFFFFFFF, strEnergy.c_str(), strEnergy.c_str() + strEnergy.size());
+		float energyTextX = font->CalcTextSizeA(font->FontSize, _hud.statBarSize / 2.f, 0, strEnergy.c_str(), strEnergy.c_str() + strEnergy.size()).x;
+		draw->AddText(glm::vec2(_hud.energyMid.x - energyTextX / 2.f, _hud.statBarOffset.y + _hud.statBarSize), 0xFFFFFFFF, strEnergy.c_str(), strEnergy.c_str() + strEnergy.size());
+	}
+
+	if(player.hasKilled())
+		_hud.animations.push_back(std::make_unique<HudCrosshairKillAnimation>());
+	if (player.hasDoneDamage())
+		_hud.animations.push_back(std::make_unique<HudCrosshairDamageAnimation>());
+
+	if (_hud.lastHealth > player.getHealth())
+		_hud.animations.push_back(std::make_unique<HudDamageAnimation>(player.getHealth(), _hud.lastHealth, player.getMaxHealth()));
+	_hud.lastHealth = player.getHealth();
+
+	if (_hud.lastEnergy > player.getEnergy())
+		_hud.animations.push_back(std::make_unique<HudEnergyAnimation>(player.getEnergy(), _hud.lastEnergy, player.getMaxEnergy()));
+	_hud.lastEnergy = player.getEnergy();
+
+	for (size_t i = 0; i < _hud.animations.size(); i++) {
+		if (_hud.animations[i]->isDone()) {
+			_hud.animations.erase(_hud.animations.begin() + i);
+			i--;
+		}
+		else
+			_hud.animations[i]->update(dt);
 	}
 
 	//{
@@ -91,7 +209,7 @@ void drawNetworkInterface(NetworkData& network, WorldData& world) {
 	network.username = usernameBuf;
 	
 	static char ipBuf[50] = "";
-	memcpy(ipBuf, network.ip.data(), std::min<int>(16, network.ip.size()));
+	memcpy(ipBuf, network.ip.data(), std::min<int>(50, network.ip.size()));
 	ImGui::InputText("ip", ipBuf, 50);
 	network.ip = ipBuf;
 
@@ -123,6 +241,18 @@ void drawNetworkInterface(NetworkData& network, WorldData& world) {
 			runClient(network, world);
 		}
 	}
+}
+
+void drawServerInterface(NetworkData& network) {
+	ImGui::Begin("Server");
+	if (server::isRunning()) {
+		std::lock_guard<std::mutex> lk(network.mServer);
+		for (auto& name : network.playerList)
+			ImGui::Text(name.c_str());
+	}
+	else
+		ImGui::Text("You're not the host, only the host can see this window");
+	ImGui::End();
 }
 
 void updateMainMenu(WorldData& world, RenderData& render, Controls& controls, float dt, Zap::Window& window) {
@@ -178,15 +308,37 @@ void update(WorldData& world, RenderData& render, NetworkData& network, Controls
 	logger::beginRegion("players");
 	{
 		std::lock_guard<std::mutex> lk(world.mPlayers);
-		if (captured) if (std::shared_ptr<Player> spPlayer = world.wpPlayer.lock()) {
-			spPlayer->updateInputs(controls, dt);
+		if (std::shared_ptr<Player> spPlayer = world.pPlayer.lock()) {
+			ImGui::Text("Kills: %lu", spPlayer->getKills());
+			ImGui::Text("Deaths: %lu", spPlayer->getDeaths());
+			ImGui::Text("Damage: %f", spPlayer->getDamage());
 			spPlayer->updateMechanics(controls, dt);
-			drawHud(*spPlayer.get());
+			if (captured)
+				spPlayer->updateInputs(controls, dt);
+			if (ImGui::IsKeyPressed(ImGuiKey_R)) {
+				spPlayer->kill();
+				spPlayer->spawn();
+			}
+			if (ImGui::IsKeyPressed(ImGuiKey_K))
+				spPlayer->kill();
+			drawHud(*spPlayer, dt);
 		}
-		for (auto spPlayerPair : world.game.players) {
+		for (auto spPlayerPair : world.players) {
 			spPlayerPair.second->updateAnimations(dt);
 			spPlayerPair.second->update(controls, dt);
 		} 
+	}
+	logger::endRegion();
+
+	logger::beginRegion("animations");
+	for (size_t i = 0; i < world.animations.size(); i++) {
+		if (auto spAnimation = world.animations[i].lock()) {
+			spAnimation->update(dt);
+		}
+		else {
+			world.animations.erase(world.animations.begin() + i);
+			i--;
+		}
 	}
 	logger::endRegion();
 
@@ -214,6 +366,7 @@ void update(WorldData& world, RenderData& render, NetworkData& network, Controls
 		controls.cameraMode = Controls::eTHIRD_PERSON;
 
 	drawNetworkInterface(network, world);
+	drawServerInterface(network);
 
 	ImGui::Begin("Frame Profile");
 	logger::drawFrameProfileImGui();
@@ -301,9 +454,12 @@ void switchToGame(WorldData& world, RenderData& render) {
 }
 
 void setupLocalPlayer(WorldData& world, std::string username) {
-	world.game.players[username] = std::make_shared<Player>(*world.game.spScene, username);
-	world.wpPlayer = world.game.players.at(username);
-	if (std::shared_ptr<Player> spPlayer = world.wpPlayer.lock()) {
+	{
+		std::lock_guard<std::mutex> lk(world.mScene);
+		world.players[username] = std::make_shared<Player>(*world.scene, username);
+	}
+	world.pPlayer = world.players.at(username);
+	if (std::shared_ptr<Player> spPlayer = world.pPlayer.lock()) {
 		spPlayer->getInventory().setItem(std::make_shared<Ray>(world), 0);
 		spPlayer->getInventory().setItem(std::make_shared<SimpleTrigger>(ImGuiMouseButton_Left), 1);
 		spPlayer->getInventory().setItem(std::make_shared<Dash>(), 2);
@@ -312,6 +468,8 @@ void setupLocalPlayer(WorldData& world, std::string username) {
 }
 
 void setupExternalPlayer(WorldData& world, std::string username) {
+	std::lock_guard<std::mutex> lk(world.mScene);
+	world.players[username] = std::make_shared<Player>(*world.scene, username);
 	world.game.players[username] = std::make_shared<Player>(*world.game.spScene, username);
 }
 
@@ -392,6 +550,9 @@ void runGame() {
 
 	terminateClient(network, world); // terminate networking if still running
 	terminateServer();
+
+	world.players.clear();
+	world.rayBeams.clear();
 
 	render.renderer->destroy();
 	delete render.renderer;

@@ -13,10 +13,10 @@ namespace client {
 	void sendPlayerSpawn(std::string username);
 
 	// the world.mPlayers mutex must be locked
-	void sendPlayerDeath(std::string username);
+	void sendPlayerDeath(std::string username, std::string usernameKiller);
 
 	// the world.mPlayers mutex must be locked
-	void sendPlayerDamage(float damage, Player& player, std::string username);
+	void sendPlayerDamage(float damage, float health, std::string username, std::string usernameDamager);
 
 	// the world.mPlayers mutex must be locked
 	void sendRay(glm::vec3 origin, glm::vec3 direction, std::string username);
@@ -35,6 +35,6 @@ namespace server {
 
 // starts the server thread
 // takes a copy of the network data, this cannot be changed while the server is running, needs a restart
-void runServer(NetworkData network);
+void runServer(NetworkData& network);
 
 void terminateServer();

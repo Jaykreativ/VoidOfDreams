@@ -58,6 +58,8 @@ namespace client {
 			return true;
 		client::_isRunning = true;
 
+		std::lock_guard<std::mutex> lk(network.mNetwork);
+
 		addrinfo hints;
 		addrinfo* serverInfo;
 
@@ -111,11 +113,6 @@ namespace client {
 
 		_isConnected = true;
 
-		//if (bind(_serverSocket.dgram, serverInfo->ai_addr, serverInfo->ai_addrlen) < 0) { // bind dgram socket to same port as 
-		//	sock::printLastError("bind");
-		//	exit(sock::lastError());
-		//}
-
 		_pollfds[0].fd = _serverSocket.stream; // init poll stream
 		_pollfds[0].events = POLLIN;
 		_pollfds[0].revents = 0;
@@ -138,6 +135,7 @@ namespace client {
 		client::_isRunning = false;
 
 		if (_isConnected) {
+			std::lock_guard<std::mutex> lk(network.mNetwork);
 			DisconnectPacket disconnectPacket;
 			disconnectPacket.username = network.username;
 			disconnectPacket.sendTo(_serverSocket.stream);
@@ -178,8 +176,16 @@ namespace client {
 					setupLocalPlayer(world, packet.username);
 				}
 				else {
+					printf("%s connected\n", packet.username.c_str());
 					setupExternalPlayer(world, packet.username);
 				}
+				break;
+			}
+			case eUDP_CONNECT: {
+				UDPConnectPacket udpConnectPacket;
+				udpConnectPacket.username = network.username;
+				udpConnectPacket.sendToDgram(_serverSocket.dgram, reinterpret_cast<const sockaddr*>(&_serverSocket.addr));
+				printf("send udp address\n");
 				break;
 			}
 			case eDISCONNECT: {
@@ -202,14 +208,15 @@ namespace client {
 			case eDamage: {
 				DamagePacket& packet = *reinterpret_cast<DamagePacket*>(spPacket.get());
 				std::lock_guard<std::mutex> lk(world.mPlayers);
-				if (world.game.players.count(packet.username)) {
-					auto spPlayer = world.game.players.at(packet.username);
-					spPlayer->syncDamage(packet.damage, packet.health);
+				if (world.players.count(packet.username) && world.players.count(packet.usernameDamager)) {
+					auto spPlayer = world.players.at(packet.username);
+					auto spDamager = world.players.at(packet.usernameDamager);
+					spPlayer->syncDamage(*spDamager, packet.damage, packet.health);
 				}
 				break;
 			}
 			case eSpawn: {
-				DamagePacket& packet = *reinterpret_cast<DamagePacket*>(spPacket.get());
+				SpawnPacket& packet = *reinterpret_cast<SpawnPacket*>(spPacket.get());
 				std::lock_guard<std::mutex> lk(world.mPlayers);
 				if (world.game.players.count(packet.username)) {
 					auto spPlayer = world.game.players.at(packet.username);
@@ -218,11 +225,16 @@ namespace client {
 				break;
 			}
 			case eDeath: {
-				DamagePacket& packet = *reinterpret_cast<DamagePacket*>(spPacket.get());
+				DeathPacket& packet = *reinterpret_cast<DeathPacket*>(spPacket.get());
 				std::lock_guard<std::mutex> lk(world.mPlayers);
-				if (world.game.players.count(packet.username)) {
-					auto spPlayer = world.game.players.at(packet.username);
-					spPlayer->syncDeath();
+				if (world.players.count(packet.username)) {
+					auto spPlayer = world.players.at(packet.username);
+					if (world.players.count(packet.usernameKiller)) {
+						auto spKiller = world.players.at(packet.usernameKiller);
+						spPlayer->syncDeath(*spKiller);
+					}
+					else
+						spPlayer->syncDeath();
 				}
 				break;
 			}
@@ -263,7 +275,7 @@ namespace client {
 		return true;
 	}
 
-	void receiverLoop(NetworkData network, WorldData* world) {
+	void receiverLoop(NetworkData* network, WorldData* world) {
 		while (true) {
 			{ // stop
 				std::lock_guard<std::mutex> lk(_mTerminate);
@@ -277,7 +289,7 @@ namespace client {
 				exit(sock::lastError());
 			}
 			if (didPoll) {
-				if (!handlePoll(network, *world)) {
+				if (!handlePoll(*network, *world)) {
 					break;
 				}
 			}
@@ -327,22 +339,24 @@ namespace client {
 		}
 	}
 
-	void sendPlayerDeath(std::string username) {
+	void sendPlayerDeath(std::string username, std::string usernameKiller) {
 		std::lock_guard<std::mutex> lk(_mTerminate);
 		if(_isConnected) {
 			DeathPacket packet;
 			packet.username = username;
+			packet.usernameKiller = usernameKiller;
 			packet.sendTo(_serverSocket.stream);
 		}
 	}
 
-	void sendPlayerDamage(float damage, Player& player, std::string username) {
+	void sendPlayerDamage(float damage, float health, std::string username, std::string usernameDamager) {
 		std::lock_guard<std::mutex> lk(_mTerminate);
 		if (_isConnected) {
 			DamagePacket packet;
 			packet.username = username;
+			packet.usernameDamager = usernameDamager;
 			packet.damage = damage;
-			packet.health = player.getHealth();
+			packet.health = health;
 			packet.sendTo(_serverSocket.stream);
 		}
 	}
@@ -366,7 +380,7 @@ bool runClient(NetworkData& network, WorldData& world) {
 	}
 	client::_shouldStop = false;
 	//client::sender = std::thread(client::senderLoop, network, &world);
-	client::_receiver = std::thread(client::receiverLoop, network, &world);
+	client::_receiver = std::thread(client::receiverLoop, &network, &world);
 	return true;
 }
 
@@ -483,6 +497,9 @@ namespace server {
 			client.username = packet.username;
 			printf("%s joined the server\n", packet.username.c_str());
 
+			UDPConnectPacket udpConnectPacket;
+			udpConnectPacket.username = client.username;
+			udpConnectPacket.sendTo(client.socket.stream); // send the udpConnect packet over tcp, because the udp address is not yet valid
 			for (auto& otherClient : _clients) {
 				packet.sendTo(otherClient.socket.stream); // tell all clients(including the new one) that a new player joined
 				if (otherClient.socket.stream != client.socket.stream) {
@@ -497,6 +514,10 @@ namespace server {
 				}
 			}
 
+			break;
+		}
+		case eUDP_CONNECT: {
+			printf("received UDP address\n");
 			break;
 		}
 		case eDISCONNECT: { // uses stream sockets
@@ -578,6 +599,12 @@ namespace server {
 
 		int type;
 		auto spPacket = Packet::receiveFromDgram(type, _serverSocket.dgram, reinterpret_cast<sockaddr*>(&addr), &addrlen);
+		
+		// update saved address
+		for (auto& client : _clients)
+			if (client.username == spPacket->username)
+				client.socket.addr = addr;
+
 		ClientData addrOnly;
 		addrOnly.socket.addr = addr;
 		handlePacket(addrOnly, spPacket, type, clientIndex); // for dgram packets only their origin address is known while the sockets are unknown
@@ -626,7 +653,7 @@ namespace server {
 	}
 
 	// free all resources
-	void freeResources() {
+	void freeResources(NetworkData& network) {
 		if (sock::closeSocket(_serverSocket.stream) == -1)
 			sock::printLastError("Server close(serverSocket.stream)");
 		if (sock::closeSocket(_serverSocket.dgram) == -1)
@@ -637,9 +664,12 @@ namespace server {
 
 		_pollfds.clear();
 		_clients.clear();
+		std::lock_guard<std::mutex> lk(network.mServer);
+		network.playerList.clear();
 	}
 
 	SocketData getServerSocket(NetworkData& network) {
+		std::lock_guard<std::mutex> lk(network.mNetwork);
 		SocketData socketData;
 
 		addrinfo hints;
@@ -707,8 +737,8 @@ namespace server {
 		return socketData;
 	}
 
-	void loop(NetworkData network) {
-		_serverSocket = getServerSocket(network);
+	void loop(NetworkData* network) {
+		_serverSocket = getServerSocket(*network);
 		printf("server running\n");
 
 		while (true) {
@@ -729,21 +759,28 @@ namespace server {
 			}
 
 			handlePoll(pollCount);
+
+			{
+				std::lock_guard<std::mutex> lk(network->mServer);
+				network->playerList.resize(_clients.size());
+				for (size_t i = 0; i < _clients.size(); i++)
+					network->playerList[i] = _clients[i].username;
+			}
 		}
 
-		freeResources();
+		freeResources(*network);
 
 		printf("server done\n");
 	}
 }
 
-void runServer(NetworkData network) {
+void runServer(NetworkData& network) {
 	if (server::_isRunning)
 		return;
 	server::_isRunning = true;
 
 	server::_shouldStop = false;
-	server::_thread = std::thread(server::loop, network);
+	server::_thread = std::thread(server::loop, &network);
 }
 
 void terminateServer() {

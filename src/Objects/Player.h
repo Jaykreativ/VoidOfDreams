@@ -23,6 +23,7 @@ public:
 	void update(Controls& controls, float dt);
 
 	void damage(float damage);
+	void damage(float damage, const Player& damager);
 
 	// spawn player without without network sync
 	void localSpawn(Zap::ActorLoader& loader);
@@ -33,8 +34,13 @@ public:
 	void spawn(Zap::ActorLoader loader = Zap::ActorLoader());
 
 	void kill();
+	void kill(const Player& killer);
 
 	void spendEnergy(float energy);
+
+	bool isWeaponMode();
+
+	bool isAbilityMode();
 
 	float getHealth();
 
@@ -43,6 +49,12 @@ public:
 	float getEnergy();
 
 	float getMaxEnergy();
+
+	uint32_t getKills();
+
+	uint32_t getDeaths();
+
+	float getDamage();
 
 	PlayerInventory& getInventory();
 
@@ -60,17 +72,31 @@ public:
 
 	glm::mat4 getTransform();
 
+	// events
+	bool hasTakenDamage();
+	bool hasSpentEnergy();
+	bool hasDied();
+	bool hasSpawned();
+	bool hasDoneDamage();
+	bool hasKilled();
+
 	// network interaction/synchronization
 	void syncSpawn();
 
 	void syncDeath();
+	void syncDeath(Player& killer);
 
 	void syncMove(glm::mat4 transform);
 
-	void syncDamage(float damage, float newHealth);
+	void syncDamage(Player& damager, float damage, float newHealth);
 
 private:
 	bool m_active = false;
+
+	enum Mode {
+		eWEAPON = 0x0,
+		eABILITY = 0x1
+	} m_mode = eWEAPON;
 
 	Zap::Actor m_base; // this is the actual transform of the player
 	Zap::Actor m_core; // the bright core in the centre
@@ -82,12 +108,31 @@ private:
 	float m_health = 100;
 	float m_energy = 100;
 
+	uint32_t m_kills = 0;
+	uint32_t m_deaths = 0;
+	float m_damage = 0;
+
 	std::string m_username;
 	Zap::Scene& m_scene;
 
 	glm::vec3 m_movementDir = { 0, 0, 0 };
 	float m_spawnProtection = 5;
 	float m_spawnTimeout = 5;
+
+	// events
+	enum Events {
+		eNONE = 0x0,
+		eDAMAGE_TAKEN = 0x1,
+		eENERGY_SPENT = 0x2,
+		eDEATH = 0x4,
+		eSPAWN = 0x8,
+		eDAMAGE_DONE = 0x10,
+		eKILL = 0x20
+	};
+	// records all events during a frame
+	uint32_t m_recordEvents = eNONE;
+	// contains all events that happened the last frame
+	uint32_t m_events = eNONE;
 
 	void updateCamera(Controls& controls);
 };
