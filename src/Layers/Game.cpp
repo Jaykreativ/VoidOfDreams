@@ -260,11 +260,14 @@ void updateMainMenu(WorldData& world, RenderData& render, Controls& controls, fl
 
 	logger::beginRegion("players");
 	{
-		if (captured) {
-			world.mainMenu.spPlayer->updateInputs(controls, dt);
+		std::lock_guard<std::mutex> lk(world.mPlayer);
+		if (std::shared_ptr<Player> spPlayer = world.wpPlayer.lock()) {
+			if (captured) {
+				spPlayer->updateInputs(controls, dt);
+			}
+			spPlayer->updateAnimations(dt);
+			spPlayer->update(controls, dt);
 		}
-		world.mainMenu.spPlayer->updateAnimations(dt);
-		world.mainMenu.spPlayer->update(controls, dt);
 	}
 	logger::endRegion();
 
@@ -285,12 +288,6 @@ void updateMainMenu(WorldData& world, RenderData& render, Controls& controls, fl
 		captured = false;
 	}
 
-	if (ImGui::Button("First Person"))
-		controls.cameraMode = Controls::eFIRST_PERSON;
-	ImGui::SameLine();
-	if (ImGui::Button("Third Person"))
-		controls.cameraMode = Controls::eTHIRD_PERSON;
-
 	ImGui::Begin("Frame Profile");
 	logger::drawFrameProfileImGui();
 	ImGui::End();
@@ -307,8 +304,8 @@ void update(WorldData& world, RenderData& render, NetworkData& network, Controls
 
 	logger::beginRegion("players");
 	{
-		std::lock_guard<std::mutex> lk(world.mPlayers);
-		if (std::shared_ptr<Player> spPlayer = world.pPlayer.lock()) {
+		std::lock_guard<std::mutex> lk(world.mPlayer);
+		if (std::shared_ptr<Player> spPlayer = world.wpPlayer.lock()) {
 			ImGui::Text("Kills: %lu", spPlayer->getKills());
 			ImGui::Text("Deaths: %lu", spPlayer->getDeaths());
 			ImGui::Text("Damage: %f", spPlayer->getDamage());
@@ -323,7 +320,7 @@ void update(WorldData& world, RenderData& render, NetworkData& network, Controls
 				spPlayer->kill();
 			drawHud(*spPlayer, dt);
 		}
-		for (auto spPlayerPair : world.players) {
+		for (auto spPlayerPair : world.game.players) {
 			spPlayerPair.second->updateAnimations(dt);
 			spPlayerPair.second->update(controls, dt);
 		} 
@@ -358,12 +355,6 @@ void update(WorldData& world, RenderData& render, NetworkData& network, Controls
 		glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
 		captured = false;
 	}
-
-	if (ImGui::Button("First Person"))
-		controls.cameraMode = Controls::eFIRST_PERSON;
-	ImGui::SameLine();
-	if (ImGui::Button("Third Person"))
-		controls.cameraMode = Controls::eTHIRD_PERSON;
 
 	drawNetworkInterface(network, world);
 	drawServerInterface(network);
@@ -402,8 +393,9 @@ void gameLoop(RenderData& render, WorldData& world, NetworkData& network, Contro
 		}
 
 		{
+			std::lock_guard<std::mutex> lk(world.mScene);
 			if (std::shared_ptr<Zap::Scene> spScene = world.wpScene.lock()) { // update scene only if present
-				std::lock_guard<std::mutex> lk(world.mPlayers);
+				std::lock_guard<std::mutex> lk(world.mPlayer);
 				if (std::shared_ptr<Player> spPlayer = world.wpPlayer.lock()) { // enable rendering only if player is selected
 					logger::beginRegion("engine");
 					render.pbRender->updateCamera(spPlayer->getCamera());
@@ -456,10 +448,10 @@ void switchToGame(WorldData& world, RenderData& render) {
 void setupLocalPlayer(WorldData& world, std::string username) {
 	{
 		std::lock_guard<std::mutex> lk(world.mScene);
-		world.players[username] = std::make_shared<Player>(*world.scene, username);
+		world.game.players[username] = std::make_shared<Player>(*world.game.spScene, username);
 	}
-	world.pPlayer = world.players.at(username);
-	if (std::shared_ptr<Player> spPlayer = world.pPlayer.lock()) {
+	world.wpPlayer = world.game.players.at(username);
+	if (std::shared_ptr<Player> spPlayer = world.wpPlayer.lock()) {
 		spPlayer->getInventory().setItem(std::make_shared<Ray>(world), 0);
 		spPlayer->getInventory().setItem(std::make_shared<SimpleTrigger>(ImGuiMouseButton_Left), 1);
 		spPlayer->getInventory().setItem(std::make_shared<Dash>(), 2);
@@ -469,14 +461,13 @@ void setupLocalPlayer(WorldData& world, std::string username) {
 
 void setupExternalPlayer(WorldData& world, std::string username) {
 	std::lock_guard<std::mutex> lk(world.mScene);
-	world.players[username] = std::make_shared<Player>(*world.scene, username);
 	world.game.players[username] = std::make_shared<Player>(*world.game.spScene, username);
 }
 
 void setupMainMenuWorld(WorldData& world) {
 	Zap::ActorLoader loader;
 	loader.flags |= Zap::ActorLoader::eReuseActor;
-	loader.load("Actors/Light.zac", world.mainMenu.spScene.get());
+	loader.load("Actors/Light2.zac", world.mainMenu.spScene.get());
 	loader.load("Actors/Cube.zac", world.mainMenu.spScene.get());
 	world.mainMenu.spPlayer = std::make_shared<Player>(*world.mainMenu.spScene.get(), "user", loader);
 	world.mainMenu.spPlayer->spawn();
@@ -487,9 +478,9 @@ void setupMainMenuWorld(WorldData& world) {
 void setupWorld(WorldData& world) {
 	Zap::ActorLoader loader;
 	loader.flags |= Zap::ActorLoader::eReuseActor;
-	loader.load((std::string)"Actors/Light.zac", world.game.spScene.get());  // Loading actor from file, they can be changed using the editor
-	loader.load((std::string)"Actors/Light2.zac", world.game.spScene.get()); // All actors can be changed at runtime
-	loader.load((std::string)"Actors/Cube.zac", world.game.spScene.get());
+	loader.load("Actors/Light.zac", world.game.spScene.get());  // Loading actor from file, they can be changed using the editor
+	loader.load("Actors/Light2.zac", world.game.spScene.get()); // All actors can be changed at runtime
+	loader.load("Actors/Cube.zac", world.game.spScene.get());
 }
 
 void resize(Zap::ResizeEvent& eventParams, void* customParams) {
@@ -551,8 +542,8 @@ void runGame() {
 	terminateClient(network, world); // terminate networking if still running
 	terminateServer();
 
-	world.players.clear();
-	world.rayBeams.clear();
+	world.game.players.clear();
+	world.game.rayBeams.clear();
 
 	render.renderer->destroy();
 	delete render.renderer;

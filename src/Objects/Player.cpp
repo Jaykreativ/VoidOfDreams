@@ -119,7 +119,6 @@ void Player::updateMechanics(Controls& controls, float dt) {
 		controls.cameraMode = Controls::eFIRST_PERSON;
 	else
 		controls.cameraMode = Controls::eTHIRD_PERSON;
-	updateCamera(controls);
 	if (m_active) {
 		m_energy = std::min<float>(m_energy, 100);
 
@@ -145,7 +144,7 @@ void Player::update(Controls& controls, float dt) {
 		m_core.cmpTransform_setPos(pos);
 		m_base.cmpTransform_setPos(pos);
 	}
-
+	updateCamera(controls);
 	m_events = m_recordEvents;
 	m_recordEvents = eNONE;
 }

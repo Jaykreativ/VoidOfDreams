@@ -16,7 +16,7 @@ Ray::Beam::Beam(WorldData& world, glm::vec3 origin, glm::vec3 direction, float l
 	Zap::ModelLoader loader;
 	auto model = loader.load(_beamModel);
 	std::lock_guard<std::mutex> lk(world.mScene);
-	world.scene->attachActor(m_actor);
+	world.game.spScene->attachActor(m_actor);
 	m_actor.addTransform();
 	m_actor.addModel(model);
 	{
@@ -39,9 +39,9 @@ Ray::Beam::~Beam() {
 }
 
 void Ray::Beam::BeamAnimation::removeFromWorld() {
-	for (auto it = m_beam.m_world.rayBeams.begin(); it != m_beam.m_world.rayBeams.end(); ++it)
+	for (auto it = m_beam.m_world.game.rayBeams.begin(); it != m_beam.m_world.game.rayBeams.end(); ++it)
 		if (it->get() == &m_beam) {
-			m_beam.m_world.rayBeams.erase(it);
+			m_beam.m_world.game.rayBeams.erase(it);
 			break;
 		}
 }
@@ -91,12 +91,12 @@ void Ray::update(Player& player, PlayerInventory::iterator iterator) {
 		bool hit = false;
 		{
 			std::lock_guard<std::mutex> lk(m_world.mScene);
-			hit = m_world.scene->raycast(origin, glm::normalize(direction), 1000, &out, &filter);
+			hit = m_world.game.spScene->raycast(origin, glm::normalize(direction), 1000, &out, &filter);
 		}
 		if (hit)
-			m_world.rayBeams.push_back(std::make_unique<Beam>(m_world, origin, glm::normalize(direction), out.distance));
+			m_world.game.rayBeams.push_back(std::make_unique<Beam>(m_world, origin, glm::normalize(direction), out.distance));
 		else
-			m_world.rayBeams.push_back(std::make_unique<Beam>(m_world, origin, glm::normalize(direction), 1000));
+			m_world.game.rayBeams.push_back(std::make_unique<Beam>(m_world, origin, glm::normalize(direction), 1000));
 		m_alternateSide = !m_alternateSide;
 	}
 	m_isTriggered = false; // one time trigger
@@ -109,14 +109,14 @@ void Ray::processRay(glm::vec3 origin, glm::vec3 direction, WorldData& world, Pl
 	bool hit = false;
 	{
 		std::lock_guard<std::mutex> lk(world.mScene);
-		hit = world.scene->raycast(origin, glm::normalize(direction), 1000, &out, &filter);
+		hit = world.game.spScene->raycast(origin, glm::normalize(direction), 1000, &out, &filter);
 	}
 	if (hit) {
 		if (out.actor == checkPlayer.getPhysicsActor()) {
 			checkPlayer.damage(_damage, senderPlayer);
 		}
-		world.rayBeams.push_back(std::make_unique<Beam>(world, origin, direction, out.distance));
+		world.game.rayBeams.push_back(std::make_unique<Beam>(world, origin, direction, out.distance));
 	}
 	else
-		world.rayBeams.push_back(std::make_unique<Beam>(world, origin, direction, 1000));
+		world.game.rayBeams.push_back(std::make_unique<Beam>(world, origin, direction, 1000));
 }

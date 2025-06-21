@@ -26,22 +26,19 @@ struct MainMenuWorldData {
 struct GameWorldData {
 	std::shared_ptr<Zap::Scene> spScene;
 	std::unordered_map<std::string, std::shared_ptr<Player>> players = {};
+
+	std::vector<std::unique_ptr<Ray::Beam>> rayBeams = {};
 };
 
 struct WorldData {
 	std::mutex mScene;
-	Zap::Scene* scene;
 	WorldStatus status = eMAIN_MENU; // start in main menu
 
 	std::weak_ptr<Zap::Scene> wpScene;
 
 	std::vector<std::weak_ptr<Animation>> animations;
 
-	std::mutex mPlayers;
-	std::weak_ptr<Player> pPlayer;
-	std::unordered_map<std::string, std::shared_ptr<Player>> players = {};
-
-	std::vector<std::unique_ptr<Ray::Beam>> rayBeams = {};
+	std::mutex mPlayer;
 	std::weak_ptr<Player> wpPlayer;
 
 	GameWorldData game = {};

@@ -145,7 +145,7 @@ namespace client {
 		sock::closeSocket(_serverSocket.dgram);
 
 		{ // delete all players as the client is being terminated
-			std::lock_guard<std::mutex> lk(world.mPlayers);
+			std::lock_guard<std::mutex> lk(world.mPlayer);
 			world.game.players.clear();
 		}
 
@@ -171,7 +171,7 @@ namespace client {
 			//}
 			case eCONNECT: {
 				ConnectPacket& packet = *reinterpret_cast<ConnectPacket*>(spPacket.get());
-				std::lock_guard<std::mutex> lk(world.mPlayers);
+				std::lock_guard<std::mutex> lk(world.mPlayer);
 				if (packet.username == network.username) { // set this clients player
 					setupLocalPlayer(world, packet.username);
 				}
@@ -190,13 +190,13 @@ namespace client {
 			}
 			case eDISCONNECT: {
 				DisconnectPacket& packet = *reinterpret_cast<DisconnectPacket*>(spPacket.get());
-				std::lock_guard<std::mutex> lk(world.mPlayers);
+				std::lock_guard<std::mutex> lk(world.mPlayer);
 				world.game.players.erase(packet.username); // delete the disconnected player
 				break;
 			}
 			case eMOVE: {
 				MovePacket& packet = *reinterpret_cast<MovePacket*>(spPacket.get());
-				std::lock_guard<std::mutex> lk(world.mPlayers);
+				std::lock_guard<std::mutex> lk(world.mPlayer);
 				if (world.game.players.count(packet.username)) {
 					world.game.players.at(packet.username)->syncMove(packet.transform);
 				}
@@ -207,17 +207,17 @@ namespace client {
 			}
 			case eDamage: {
 				DamagePacket& packet = *reinterpret_cast<DamagePacket*>(spPacket.get());
-				std::lock_guard<std::mutex> lk(world.mPlayers);
-				if (world.players.count(packet.username) && world.players.count(packet.usernameDamager)) {
-					auto spPlayer = world.players.at(packet.username);
-					auto spDamager = world.players.at(packet.usernameDamager);
+				std::lock_guard<std::mutex> lk(world.mPlayer);
+				if (world.game.players.count(packet.username) && world.game.players.count(packet.usernameDamager)) {
+					auto spPlayer = world.game.players.at(packet.username);
+					auto spDamager = world.game.players.at(packet.usernameDamager);
 					spPlayer->syncDamage(*spDamager, packet.damage, packet.health);
 				}
 				break;
 			}
 			case eSpawn: {
 				SpawnPacket& packet = *reinterpret_cast<SpawnPacket*>(spPacket.get());
-				std::lock_guard<std::mutex> lk(world.mPlayers);
+				std::lock_guard<std::mutex> lk(world.mPlayer);
 				if (world.game.players.count(packet.username)) {
 					auto spPlayer = world.game.players.at(packet.username);
 					spPlayer->syncSpawn();
@@ -226,11 +226,11 @@ namespace client {
 			}
 			case eDeath: {
 				DeathPacket& packet = *reinterpret_cast<DeathPacket*>(spPacket.get());
-				std::lock_guard<std::mutex> lk(world.mPlayers);
-				if (world.players.count(packet.username)) {
-					auto spPlayer = world.players.at(packet.username);
-					if (world.players.count(packet.usernameKiller)) {
-						auto spKiller = world.players.at(packet.usernameKiller);
+				std::lock_guard<std::mutex> lk(world.mPlayer);
+				if (world.game.players.count(packet.username)) {
+					auto spPlayer = world.game.players.at(packet.username);
+					if (world.game.players.count(packet.usernameKiller)) {
+						auto spKiller = world.game.players.at(packet.usernameKiller);
 						spPlayer->syncDeath(*spKiller);
 					}
 					else
@@ -240,7 +240,7 @@ namespace client {
 			}
 			case eRay: {
 				RayPacket& packet = *reinterpret_cast<RayPacket*>(spPacket.get());
-				std::lock_guard<std::mutex> lk(world.mPlayers);
+				std::lock_guard<std::mutex> lk(world.mPlayer);
 				if (std::shared_ptr<Player> spPlayer = world.wpPlayer.lock()) {
 					Ray::processRay(packet.origin, packet.direction, world, *spPlayer, *world.game.players.at(packet.username));
 				}
