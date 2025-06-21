@@ -38,6 +38,8 @@ public:
 
 	void spendEnergy(float energy);
 
+	bool isAlive();
+
 	bool isWeaponMode();
 
 	bool isAbilityMode();
@@ -55,6 +57,10 @@ public:
 	uint32_t getDeaths();
 
 	float getDamage();
+
+	float getSpawnTimeout();
+
+	float getSpawProtectionTimeout();
 
 	PlayerInventory& getInventory();
 

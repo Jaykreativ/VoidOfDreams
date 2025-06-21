@@ -15,6 +15,7 @@
 #include "Zap/FileLoader.h"
 
 #include "ImGui.h"
+#include "backends/imgui_impl_vulkan.h";
 
 #include <chrono>
 
@@ -134,6 +135,7 @@ void drawHud(Player& player, float dt) {
 	}
 
 	// health + energy bar
+	ImGui::PushFont(_hud.textFont);
 	{
 		_hud.statBarSize = 100 * _hud.scale;
 		_hud.statBarOffset = glm::vec2(ImGui::GetWindowSize().x - _hud.statBarSize * 1.1, _hud.statBarSize * 0.1);
@@ -156,6 +158,7 @@ void drawHud(Player& player, float dt) {
 		float energyTextX = font->CalcTextSizeA(font->FontSize, _hud.statBarSize / 2.f, 0, strEnergy.c_str(), strEnergy.c_str() + strEnergy.size()).x;
 		draw->AddText(glm::vec2(_hud.energyMid.x - energyTextX / 2.f, _hud.statBarOffset.y + _hud.statBarSize), 0xFFFFFFFF, strEnergy.c_str(), strEnergy.c_str() + strEnergy.size());
 	}
+	ImGui::PopFont();
 
 	if(player.hasKilled())
 		_hud.animations.push_back(std::make_unique<HudCrosshairKillAnimation>());
@@ -194,7 +197,17 @@ void drawHud(Player& player, float dt) {
 	//	draw->AddConvexPolyFilled(reinterpret_cast<ImVec2*>(points), 5, 0xFFFFFFFF);
 	//}
 
+	// spawn timers
+	float spawnTimeout = player.getSpawnTimeout();
+	if (spawnTimeout > 0)
+		ImGui::Text("%f", spawnTimeout);
+
+	float spawnProtectionTimeout = player.getSpawProtectionTimeout();
+	if (spawnProtectionTimeout > 0 && player.isAlive())
+		ImGui::Text("%f", spawnProtectionTimeout);
+
 	ImGui::End();
+
 }
 
 void drawNetworkInterface(NetworkData& network, WorldData& world) {
@@ -219,28 +232,6 @@ void drawNetworkInterface(NetworkData& network, WorldData& world) {
 	network.port = portBuf;
 	if (serverRunning || clientRunning)
 		ImGui::EndDisabled();
-
-	if (serverRunning) {
-		if (ImGui::Button("Stop Server")) {
-			terminateServer();
-		}
-	}
-	else {
-		if (ImGui::Button("Start Server")) {
-			runServer(network);
-		}
-	}
-	
-	if (clientRunning) {
-		if (ImGui::Button("Stop Client")) {
-			terminateClient(network, world);
-		}
-	}
-	else {
-		if (ImGui::Button("Start Client")) {
-			runClient(network, world);
-		}
-	}
 }
 
 void drawServerInterface(NetworkData& network) {
@@ -255,7 +246,7 @@ void drawServerInterface(NetworkData& network) {
 	ImGui::End();
 }
 
-void updateMainMenu(WorldData& world, RenderData& render, Controls& controls, float dt, Zap::Window& window) {
+void updateMainMenu(WorldData& world, RenderData& render, NetworkData& network, Controls& controls, float dt, Zap::Window& window) {
 	static bool captured = false;
 
 	logger::beginRegion("players");
@@ -273,30 +264,41 @@ void updateMainMenu(WorldData& world, RenderData& render, Controls& controls, fl
 
 	logger::beginRegion("gui");
 	bool wasCaptured = captured;
-	if (wasCaptured)
-		ImGui::BeginDisabled();
 
-	if (ImGui::Button("Game"))
-		switchToGame(world, render);
-
-	if (ImGui::Button("Capture")) { // use imgui to capture mouse because there is no menu implemented yet
-		glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
-		captured = true;
-	}
 	if (captured && ImGui::IsKeyPressed(ImGuiKey_Escape)) {
 		glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
 		captured = false;
 	}
 
-	ImGui::Begin("Frame Profile");
-	logger::drawFrameProfileImGui();
-	ImGui::End();
+	if (!wasCaptured)
+	{
+		if (ImGui::Button("Continue") || ImGui::IsKeyPressed(ImGuiKey_Escape)) { // use imgui to capture mouse because there is no menu implemented yet
+			glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+			captured = true;
+		}
 
+		drawNetworkInterface(network, world);
+
+		if (ImGui::Button("Host")) {
+			runServer(network);
+			waitServerStartup();
+			runClient(network, world);
+			if (client::isRunning())
+				switchToGame(world, render);
+		}
+
+		if (ImGui::Button("Join")) {
+			runClient(network, world);
+			if (client::isRunning())
+				switchToGame(world, render);
+		}
+
+		ImGui::Begin("Frame Profile");
+		logger::drawFrameProfileImGui();
+		ImGui::End();
+
+	}
 	logger::endRegion();
-
-	if (wasCaptured)
-		ImGui::EndDisabled();
-
 }
 
 void update(WorldData& world, RenderData& render, NetworkData& network, Controls& controls, float dt, Zap::Window& window) {
@@ -306,9 +308,6 @@ void update(WorldData& world, RenderData& render, NetworkData& network, Controls
 	{
 		std::lock_guard<std::mutex> lk(world.mPlayer);
 		if (std::shared_ptr<Player> spPlayer = world.wpPlayer.lock()) {
-			ImGui::Text("Kills: %lu", spPlayer->getKills());
-			ImGui::Text("Deaths: %lu", spPlayer->getDeaths());
-			ImGui::Text("Damage: %f", spPlayer->getDamage());
 			spPlayer->updateMechanics(controls, dt);
 			if (captured)
 				spPlayer->updateInputs(controls, dt);
@@ -318,7 +317,6 @@ void update(WorldData& world, RenderData& render, NetworkData& network, Controls
 			}
 			if (ImGui::IsKeyPressed(ImGuiKey_K))
 				spPlayer->kill();
-			drawHud(*spPlayer, dt);
 		}
 		for (auto spPlayerPair : world.game.players) {
 			spPlayerPair.second->updateAnimations(dt);
@@ -341,40 +339,48 @@ void update(WorldData& world, RenderData& render, NetworkData& network, Controls
 
 	logger::beginRegion("gui");
 	bool wasCaptured = captured;
-	if (wasCaptured)
-		ImGui::BeginDisabled();
 
-	if (ImGui::Button("MainMenu")) {
-		if(client::isRunning())
-			terminateClient(network, world);
-		if (server::isRunning())
-			terminateServer();
-		switchToMainMenu(world, render);
-	}
-
-	if (ImGui::Button("Capture")) { // use imgui to capture mouse because there is no menu implemented yet
-		glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
-		captured = true;
-	}
 	if (captured && ImGui::IsKeyPressed(ImGuiKey_Escape)) {
 		glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
 		captured = false;
 	}
 
-	drawNetworkInterface(network, world);
-	drawServerInterface(network);
+	if (!wasCaptured)
+	{
+		if (auto spPlayer = world.wpPlayer.lock()) {
+			ImGui::Begin("stats");
+			ImGui::Text("Kills: %lu", spPlayer->getKills());
+			ImGui::Text("Deaths: %lu", spPlayer->getDeaths());
+			ImGui::Text("Damage: %f", spPlayer->getDamage());
+			ImGui::End();
 
-	ImGui::Begin("Frame Profile");
-	logger::drawFrameProfileImGui();
-	ImGui::End();
+			drawHud(*spPlayer, dt);
+		}
 
-	//ImGui::Begin("Timeline");
-	//logger::drawTimelineImGui();
-	//ImGui::End();
+		if (ImGui::Button("MainMenu")) {
+			if (client::isRunning())
+				terminateClient(network, world);
+			if (server::isRunning())
+				terminateServer();
+			switchToMainMenu(world, render);
+		}
+
+		if (ImGui::Button("Capture") || ImGui::IsKeyPressed(ImGuiKey_Escape)) { // use imgui to capture mouse because there is no menu implemented yet
+			glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+			captured = true;
+		}
+
+		drawServerInterface(network);
+
+		ImGui::Begin("Frame Profile");
+		logger::drawFrameProfileImGui();
+		ImGui::End();
+
+		//ImGui::Begin("Timeline");
+		//logger::drawTimelineImGui();
+		//ImGui::End();
+	}
 	logger::endRegion();
-
-	if (wasCaptured)
-		ImGui::EndDisabled();
 }
 
 void gameLoop(RenderData& render, WorldData& world, NetworkData& network, Controls& controls) {
@@ -391,7 +397,7 @@ void gameLoop(RenderData& render, WorldData& world, NetworkData& network, Contro
 			update(world, render, network, controls, deltaTime, *render.window);
 			break;
 		case eMAIN_MENU:
-			updateMainMenu(world, render, controls, deltaTime, *render.window);
+			updateMainMenu(world, render, network, controls, deltaTime, *render.window);
 			break;
 		default:
 			break;
@@ -445,9 +451,26 @@ void switchToMainMenu(WorldData& world, RenderData& render) {
 
 void switchToGame(WorldData& world, RenderData& render) {
 	world.wpScene = world.game.spScene;
-	world.wpPlayer.reset();
 	render.pbRender->changeScene(world.game.spScene.get());
 	world.status = eGAME;
+}
+
+void setupGUI() {
+	_hud.textFont = _hud.fontAtlas.AddFontFromFileTTF("Fonts/exoplanetaria-font/Exoplanetaria.ttf", 20);
+	_hud.headerFont = _hud.fontAtlas.AddFontFromFileTTF("Fonts/quantum-font/QuantumRegular.otf", 50);
+	_hud.fontAtlas.Build();
+	unsigned char* data;
+	int width, height;
+	_hud.fontAtlas.GetTexDataAsRGBA32(&data, &width, &height);
+	Zap::ImageLoader loader;
+	auto image = loader.load(data, width, height);
+	_hud.fontSampler.init();
+	_hud.fontAtlas.TexID = ImGui_ImplVulkan_AddTexture(_hud.fontSampler, image.getVkImageView(), VK_IMAGE_LAYOUT_GENERAL);
+}
+
+void freeGUI() {
+	ImGui_ImplVulkan_RemoveTexture((VkDescriptorSet)_hud.fontAtlas.TexID);
+	_hud.fontSampler.destroy();
 }
 
 void setupLocalPlayer(WorldData& world, std::string username) {
@@ -526,6 +549,8 @@ void runGame() {
 	render.window->getResizeEventHandler()->addCallback(resize, render.pbRender); // give the window access to the pbRender task to resize its viewport
 	render.pGui->initImGui(render.window);
 
+	setupGUI();
+
 #ifdef _DEBUG
 	static bool areShadersCompiled = false;
 	if (!areShadersCompiled) {
@@ -552,6 +577,7 @@ void runGame() {
 
 	render.renderer->destroy();
 	delete render.renderer;
+	freeGUI();
 	render.pGui->destroyImGui();
 	delete render.pGui;
 	delete render.pbRender;

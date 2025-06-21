@@ -134,7 +134,6 @@ void Player::updateMechanics(Controls& controls, float dt) {
 		m_spawnTimeout -= dt;
 		if (m_spawnTimeout < 0)
 			spawn();
-		ImGui::Text(std::to_string(m_spawnTimeout).c_str());
 	}
 }
 
@@ -220,6 +219,10 @@ void Player::spendEnergy(float energy) {
 	m_recordEvents |= eENERGY_SPENT;
 }
 
+bool Player::isAlive() {
+	return m_active;
+}
+
 bool Player::isWeaponMode() {
 	return m_mode == eWEAPON;
 }
@@ -254,6 +257,14 @@ uint32_t Player::getDeaths() {
 
 float Player::getDamage() {
 	return m_damage;
+}
+
+float Player::getSpawnTimeout() {
+	return m_spawnTimeout;
+}
+
+float Player::getSpawProtectionTimeout() {
+	return m_spawnProtection;
 }
 
 PlayerInventory& Player::getInventory() {

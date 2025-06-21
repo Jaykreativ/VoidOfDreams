@@ -26,7 +26,17 @@ struct HudData {
 	ImU32 healthColor = 0xFFFFFFFF;
 	ImU32 energyColor = 0xFFFFFFFF;
 
+	float timerHeight = 0;
+	glm::vec2 timerMid = { 0, 0 };
+	glm::vec2 timerOffset = { 0, 0 };
+
 	// animations
 	float lastHealth = 0;
 	float lastEnergy = 0;
+
+	//font
+	vk::Sampler fontSampler;
+	ImFontAtlas fontAtlas;
+	ImFont* textFont;
+	ImFont* headerFont;
 };

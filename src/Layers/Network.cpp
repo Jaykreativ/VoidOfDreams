@@ -397,6 +397,8 @@ void terminateClient(NetworkData& network, WorldData& world) {
 }
 
 namespace server {
+	std::mutex _mRunning;
+	std::condition_variable _cvRunning;
 	bool _isRunning = false;
 	std::mutex _mTerminate; // controls access to variables for terminating the server
 	volatile bool _shouldStop = false;
@@ -419,7 +421,7 @@ namespace server {
 	std::vector<pollfd> _pollfds = {};
 
 	bool isRunning() {
-		std::lock_guard<std::mutex> lk(_mTerminate);
+		std::lock_guard<std::mutex> lk(_mRunning);
 		return _isRunning;
 	}
 
@@ -739,6 +741,11 @@ namespace server {
 
 	void loop(NetworkData* network) {
 		_serverSocket = getServerSocket(*network);
+		{
+			std::lock_guard<std::mutex> lk(_mRunning);
+			_isRunning = true;
+		}
+		_cvRunning.notify_all();
 		printf("server running\n");
 
 		while (true) {
@@ -771,20 +778,29 @@ namespace server {
 		freeResources(*network);
 
 		printf("server done\n");
+		{
+			std::lock_guard<std::mutex> lk(_mRunning);
+			_isRunning = false;
+		}
+		_cvRunning.notify_all();
 	}
 }
 
 void runServer(NetworkData& network) {
-	if (server::_isRunning)
+	if (server::isRunning())
 		return;
-	server::_isRunning = true;
 
 	server::_shouldStop = false;
 	server::_thread = std::thread(server::loop, &network);
 }
 
+void waitServerStartup() {
+	std::unique_lock lk(server::_mRunning);
+	server::_cvRunning.wait(lk, [] {return server::_isRunning; });
+}
+
 void terminateServer() {
-	if (!server::_isRunning)
+	if (!server::isRunning())
 		return;
 	{
 		std::lock_guard<std::mutex> lk(server::_mTerminate);
@@ -792,5 +808,4 @@ void terminateServer() {
 	}
 	server::_thread.join();
 	server::_shouldStop = false;
-	server::_isRunning = false;
 }
