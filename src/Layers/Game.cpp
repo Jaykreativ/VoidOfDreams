@@ -5,7 +5,7 @@
 #include "Shares/NetworkData.h"
 #include "Shares/Render.h"
 #include "Shares/World.h"
-#include "Shares/Hud.h"
+#include "Shares/GuiData.h"
 #include "Objects/Inventory.h"
 #include "Objects/Weapons/Ray.h"
 #include "Objects/PermaAbilities/Dash.h"
@@ -19,24 +19,22 @@
 
 #include <chrono>
 
-static HudData _hud = {};
-
 class HudDamageAnimation : public Animation {
 public:
-	HudDamageAnimation(float minHealth, float maxHealth, float fullHealth)
-		: Animation(.5f), m_minHealth(minHealth), m_maxHealth(maxHealth), m_fullHealth(fullHealth)
+	HudDamageAnimation(HudData& hud, float minHealth, float maxHealth, float fullHealth)
+		: Animation(.5f), m_hud(hud), m_minHealth(minHealth), m_maxHealth(maxHealth), m_fullHealth(fullHealth)
 	{}
 
 	void update(float dt) override {
 		auto* draw = ImGui::GetWindowDrawList();
-		glm::vec2 min = _hud.healthMid - _hud.statBarHalfExtents + glm::vec2(0, (1 - m_maxHealth / m_fullHealth) * _hud.statBarSize);
-		glm::vec2 max = _hud.healthMid + _hud.statBarHalfExtents - glm::vec2(0, m_minHealth / m_fullHealth * _hud.statBarSize);
+		glm::vec2 min = m_hud.healthMid - m_hud.statBarHalfExtents + glm::vec2(0, (1 - m_maxHealth / m_fullHealth) * m_hud.statBarSize);
+		glm::vec2 max = m_hud.healthMid + m_hud.statBarHalfExtents - glm::vec2(0, m_minHealth / m_fullHealth * m_hud.statBarSize);
 		glm::vec2 mid = (min + max) / 2.f;
 		glm::vec2 extents = max - mid;
 		draw->AddRectFilled(
 			mid - extents * (1 - timeFactor()),
 			mid + extents * (1 - timeFactor()),
-			_hud.healthColor);
+			m_hud.healthColor);
 		addDeltaTime(dt);
 	}
 
@@ -44,24 +42,25 @@ private:
 	float m_minHealth;
 	float m_maxHealth;
 	float m_fullHealth;
+	HudData& m_hud;
 };
 
 class HudEnergyAnimation : public Animation {
 public:
-	HudEnergyAnimation(float minEnergy, float maxEnergy, float fullEnergy)
-		: Animation(.25f), m_minEnergy(minEnergy), m_maxEnergy(maxEnergy), m_fullEnergy(fullEnergy)
+	HudEnergyAnimation(HudData& hud, float minEnergy, float maxEnergy, float fullEnergy)
+		: Animation(.25f), m_hud(hud), m_minEnergy(minEnergy), m_maxEnergy(maxEnergy), m_fullEnergy(fullEnergy)
 	{}
 
 	void update(float dt) override {
 		auto* draw = ImGui::GetWindowDrawList();
-		glm::vec2 min = _hud.energyMid - _hud.statBarHalfExtents + glm::vec2(0, (1 - m_maxEnergy / m_fullEnergy) * _hud.statBarSize);
-		glm::vec2 max = _hud.energyMid + _hud.statBarHalfExtents - glm::vec2(0, m_minEnergy / m_fullEnergy * _hud.statBarSize);
+		glm::vec2 min = m_hud.energyMid - m_hud.statBarHalfExtents + glm::vec2(0, (1 - m_maxEnergy / m_fullEnergy) * m_hud.statBarSize);
+		glm::vec2 max = m_hud.energyMid + m_hud.statBarHalfExtents - glm::vec2(0, m_minEnergy / m_fullEnergy * m_hud.statBarSize);
 		glm::vec2 mid = (min + max) / 2.f;
 		glm::vec2 extents = max - mid;
 		draw->AddRectFilled(
 			mid - extents * (1 - timeFactor()),
 			mid + extents * (1 - timeFactor()),
-			_hud.energyColor);
+			m_hud.energyColor);
 		addDeltaTime(dt);
 	}
 
@@ -69,54 +68,61 @@ private:
 	float m_minEnergy;
 	float m_maxEnergy;
 	float m_fullEnergy;
+	HudData& m_hud;
 };
 
 class HudCrosshairKillAnimation : public Animation {
 public:
-	HudCrosshairKillAnimation()
-		: Animation(1)
+	HudCrosshairKillAnimation(HudData& hud)
+		: Animation(1), m_hud(hud)
 	{}
 
 	void update(float dt) override {
 		auto* draw = ImGui::GetWindowDrawList();
-		glm::vec4 normColor = ImGui::ColorConvertU32ToFloat4(_hud.crosshairColor);
+		glm::vec4 normColor = ImGui::ColorConvertU32ToFloat4(m_hud.crosshairColor);
 		ImU32 color = ImGui::GetColorU32(glm::vec4(glm::vec3(normColor), (1-timeFactor())));
-		draw->AddCircle(_hud.crosshairMiddle, _hud.crosshairSize*(1.2+timeFactor()*10), color);
+		draw->AddCircle(m_hud.crosshairMiddle, m_hud.crosshairSize*(1.2+timeFactor()*10), color);
 		addDeltaTime(dt);
 	}
+
+private:
+	HudData& m_hud;
 };
 
 class HudCrosshairDamageAnimation : public Animation {
 public:
-	HudCrosshairDamageAnimation()
-		: Animation(1)
+	HudCrosshairDamageAnimation(HudData& hud)
+		: Animation(1), m_hud(hud)
 	{}
 
 	void update(float dt) override {
 		auto* draw = ImGui::GetWindowDrawList();
-		glm::vec4 normColor = ImGui::ColorConvertU32ToFloat4(_hud.crosshairColor);
+		glm::vec4 normColor = ImGui::ColorConvertU32ToFloat4(m_hud.crosshairColor);
 		ImU32 color = ImGui::GetColorU32(glm::vec4(glm::vec3(normColor), (1-timeFactor())));
 		
 		for (size_t i = 0; i < 4; i++) {
 			glm::mat4 rotMat = glm::rotate(glm::mat4(1), glm::radians<float>(45+90*i), glm::vec3(0, 0, 1));
 			glm::vec2 rect[4] = {
-				glm::vec2(-_hud.crosshairSize * (1 + timeFactor()), -_hud.crosshairThickness) * .5f,
-				glm::vec2(-_hud.crosshairSize * .5 * (1 + timeFactor()), -_hud.crosshairThickness)*.5f,
-				glm::vec2(-_hud.crosshairSize * .5 * (1 + timeFactor()), _hud.crosshairThickness)*.5f,
-				glm::vec2(-_hud.crosshairSize * (1 + timeFactor()), _hud.crosshairThickness)*.5f
+				glm::vec2(-m_hud.crosshairSize * (1 + timeFactor()), -m_hud.crosshairThickness) * .5f,
+				glm::vec2(-m_hud.crosshairSize * .5 * (1 + timeFactor()), -m_hud.crosshairThickness)*.5f,
+				glm::vec2(-m_hud.crosshairSize * .5 * (1 + timeFactor()), m_hud.crosshairThickness)*.5f,
+				glm::vec2(-m_hud.crosshairSize * (1 + timeFactor()), m_hud.crosshairThickness)*.5f
 			};
 			for (size_t j = 0; j < 4; j++) {
 				rect[j] = glm::vec4(rect[j], 0, 1) * rotMat;
-				rect[j] += _hud.crosshairMiddle;
+				rect[j] += m_hud.crosshairMiddle;
 			}
 			draw->AddConvexPolyFilled(reinterpret_cast<ImVec2*>(rect), 4, color);
 
 			addDeltaTime(dt);
 		}
 	}
+
+private:
+	HudData& m_hud;
 };
 
-void drawHud(Player& player, float dt) {
+void drawHud(GuiData& gui, Player& player, float dt) {
 	ImGui::SetNextWindowSize(ImGui::GetIO().DisplaySize);
 	ImGui::SetNextWindowPos({0, 0});
 	ImGui::Begin("Hud", nullptr, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoDocking | ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoFocusOnAppearing);
@@ -124,62 +130,62 @@ void drawHud(Player& player, float dt) {
 
 	// crosshair
 	{
-		_hud.crosshairMiddle = glm::vec2(ImGui::GetWindowSize()) / 2.f;
-		_hud.crosshairSize = 25* _hud.scale;
-		_hud.crosshairThickness = 2* _hud.scale;
-		_hud.crosshairColor = ImGui::GetColorU32({1, 1, 1, 1});
-		glm::vec2 xVec = glm::vec2(_hud.crosshairSize, _hud.crosshairThickness) / 2.f;
-		draw->AddRectFilled(_hud.crosshairMiddle -xVec, _hud.crosshairMiddle +xVec, _hud.crosshairColor);
-		glm::vec2 yVec = glm::vec2(_hud.crosshairThickness, _hud.crosshairSize) / 2.f;
-		draw->AddRectFilled(_hud.crosshairMiddle -yVec, _hud.crosshairMiddle +yVec, _hud.crosshairColor);
+		gui.hud.crosshairMiddle = glm::vec2(ImGui::GetWindowSize()) / 2.f;
+		gui.hud.crosshairSize = 25* gui.hud.scale;
+		gui.hud.crosshairThickness = 2* gui.hud.scale;
+		gui.hud.crosshairColor = ImGui::GetColorU32({1, 1, 1, 1});
+		glm::vec2 xVec = glm::vec2(gui.hud.crosshairSize, gui.hud.crosshairThickness) / 2.f;
+		draw->AddRectFilled(gui.hud.crosshairMiddle -xVec, gui.hud.crosshairMiddle +xVec, gui.hud.crosshairColor);
+		glm::vec2 yVec = glm::vec2(gui.hud.crosshairThickness, gui.hud.crosshairSize) / 2.f;
+		draw->AddRectFilled(gui.hud.crosshairMiddle -yVec, gui.hud.crosshairMiddle +yVec, gui.hud.crosshairColor);
 	}
 
 	// health + energy bar
-	ImGui::PushFont(_hud.textFont);
+	ImGui::PushFont(gui.textFont);
 	{
-		_hud.statBarSize = 100 * _hud.scale;
-		_hud.statBarOffset = glm::vec2(ImGui::GetWindowSize().x - _hud.statBarSize * 1.1, _hud.statBarSize * 0.1);
-		_hud.healthMid = _hud.statBarOffset + glm::vec2(_hud.statBarSize / 4.f, _hud.statBarSize / 2.f);
-		_hud.energyMid = _hud.statBarOffset + glm::vec2(_hud.statBarSize *3.f/4.f, _hud.statBarSize /2.f);
-		_hud.statBarHalfExtents = glm::vec2(_hud.statBarSize /2.5f, _hud.statBarSize) / 2.f;
+		gui.hud.statBarSize = 100 * gui.hud.scale;
+		gui.hud.statBarOffset = glm::vec2(ImGui::GetWindowSize().x - gui.hud.statBarSize * 1.1, gui.hud.statBarSize * 0.1);
+		gui.hud.healthMid = gui.hud.statBarOffset + glm::vec2(gui.hud.statBarSize / 4.f, gui.hud.statBarSize / 2.f);
+		gui.hud.energyMid = gui.hud.statBarOffset + glm::vec2(gui.hud.statBarSize *3.f/4.f, gui.hud.statBarSize /2.f);
+		gui.hud.statBarHalfExtents = glm::vec2(gui.hud.statBarSize /2.5f, gui.hud.statBarSize) / 2.f;
 		auto* font = ImGui::GetFont();
 
 		// health bar
-		_hud.healthColor = ImGui::GetColorU32({ 0.9, 0.1, 0.1, 1 });
-		draw->AddRectFilled(_hud.healthMid - _hud.statBarHalfExtents +glm::vec2(0, (1-player.getHealth() / player.getMaxHealth())* _hud.statBarSize), _hud.healthMid + _hud.statBarHalfExtents, _hud.healthColor);
+		gui.hud.healthColor = ImGui::GetColorU32({ 0.9, 0.1, 0.1, 1 });
+		draw->AddRectFilled(gui.hud.healthMid - gui.hud.statBarHalfExtents +glm::vec2(0, (1-player.getHealth() / player.getMaxHealth())* gui.hud.statBarSize), gui.hud.healthMid + gui.hud.statBarHalfExtents, gui.hud.healthColor);
 		std::string strHealth = std::to_string((uint32_t)std::clamp<float>(std::ceil(player.getHealth()), 0, player.getMaxHealth()));
-		float healthTextX = font->CalcTextSizeA(font->FontSize, _hud.statBarSize / 2.f, 0, strHealth.c_str(), strHealth.c_str() + strHealth.size()).x;
-		draw->AddText(glm::vec2(_hud.healthMid.x - healthTextX / 2.f, _hud.statBarOffset.y + _hud.statBarSize), 0xFFFFFFFF, strHealth.c_str(), strHealth.c_str() + strHealth.size());
+		float healthTextX = font->CalcTextSizeA(font->FontSize, gui.hud.statBarSize / 2.f, 0, strHealth.c_str(), strHealth.c_str() + strHealth.size()).x;
+		draw->AddText(glm::vec2(gui.hud.healthMid.x - healthTextX / 2.f, gui.hud.statBarOffset.y + gui.hud.statBarSize), 0xFFFFFFFF, strHealth.c_str(), strHealth.c_str() + strHealth.size());
 
 		// energy bar
-		_hud.energyColor = ImGui::GetColorU32({ 0.9, 0.9, 0.9, 1 });
-		draw->AddRectFilled(_hud.energyMid - _hud.statBarHalfExtents +glm::vec2(0, (1-player.getEnergy() / player.getMaxEnergy())* _hud.statBarSize), _hud.energyMid + _hud.statBarHalfExtents, _hud.energyColor);
+		gui.hud.energyColor = ImGui::GetColorU32({ 0.9, 0.9, 0.9, 1 });
+		draw->AddRectFilled(gui.hud.energyMid - gui.hud.statBarHalfExtents +glm::vec2(0, (1-player.getEnergy() / player.getMaxEnergy())* gui.hud.statBarSize), gui.hud.energyMid + gui.hud.statBarHalfExtents, gui.hud.energyColor);
 		std::string strEnergy = std::to_string((uint32_t)std::clamp<float>(std::ceil(player.getEnergy()), 0, player.getMaxEnergy()));
-		float energyTextX = font->CalcTextSizeA(font->FontSize, _hud.statBarSize / 2.f, 0, strEnergy.c_str(), strEnergy.c_str() + strEnergy.size()).x;
-		draw->AddText(glm::vec2(_hud.energyMid.x - energyTextX / 2.f, _hud.statBarOffset.y + _hud.statBarSize), 0xFFFFFFFF, strEnergy.c_str(), strEnergy.c_str() + strEnergy.size());
+		float energyTextX = font->CalcTextSizeA(font->FontSize, gui.hud.statBarSize / 2.f, 0, strEnergy.c_str(), strEnergy.c_str() + strEnergy.size()).x;
+		draw->AddText(glm::vec2(gui.hud.energyMid.x - energyTextX / 2.f, gui.hud.statBarOffset.y + gui.hud.statBarSize), 0xFFFFFFFF, strEnergy.c_str(), strEnergy.c_str() + strEnergy.size());
 	}
 	ImGui::PopFont();
 
 	if(player.hasKilled())
-		_hud.animations.push_back(std::make_unique<HudCrosshairKillAnimation>());
+		gui.hud.animations.push_back(std::make_unique<HudCrosshairKillAnimation>(gui.hud));
 	if (player.hasDoneDamage())
-		_hud.animations.push_back(std::make_unique<HudCrosshairDamageAnimation>());
+		gui.hud.animations.push_back(std::make_unique<HudCrosshairDamageAnimation>(gui.hud));
 
-	if (_hud.lastHealth > player.getHealth())
-		_hud.animations.push_back(std::make_unique<HudDamageAnimation>(player.getHealth(), _hud.lastHealth, player.getMaxHealth()));
-	_hud.lastHealth = player.getHealth();
+	if (gui.hud.lastHealth > player.getHealth())
+		gui.hud.animations.push_back(std::make_unique<HudDamageAnimation>(gui.hud, player.getHealth(), gui.hud.lastHealth, player.getMaxHealth()));
+	gui.hud.lastHealth = player.getHealth();
 
-	if (_hud.lastEnergy > player.getEnergy())
-		_hud.animations.push_back(std::make_unique<HudEnergyAnimation>(player.getEnergy(), _hud.lastEnergy, player.getMaxEnergy()));
-	_hud.lastEnergy = player.getEnergy();
+	if (gui.hud.lastEnergy > player.getEnergy())
+		gui.hud.animations.push_back(std::make_unique<HudEnergyAnimation>(gui.hud, player.getEnergy(), gui.hud.lastEnergy, player.getMaxEnergy()));
+	gui.hud.lastEnergy = player.getEnergy();
 
-	for (size_t i = 0; i < _hud.animations.size(); i++) {
-		if (_hud.animations[i]->isDone()) {
-			_hud.animations.erase(_hud.animations.begin() + i);
+	for (size_t i = 0; i < gui.hud.animations.size(); i++) {
+		if (gui.hud.animations[i]->isDone()) {
+			gui.hud.animations.erase(gui.hud.animations.begin() + i);
 			i--;
 		}
 		else
-			_hud.animations[i]->update(dt);
+			gui.hud.animations[i]->update(dt);
 	}
 
 	//{
@@ -301,7 +307,7 @@ void updateMainMenu(WorldData& world, RenderData& render, NetworkData& network, 
 	logger::endRegion();
 }
 
-void update(WorldData& world, RenderData& render, NetworkData& network, Controls& controls, float dt, Zap::Window& window) {
+void update(WorldData& world, RenderData& render, NetworkData& network, GuiData& gui, Controls& controls, float dt, Zap::Window& window) {
 	static bool captured = false;
 
 	logger::beginRegion("players");
@@ -354,7 +360,7 @@ void update(WorldData& world, RenderData& render, NetworkData& network, Controls
 			ImGui::Text("Damage: %f", spPlayer->getDamage());
 			ImGui::End();
 
-			drawHud(*spPlayer, dt);
+			drawHud(gui, *spPlayer, dt);
 		}
 
 		if (ImGui::Button("MainMenu")) {
@@ -383,7 +389,7 @@ void update(WorldData& world, RenderData& render, NetworkData& network, Controls
 	logger::endRegion();
 }
 
-void gameLoop(RenderData& render, WorldData& world, NetworkData& network, Controls& controls) {
+void gameLoop(RenderData& render, WorldData& world, NetworkData& network, GuiData& gui, Controls& controls) {
 	float deltaTime = 0;
 	while (!render.window->shouldClose()) {
 		logger::beginFrame();
@@ -394,7 +400,7 @@ void gameLoop(RenderData& render, WorldData& world, NetworkData& network, Contro
 		switch (world.status)
 		{
 		case eGAME:
-			update(world, render, network, controls, deltaTime, *render.window);
+			update(world, render, network, gui, controls, deltaTime, *render.window);
 			break;
 		case eMAIN_MENU:
 			updateMainMenu(world, render, network, controls, deltaTime, *render.window);
@@ -455,22 +461,22 @@ void switchToGame(WorldData& world, RenderData& render) {
 	world.status = eGAME;
 }
 
-void setupGUI() {
-	_hud.textFont = _hud.fontAtlas.AddFontFromFileTTF("Fonts/exoplanetaria-font/Exoplanetaria.ttf", 20);
-	_hud.headerFont = _hud.fontAtlas.AddFontFromFileTTF("Fonts/quantum-font/QuantumRegular.otf", 50);
-	_hud.fontAtlas.Build();
+void setupGUI(GuiData& gui) {
+	gui.textFont = gui.fontAtlas.AddFontFromFileTTF("Fonts/exoplanetaria-font/Exoplanetaria.ttf", 20);
+	gui.headerFont = gui.fontAtlas.AddFontFromFileTTF("Fonts/quantum-font/QuantumRegular.otf", 50);
+	gui.fontAtlas.Build();
 	unsigned char* data;
 	int width, height;
-	_hud.fontAtlas.GetTexDataAsRGBA32(&data, &width, &height);
+	gui.fontAtlas.GetTexDataAsRGBA32(&data, &width, &height);
 	Zap::ImageLoader loader;
 	auto image = loader.load(data, width, height);
-	_hud.fontSampler.init();
-	_hud.fontAtlas.TexID = ImGui_ImplVulkan_AddTexture(_hud.fontSampler, image.getVkImageView(), VK_IMAGE_LAYOUT_GENERAL);
+	gui.fontSampler.init();
+	gui.fontAtlas.TexID = ImGui_ImplVulkan_AddTexture(gui.fontSampler, image.getVkImageView(), VK_IMAGE_LAYOUT_GENERAL);
 }
 
-void freeGUI() {
-	ImGui_ImplVulkan_RemoveTexture((VkDescriptorSet)_hud.fontAtlas.TexID);
-	_hud.fontSampler.destroy();
+void freeGUI(GuiData& gui) {
+	ImGui_ImplVulkan_RemoveTexture((VkDescriptorSet)gui.fontAtlas.TexID);
+	gui.fontSampler.destroy();
 }
 
 void setupLocalPlayer(WorldData& world, std::string username) {
@@ -520,6 +526,7 @@ void runGame() {
 	RenderData render = {};
 	WorldData world = {};
 	NetworkData network = {};
+	GuiData gui = {};
 	Controls controls = {};
 
 	render.window = new Zap::Window(1000, 600, "Void of Dreams");
@@ -549,7 +556,7 @@ void runGame() {
 	render.window->getResizeEventHandler()->addCallback(resize, render.pbRender); // give the window access to the pbRender task to resize its viewport
 	render.pGui->initImGui(render.window);
 
-	setupGUI();
+	setupGUI(gui);
 
 #ifdef _DEBUG
 	static bool areShadersCompiled = false;
@@ -567,7 +574,7 @@ void runGame() {
 
 	render.window->show();
 
-	gameLoop(render, world, network, controls);
+	gameLoop(render, world, network, gui, controls);
 
 	terminateClient(network, world); // terminate networking if still running
 	terminateServer();
@@ -577,7 +584,7 @@ void runGame() {
 
 	render.renderer->destroy();
 	delete render.renderer;
-	freeGUI();
+	freeGUI(gui);
 	render.pGui->destroyImGui();
 	delete render.pGui;
 	delete render.pbRender;

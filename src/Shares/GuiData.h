@@ -2,6 +2,8 @@
 
 #include "Objects/Animation.h"
 
+#include "Zap/"
+
 #include "imgui.h"
 
 #include "glm.hpp"
@@ -33,10 +35,15 @@ struct HudData {
 	// animations
 	float lastHealth = 0;
 	float lastEnergy = 0;
+};
 
+struct GuiData {
 	//font
 	vk::Sampler fontSampler;
 	ImFontAtlas fontAtlas;
+	Zap::Image fontImage;
 	ImFont* textFont;
 	ImFont* headerFont;
+
+	HudData hud;
 };
