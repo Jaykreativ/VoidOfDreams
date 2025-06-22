@@ -238,6 +238,11 @@ void drawNetworkInterface(NetworkData& network, WorldData& world) {
 	network.port = portBuf;
 	if (serverRunning || clientRunning)
 		ImGui::EndDisabled();
+
+	if (serverRunning)
+		if (ImGui::Button("Cancel")) {
+			terminateServer();
+		}
 }
 
 void drawServerInterface(NetworkData& network) {
@@ -351,18 +356,31 @@ void update(WorldData& world, RenderData& render, NetworkData& network, GuiData&
 		captured = false;
 	}
 
-	if (!wasCaptured)
-	{
-		if (auto spPlayer = world.wpPlayer.lock()) {
-			ImGui::Begin("stats");
+	if (auto spPlayer = world.wpPlayer.lock()) {
+		if(ImGui::IsKeyDown(ImGuiKey_Tab)) {
+			glm::vec2 displaySize = ImGui::GetIO().DisplaySize;
+			ImGui::SetNextWindowPos(gui.statsOffsetRelative * displaySize + gui.statsOffsetUpperRight - glm::vec2(gui.statsSize.x, 0));
+			ImGui::SetNextWindowSize(gui.statsSize);
+
+			ImGuiWindowFlags windowFlags = ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove;
+			ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
+			ImGui::PushStyleColor(ImGuiCol_WindowBg, {0, 0, 0, gui.statsAlpha});
+			ImGui::Begin("stats", 0, windowFlags);
+
 			ImGui::Text("Kills: %lu", spPlayer->getKills());
 			ImGui::Text("Deaths: %lu", spPlayer->getDeaths());
-			ImGui::Text("Damage: %f", spPlayer->getDamage());
-			ImGui::End();
+			ImGui::Text("Damage: %i", static_cast<int>(std::ceil(spPlayer->getDamage())));
 
-			drawHud(gui, *spPlayer, dt);
+			ImGui::End();
+			ImGui::PopStyleColor();
+			ImGui::PopStyleVar();
 		}
 
+		drawHud(gui, *spPlayer, dt);
+	}
+
+	if (!wasCaptured)
+	{
 		if (ImGui::Button("MainMenu")) {
 			if (client::isRunning())
 				terminateClient(network, world);

@@ -2,8 +2,6 @@
 
 #include "Objects/Animation.h"
 
-#include "Zap/"
-
 #include "imgui.h"
 
 #include "glm.hpp"
@@ -46,4 +44,9 @@ struct GuiData {
 	ImFont* headerFont;
 
 	HudData hud;
+
+	glm::vec2 statsOffsetRelative = { 1, 0.4 };
+	glm::vec2 statsOffsetUpperRight = { -10, 0 };
+	glm::vec2 statsSize = { 100, 70 };
+	float statsAlpha = 0.2;
 };
