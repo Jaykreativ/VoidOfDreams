@@ -469,14 +469,15 @@ void setupGUI(GuiData& gui) {
 	int width, height;
 	gui.fontAtlas.GetTexDataAsRGBA32(&data, &width, &height);
 	Zap::ImageLoader loader;
-	auto image = loader.load(data, width, height);
+	gui.fontImage = loader.load(data, width, height);
 	gui.fontSampler.init();
-	gui.fontAtlas.TexID = ImGui_ImplVulkan_AddTexture(gui.fontSampler, image.getVkImageView(), VK_IMAGE_LAYOUT_GENERAL);
+	gui.fontAtlas.TexID = ImGui_ImplVulkan_AddTexture(gui.fontSampler, gui.fontImage.getVkImageView(), VK_IMAGE_LAYOUT_GENERAL);
 }
 
 void freeGUI(GuiData& gui) {
 	ImGui_ImplVulkan_RemoveTexture((VkDescriptorSet)gui.fontAtlas.TexID);
 	gui.fontSampler.destroy();
+	gui.fontImage.destroy();
 }
 
 void setupLocalPlayer(WorldData& world, std::string username) {
