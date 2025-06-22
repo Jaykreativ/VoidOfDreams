@@ -240,7 +240,8 @@ namespace client {
 			}
 			case eRay: {
 				RayPacket& packet = *reinterpret_cast<RayPacket*>(spPacket.get());
-				std::lock_guard<std::mutex> lk(world.mPlayer);
+				std::lock_guard<std::mutex> lks(world.mScene);
+				std::lock_guard<std::mutex> lkp(world.mPlayer);
 				if (std::shared_ptr<Player> spPlayer = world.wpPlayer.lock()) {
 					Ray::processRay(packet.origin, packet.direction, world, *spPlayer, *world.game.players.at(packet.username));
 				}

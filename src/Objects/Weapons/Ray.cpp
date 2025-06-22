@@ -15,7 +15,6 @@ Ray::Beam::Beam(WorldData& world, glm::vec3 origin, glm::vec3 direction, float l
 {
 	Zap::ModelLoader loader;
 	auto model = loader.load(_beamModel);
-	std::lock_guard<std::mutex> lk(world.mScene);
 	world.game.spScene->attachActor(m_actor);
 	m_actor.addTransform();
 	m_actor.addModel(model);
@@ -107,10 +106,7 @@ void Ray::processRay(glm::vec3 origin, glm::vec3 direction, WorldData& world, Pl
 	RayFilter filter;
 	filter.excludedActor = senderPlayer.getPhysicsActor();
 	bool hit = false;
-	{
-		std::lock_guard<std::mutex> lk(world.mScene);
-		hit = world.game.spScene->raycast(origin, glm::normalize(direction), 1000, &out, &filter);
-	}
+	hit = world.game.spScene->raycast(origin, glm::normalize(direction), 1000, &out, &filter);
 	if (hit) {
 		if (out.actor == checkPlayer.getPhysicsActor()) {
 			checkPlayer.damage(_damage, senderPlayer);
