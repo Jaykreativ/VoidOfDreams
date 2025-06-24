@@ -38,6 +38,12 @@ public:
 
 	void spendEnergy(float energy);
 
+	void disableInput();
+
+	void enableInput();
+
+	bool receivesInput();
+
 	bool isAlive();
 
 	bool isWeaponMode();
@@ -97,6 +103,7 @@ public:
 	void syncDamage(Player& damager, float damage, float newHealth);
 
 private:
+	bool m_recvInput = false;
 	bool m_active = false;
 
 	enum Mode {

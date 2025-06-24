@@ -362,6 +362,11 @@ void update(WorldData& world, RenderData& render, NetworkData& network, GuiData&
 	}
 
 	if (auto spPlayer = world.wpPlayer.lock()) {
+		if (gui.isPaused)
+			spPlayer->disableInput();
+		else
+			spPlayer->enableInput();
+
 		if(ImGui::IsKeyDown(ImGuiKey_Tab)) {
 			ImGui::SetNextWindowPos(gui.statsOffsetRelative * displaySize + gui.statsOffsetUpperRight - glm::vec2(gui.statsSize.x, 0));
 			ImGui::SetNextWindowSize(gui.statsSize);

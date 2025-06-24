@@ -61,6 +61,9 @@ void Player::updateAnimations(float dt) {
 }
 
 void Player::updateInputs(Controls& controls, float dt) {
+	if (!receivesInput())
+		return;
+
 	glm::mat4 transform = m_base.cmpTransform_getTransform();
 	glm::vec3 xDir = glm::normalize(transform[0]);
 	glm::vec3 yDir = glm::normalize(transform[1]);
@@ -217,6 +220,18 @@ void Player::kill(const Player& killer) {
 void Player::spendEnergy(float energy) {
 	m_energy -= energy;
 	m_recordEvents |= eENERGY_SPENT;
+}
+
+void Player::disableInput() {
+	m_recvInput = false;
+}
+
+void Player::enableInput() {
+	m_recvInput = true;
+}
+
+bool Player::receivesInput() {
+	return m_recvInput;
 }
 
 bool Player::isAlive() {

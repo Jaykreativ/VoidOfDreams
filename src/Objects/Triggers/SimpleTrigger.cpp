@@ -1,5 +1,7 @@
 #include "SimpleTrigger.h"
 
+#include "Objects/Player.h"
+
 SimpleTrigger::SimpleTrigger(ImGuiKey key)
 	: m_isKey(true), m_key(key), m_mouseButton(0)
 {}
@@ -9,6 +11,9 @@ SimpleTrigger::SimpleTrigger(ImGuiMouseButton_ mouseButton)
 {}
 
 void SimpleTrigger::update(Player& player, PlayerInventory::iterator iterator) {
+	if (!player.receivesInput())
+		return;
+
 	bool trigger = false;
 	if (m_isKey) {
 		if (ImGui::IsKeyPressed(m_key, false)) {
