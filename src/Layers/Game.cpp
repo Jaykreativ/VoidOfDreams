@@ -129,7 +129,7 @@ void drawHud(GuiData& gui, Player& player, float dt) {
 	auto* draw = ImGui::GetWindowDrawList();
 
 	// crosshair
-	{
+	if(!gui.isPaused) {
 		gui.hud.crosshairMiddle = glm::vec2(ImGui::GetWindowSize()) / 2.f;
 		gui.hud.crosshairSize = 25* gui.hud.scale;
 		gui.hud.crosshairThickness = 2* gui.hud.scale;
@@ -290,6 +290,8 @@ void updateMainMenu(WorldData& world, RenderData& render, NetworkData& network, 
 
 		drawNetworkInterface(network, world);
 
+		ImGui::ShowDemoWindow();
+
 		if (ImGui::Button("Host")) {
 			runServer(network);
 			waitServerStartup();
@@ -349,16 +351,18 @@ void update(WorldData& world, RenderData& render, NetworkData& network, GuiData&
 	logger::endRegion();
 
 	logger::beginRegion("gui");
+	glm::vec2 displaySize = ImGui::GetIO().DisplaySize;
 	bool wasCaptured = captured;
+	bool wasPaused = gui.isPaused;
 
 	if (captured && ImGui::IsKeyPressed(ImGuiKey_Escape)) {
 		glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
 		captured = false;
+		gui.isPaused = true;
 	}
 
 	if (auto spPlayer = world.wpPlayer.lock()) {
 		if(ImGui::IsKeyDown(ImGuiKey_Tab)) {
-			glm::vec2 displaySize = ImGui::GetIO().DisplaySize;
 			ImGui::SetNextWindowPos(gui.statsOffsetRelative * displaySize + gui.statsOffsetUpperRight - glm::vec2(gui.statsSize.x, 0));
 			ImGui::SetNextWindowSize(gui.statsSize);
 
@@ -379,21 +383,52 @@ void update(WorldData& world, RenderData& render, NetworkData& network, GuiData&
 		drawHud(gui, *spPlayer, dt);
 	}
 
-	if (!wasCaptured)
-	{
-		if (ImGui::Button("MainMenu")) {
+	if (wasPaused) {
+		ImGui::SetNextWindowPos({0, 0}); // Outer Window
+		ImGui::SetNextWindowSize(displaySize);
+
+		ImGuiWindowFlags windowFlags = ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove;
+		ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
+		ImGui::PushStyleColor(ImGuiCol_WindowBg, { 0, 0, 0, gui.pauseOuterAlpha });
+		ImGui::Begin("Pause Menu", 0, windowFlags);
+
+		ImGui::SetNextWindowPos(gui.pauseMidRelative*displaySize - gui.pauseSize/2.f); // Inner Window
+
+		ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, gui.pauseRoundingRelative * glm::length(gui.pauseSize));
+		ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, gui.pausePaddingRelative * glm::length(gui.pauseSize));
+		ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, gui.pausePaddingRelative * glm::length(gui.pauseSize) * 0.5f);
+		ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, gui.pauseRoundingRelative * glm::length(gui.pauseSize));
+		ImGui::PushStyleColor(ImGuiCol_ChildBg, { 0, 0, 0, gui.pauseAlpha });
+		ImGui::BeginChild("Inner Menu", {0, 0}, ImGuiChildFlags_AlwaysUseWindowPadding | ImGuiChildFlags_AutoResizeX | ImGuiChildFlags_AutoResizeY);
+		
+		ImGui::PushFont(gui.headerFont);
+		if (ImGui::Button("Continue", gui.pauseButtonSize) || ImGui::IsKeyPressed(ImGuiKey_Escape)) { // use imgui to capture mouse because there is no menu implemented yet
+			glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+			gui.isPaused = false;
+			captured = true;
+		}
+
+		if (ImGui::Button("Main Menu", gui.pauseButtonSize)) {
 			if (client::isRunning())
 				terminateClient(network, world);
 			if (server::isRunning())
 				terminateServer();
 			switchToMainMenu(world, render);
 		}
+		ImGui::PopFont();
 
-		if (ImGui::Button("Capture") || ImGui::IsKeyPressed(ImGuiKey_Escape)) { // use imgui to capture mouse because there is no menu implemented yet
-			glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
-			captured = true;
-		}
+		gui.pauseSize = ImGui::GetWindowSize();
+		ImGui::EndChild();
+		ImGui::PopStyleColor();
+		ImGui::PopStyleVar(4); // End Inner
 
+		ImGui::End();
+		ImGui::PopStyleColor();
+		ImGui::PopStyleVar(); // End Outer
+	}
+
+	if (false) // disabled TODO add settings to enable debug information
+	{
 		drawServerInterface(network);
 
 		ImGui::Begin("Frame Profile");

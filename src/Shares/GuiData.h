@@ -36,6 +36,8 @@ struct HudData {
 };
 
 struct GuiData {
+	bool isPaused = true;
+
 	//font
 	vk::Sampler fontSampler;
 	ImFontAtlas fontAtlas;
@@ -49,4 +51,12 @@ struct GuiData {
 	glm::vec2 statsOffsetUpperRight = { -10, 0 };
 	glm::vec2 statsSize = { 100, 70 };
 	float statsAlpha = 0.2;
+
+	glm::vec2 pauseMidRelative = { 0.5, 0.5 };
+	glm::vec2 pauseSize = { 200, 150 };
+	float pauseRoundingRelative = 0.05;
+	glm::vec2 pausePaddingRelative = { 0.1, 0.08 };
+	glm::vec2 pauseButtonSize = { 320, 64 };
+	float pauseOuterAlpha = 0.2;
+	float pauseAlpha = 0.5;
 };
