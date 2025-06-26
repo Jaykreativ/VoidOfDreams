@@ -238,11 +238,6 @@ void drawNetworkInterface(NetworkData& network, WorldData& world) {
 	network.port = portBuf;
 	if (serverRunning || clientRunning)
 		ImGui::EndDisabled();
-
-	if (serverRunning)
-		if (ImGui::Button("Cancel")) {
-			terminateServer();
-		}
 }
 
 void drawServerInterface(NetworkData& network) {
@@ -312,18 +307,29 @@ void updateMainMenu(WorldData& world, RenderData& render, NetworkData& network, 
 			gui.state = GuiData::eGAME;
 		}
 
-		if (ImGui::Button("Host", gui.pauseButtonSize)) {
-			runServer(network);
-			waitServerStartup();
-			runClient(network, world);
-			if (client::isRunning())
-				switchToGame(world, render);
+		if (server::isRunning()) {
+			if (ImGui::Button("Cancel", gui.pauseButtonSize)) {
+				terminateServer();
+			}
+		}
+		else {
+			if (ImGui::Button("Host", gui.pauseButtonSize)) {
+				runServer(network);
+				waitServerStartup();
+				runClient(network, world);
+				if (client::isRunning())
+					switchToGame(world, render);
+			}
 		}
 
 		if (ImGui::Button("Join", gui.pauseButtonSize)) {
 			runClient(network, world);
 			if (client::isRunning())
 				switchToGame(world, render);
+		}
+
+		if (ImGui::Button("Settings", gui.pauseButtonSize)) {
+			gui.state = GuiData::eSETTINGS;
 		}
 		ImGui::PopFont();
 
@@ -336,10 +342,6 @@ void updateMainMenu(WorldData& world, RenderData& render, NetworkData& network, 
 		ImGui::PopStyleColor();
 		ImGui::PopStyleVar(); // End Oute
 
-		ImGui::Begin("Network");
-		drawNetworkInterface(network, world);
-		ImGui::End();
-
 		//ImGui::ShowDemoWindow();
 
 		//ImGui::Begin("Frame Profile");
@@ -347,6 +349,23 @@ void updateMainMenu(WorldData& world, RenderData& render, NetworkData& network, 
 		//ImGui::End();
 
 	}
+
+	if (oldState & GuiData::eSETTINGS) {
+		ImGui::Begin("Settings");
+
+		glm::vec2 region = ImGui::GetContentRegionAvail();
+		ImGui::BeginChild("Inner Menu", region - glm::vec2(0, 25));
+
+		ImGui::SeparatorText("Network");
+		drawNetworkInterface(network, world);
+
+		ImGui::EndChild();
+		if (ImGui::Button("Back") || ImGui::IsKeyPressed(ImGuiKey_Escape)) {
+			gui.state = GuiData::ePAUSE;
+		}
+		ImGui::End();
+	}
+
 	logger::endRegion();
 }
 
