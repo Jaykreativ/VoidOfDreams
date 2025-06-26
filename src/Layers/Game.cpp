@@ -303,10 +303,10 @@ void updateMainMenu(WorldData& world, RenderData& render, NetworkData& network, 
 
 		ImGui::SetNextWindowPos(gui.pauseMidRelative * displaySize - gui.pauseSize / 2.f); // Inner Window
 
-		ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, gui.pauseRoundingRelative * glm::length(gui.pauseSize));
-		ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, gui.pausePaddingRelative * glm::length(gui.pauseSize));
-		ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, gui.pausePaddingRelative * glm::length(gui.pauseSize) * 0.5f);
-		ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, gui.pauseRoundingRelative * glm::length(gui.pauseSize));
+		ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, gui.pauseRoundingRelative * glm::length(gui.pauseButtonSize));
+		ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, gui.pausePaddingRelative * glm::length(gui.pauseButtonSize));
+		ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, gui.pausePaddingRelative * glm::length(gui.pauseButtonSize) * 0.5f);
+		ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, gui.pauseRoundingRelative * glm::length(gui.pauseButtonSize));
 		ImGui::PushStyleColor(ImGuiCol_ChildBg, { 0, 0, 0, gui.pauseAlpha });
 		ImGui::BeginChild("Inner Menu", { 0, 0 }, ImGuiChildFlags_AlwaysUseWindowPadding | ImGuiChildFlags_AutoResizeX | ImGuiChildFlags_AutoResizeY);
 
@@ -440,10 +440,10 @@ void update(WorldData& world, RenderData& render, NetworkData& network, GuiData&
 
 		ImGui::SetNextWindowPos(gui.pauseMidRelative*displaySize - gui.pauseSize/2.f); // Inner Window
 
-		ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, gui.pauseRoundingRelative * glm::length(gui.pauseSize));
-		ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, gui.pausePaddingRelative * glm::length(gui.pauseSize));
-		ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, gui.pausePaddingRelative * glm::length(gui.pauseSize) * 0.5f);
-		ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, gui.pauseRoundingRelative * glm::length(gui.pauseSize));
+		ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, gui.pauseRoundingRelative * glm::length(gui.pauseButtonSize));
+		ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, gui.pausePaddingRelative * glm::length(gui.pauseButtonSize));
+		ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, gui.pausePaddingRelative * glm::length(gui.pauseButtonSize) * 0.5f);
+		ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, gui.pauseRoundingRelative * glm::length(gui.pauseButtonSize));
 		ImGui::PushStyleColor(ImGuiCol_ChildBg, { 0, 0, 0, gui.pauseAlpha });
 		ImGui::BeginChild("Inner Menu", {0, 0}, ImGuiChildFlags_AlwaysUseWindowPadding | ImGuiChildFlags_AutoResizeX | ImGuiChildFlags_AutoResizeY);
 		
