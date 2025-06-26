@@ -129,7 +129,7 @@ void drawHud(GuiData& gui, Player& player, float dt) {
 	auto* draw = ImGui::GetWindowDrawList();
 
 	// crosshair
-	if(!gui.isPaused) {
+	if(gui.state & GuiData::eGAME) {
 		gui.hud.crosshairMiddle = glm::vec2(ImGui::GetWindowSize()) / 2.f;
 		gui.hud.crosshairSize = 25* gui.hud.scale;
 		gui.hud.crosshairThickness = 2* gui.hud.scale;
@@ -258,13 +258,11 @@ void drawServerInterface(NetworkData& network) {
 }
 
 void updateMainMenu(WorldData& world, RenderData& render, NetworkData& network, GuiData& gui, Controls& controls, float dt, Zap::Window& window) {
-	static bool captured = false;
-
 	logger::beginRegion("players");
 	{
 		std::lock_guard<std::mutex> lk(world.mPlayer);
 		if (std::shared_ptr<Player> spPlayer = world.wpPlayer.lock()) {
-			if (captured) {
+			if (gui.state & GuiData::eGAME) {
 				spPlayer->updateInputs(controls, dt);
 			}
 			spPlayer->updateAnimations(dt);
@@ -275,23 +273,21 @@ void updateMainMenu(WorldData& world, RenderData& render, NetworkData& network, 
 
 	logger::beginRegion("gui");
 	glm::vec2 displaySize = ImGui::GetIO().DisplaySize;
-	bool wasCaptured = captured;
-	bool wasPaused = gui.isPaused;
+	GuiData::State oldState = gui.state;
 
 	if (auto spPlayer = world.wpPlayer.lock()) {
-		if (gui.isPaused)
-			spPlayer->disableInput();
-		else
+		if (oldState & GuiData::eGAME)
 			spPlayer->enableInput();
+		else
+			spPlayer->disableInput();
 	}
 
-	if (captured && ImGui::IsKeyPressed(ImGuiKey_Escape)) {
+	if (oldState & GuiData::eGAME && ImGui::IsKeyPressed(ImGuiKey_Escape)) {
 		glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
-		captured = false;
-		gui.isPaused = true;
+		gui.state = GuiData::ePAUSE;
 	}
 
-	if (wasPaused)
+	if (oldState & GuiData::ePAUSE)
 	{
 		ImGui::SetNextWindowPos({ 0, 0 }); // Outer Window
 		ImGui::SetNextWindowSize(displaySize);
@@ -313,8 +309,7 @@ void updateMainMenu(WorldData& world, RenderData& render, NetworkData& network, 
 		ImGui::PushFont(gui.headerFont);
 		if (ImGui::Button("Continue", gui.pauseButtonSize) || ImGui::IsKeyPressed(ImGuiKey_Escape)) { // use imgui to capture mouse because there is no menu implemented yet
 			glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
-			captured = true;
-			gui.isPaused = false;
+			gui.state = GuiData::eGAME;
 		}
 
 		if (ImGui::Button("Host", gui.pauseButtonSize)) {
@@ -356,14 +351,12 @@ void updateMainMenu(WorldData& world, RenderData& render, NetworkData& network, 
 }
 
 void update(WorldData& world, RenderData& render, NetworkData& network, GuiData& gui, Controls& controls, float dt, Zap::Window& window) {
-	static bool captured = false;
-
 	logger::beginRegion("players");
 	{
 		std::lock_guard<std::mutex> lk(world.mPlayer);
 		if (std::shared_ptr<Player> spPlayer = world.wpPlayer.lock()) {
 			spPlayer->updateMechanics(controls, dt);
-			if (captured)
+			if (gui.state & GuiData::eGAME)
 				spPlayer->updateInputs(controls, dt);
 			if (ImGui::IsKeyPressed(ImGuiKey_R)) {
 				spPlayer->kill();
@@ -393,20 +386,18 @@ void update(WorldData& world, RenderData& render, NetworkData& network, GuiData&
 
 	logger::beginRegion("gui");
 	glm::vec2 displaySize = ImGui::GetIO().DisplaySize;
-	bool wasCaptured = captured;
-	bool wasPaused = gui.isPaused;
+	GuiData::State oldState = gui.state;
 
-	if (captured && ImGui::IsKeyPressed(ImGuiKey_Escape)) {
+	if (oldState & GuiData::eGAME && ImGui::IsKeyPressed(ImGuiKey_Escape)) {
 		glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
-		captured = false;
-		gui.isPaused = true;
+		gui.state = GuiData::ePAUSE;
 	}
 
 	if (auto spPlayer = world.wpPlayer.lock()) {
-		if (gui.isPaused)
-			spPlayer->disableInput();
-		else
+		if (oldState & GuiData::eGAME)
 			spPlayer->enableInput();
+		else
+			spPlayer->disableInput();
 
 		if(ImGui::IsKeyDown(ImGuiKey_Tab)) {
 			ImGui::SetNextWindowPos(gui.statsOffsetRelative * displaySize + gui.statsOffsetUpperRight - glm::vec2(gui.statsSize.x, 0));
@@ -429,7 +420,7 @@ void update(WorldData& world, RenderData& render, NetworkData& network, GuiData&
 		drawHud(gui, *spPlayer, dt);
 	}
 
-	if (wasPaused) {
+	if (oldState & GuiData::ePAUSE) {
 		ImGui::SetNextWindowPos({0, 0}); // Outer Window
 		ImGui::SetNextWindowSize(displaySize);
 
@@ -450,8 +441,7 @@ void update(WorldData& world, RenderData& render, NetworkData& network, GuiData&
 		ImGui::PushFont(gui.headerFont);
 		if (ImGui::Button("Continue", gui.pauseButtonSize) || ImGui::IsKeyPressed(ImGuiKey_Escape)) { // use imgui to capture mouse because there is no menu implemented yet
 			glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
-			gui.isPaused = false;
-			captured = true;
+			gui.state = GuiData::eGAME;
 		}
 
 		if (ImGui::Button("Main Menu", gui.pauseButtonSize)) {

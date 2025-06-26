@@ -36,7 +36,12 @@ struct HudData {
 };
 
 struct GuiData {
-	bool isPaused = true;
+	enum State {
+		eNONE = 0x0,
+		eGAME = 0x1,
+		ePAUSE = 0x2,
+		eSETTINGS = 0x4
+	} state = ePAUSE;
 
 	//font
 	vk::Sampler fontSampler;
