@@ -53,7 +53,7 @@ struct GuiData {
 	float statsAlpha = 0.2;
 
 	glm::vec2 pauseMidRelative = { 0.5, 0.5 };
-	glm::vec2 pauseSize = { 200, 150 };
+	glm::vec2 pauseSize = { 0, 0 };
 	float pauseRoundingRelative = 0.05;
 	glm::vec2 pausePaddingRelative = { 0.1, 0.08 };
 	glm::vec2 pauseButtonSize = { 320, 64 };

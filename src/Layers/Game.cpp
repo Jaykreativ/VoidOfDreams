@@ -257,7 +257,7 @@ void drawServerInterface(NetworkData& network) {
 	ImGui::End();
 }
 
-void updateMainMenu(WorldData& world, RenderData& render, NetworkData& network, Controls& controls, float dt, Zap::Window& window) {
+void updateMainMenu(WorldData& world, RenderData& render, NetworkData& network, GuiData& gui, Controls& controls, float dt, Zap::Window& window) {
 	static bool captured = false;
 
 	logger::beginRegion("players");
@@ -274,25 +274,50 @@ void updateMainMenu(WorldData& world, RenderData& render, NetworkData& network, 
 	logger::endRegion();
 
 	logger::beginRegion("gui");
+	glm::vec2 displaySize = ImGui::GetIO().DisplaySize;
 	bool wasCaptured = captured;
+	bool wasPaused = gui.isPaused;
+
+	if (auto spPlayer = world.wpPlayer.lock()) {
+		if (gui.isPaused)
+			spPlayer->disableInput();
+		else
+			spPlayer->enableInput();
+	}
 
 	if (captured && ImGui::IsKeyPressed(ImGuiKey_Escape)) {
 		glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
 		captured = false;
+		gui.isPaused = true;
 	}
 
-	if (!wasCaptured)
+	if (wasPaused)
 	{
-		if (ImGui::Button("Continue") || ImGui::IsKeyPressed(ImGuiKey_Escape)) { // use imgui to capture mouse because there is no menu implemented yet
+		ImGui::SetNextWindowPos({ 0, 0 }); // Outer Window
+		ImGui::SetNextWindowSize(displaySize);
+
+		ImGuiWindowFlags windowFlags = ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove;
+		ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
+		ImGui::PushStyleColor(ImGuiCol_WindowBg, { 0, 0, 0, gui.pauseOuterAlpha });
+		ImGui::Begin("Main Menu", 0, windowFlags);
+
+		ImGui::SetNextWindowPos(gui.pauseMidRelative * displaySize - gui.pauseSize / 2.f); // Inner Window
+
+		ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, gui.pauseRoundingRelative * glm::length(gui.pauseSize));
+		ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, gui.pausePaddingRelative * glm::length(gui.pauseSize));
+		ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, gui.pausePaddingRelative * glm::length(gui.pauseSize) * 0.5f);
+		ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, gui.pauseRoundingRelative * glm::length(gui.pauseSize));
+		ImGui::PushStyleColor(ImGuiCol_ChildBg, { 0, 0, 0, gui.pauseAlpha });
+		ImGui::BeginChild("Inner Menu", { 0, 0 }, ImGuiChildFlags_AlwaysUseWindowPadding | ImGuiChildFlags_AutoResizeX | ImGuiChildFlags_AutoResizeY);
+
+		ImGui::PushFont(gui.headerFont);
+		if (ImGui::Button("Continue", gui.pauseButtonSize) || ImGui::IsKeyPressed(ImGuiKey_Escape)) { // use imgui to capture mouse because there is no menu implemented yet
 			glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
 			captured = true;
+			gui.isPaused = false;
 		}
 
-		drawNetworkInterface(network, world);
-
-		ImGui::ShowDemoWindow();
-
-		if (ImGui::Button("Host")) {
+		if (ImGui::Button("Host", gui.pauseButtonSize)) {
 			runServer(network);
 			waitServerStartup();
 			runClient(network, world);
@@ -300,15 +325,31 @@ void updateMainMenu(WorldData& world, RenderData& render, NetworkData& network, 
 				switchToGame(world, render);
 		}
 
-		if (ImGui::Button("Join")) {
+		if (ImGui::Button("Join", gui.pauseButtonSize)) {
 			runClient(network, world);
 			if (client::isRunning())
 				switchToGame(world, render);
 		}
+		ImGui::PopFont();
 
-		ImGui::Begin("Frame Profile");
-		logger::drawFrameProfileImGui();
+		gui.pauseSize = ImGui::GetWindowSize();
+		ImGui::EndChild();
+		ImGui::PopStyleColor();
+		ImGui::PopStyleVar(4); // End Inner
+
 		ImGui::End();
+		ImGui::PopStyleColor();
+		ImGui::PopStyleVar(); // End Oute
+
+		ImGui::Begin("Network");
+		drawNetworkInterface(network, world);
+		ImGui::End();
+
+		//ImGui::ShowDemoWindow();
+
+		//ImGui::Begin("Frame Profile");
+		//logger::drawFrameProfileImGui();
+		//ImGui::End();
 
 	}
 	logger::endRegion();
@@ -461,7 +502,7 @@ void gameLoop(RenderData& render, WorldData& world, NetworkData& network, GuiDat
 			update(world, render, network, gui, controls, deltaTime, *render.window);
 			break;
 		case eMAIN_MENU:
-			updateMainMenu(world, render, network, controls, deltaTime, *render.window);
+			updateMainMenu(world, render, network, gui, controls, deltaTime, *render.window);
 			break;
 		default:
 			break;
