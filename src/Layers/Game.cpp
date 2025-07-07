@@ -370,12 +370,19 @@ void updateMainMenu(WorldData& world, RenderData& render, NetworkData& network, 
 		ImGui::End();
 	}
 
+	ImGui::PushFont(gui.textFont);
 	for (size_t i = 0; i < gui.errorMessages.size(); i++) {
-		ImGuiWindowFlags flags = ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoDocking;
+		ImGuiWindowFlags flags = ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoDocking | ImGuiWindowFlags_AlwaysAutoResize;
+		ImGui::SetNextWindowFocus();
 		ImGui::Begin(("ErrorMsg##" + std::to_string(i)).c_str(), 0, flags);
 		ImGui::Text(gui.errorMessages[i].c_str());
+		if (ImGui::Button("Close")) {
+			gui.errorMessages.erase(gui.errorMessages.begin() + i);
+			i--;
+		}
 		ImGui::End();
 	}
+	ImGui::PopFont();
 
 	logger::endRegion();
 }
