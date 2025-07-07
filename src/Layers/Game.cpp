@@ -252,6 +252,174 @@ void drawServerInterface(NetworkData& network) {
 	ImGui::End();
 }
 
+void drawSettings(WorldData& world, NetworkData& network, GuiData& gui) {
+	ImGui::Begin("Settings");
+
+	glm::vec2 region = ImGui::GetContentRegionAvail();
+	ImGui::BeginChild("Inner Menu", region - glm::vec2(0, 25));
+
+	ImGui::SeparatorText("Network");
+	drawNetworkInterface(network, world);
+
+	ImGui::EndChild();
+	if (ImGui::Button("Back") || ImGui::IsKeyPressed(ImGuiKey_Escape)) {
+		gui.state = GuiData::ePAUSE;
+	}
+	ImGui::End();
+}
+
+void drawErrorMessages(GuiData& gui) {
+	ImGui::PushFont(gui.textFont); // display error messages
+	for (size_t i = 0; i < gui.errorMessages.size(); i++) {
+		ImGuiWindowFlags flags = ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoDocking | ImGuiWindowFlags_AlwaysAutoResize;
+		ImGui::SetNextWindowFocus();
+		ImGui::Begin(("ErrorMsg##" + std::to_string(i)).c_str(), 0, flags);
+		ImGui::Text(gui.errorMessages[i].c_str());
+		if (ImGui::Button("Close")) {
+			gui.errorMessages.erase(gui.errorMessages.begin() + i);
+			i--;
+		}
+		ImGui::End();
+	}
+	ImGui::PopFont();
+}
+
+void drawPauseMainMenu(WorldData& world, RenderData& render, NetworkData& network, GuiData& gui, Zap::Window& window) {
+	glm::vec2 displaySize = ImGui::GetIO().DisplaySize;
+
+	ImGui::SetNextWindowPos({ 0, 0 }); // Outer Window
+	ImGui::SetNextWindowSize(displaySize);
+
+	ImGuiWindowFlags windowFlags = ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove;
+	ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
+	ImGui::PushStyleColor(ImGuiCol_WindowBg, { 0, 0, 0, gui.pauseOuterAlpha });
+	ImGui::Begin("Main Menu", 0, windowFlags);
+
+	ImGui::SetNextWindowPos(gui.pauseMidRelative * displaySize - gui.pauseSize / 2.f); // Inner Window
+
+	ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, gui.pauseRoundingRelative * glm::length(gui.pauseButtonSize));
+	ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, gui.pausePaddingRelative * glm::length(gui.pauseButtonSize));
+	ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, gui.pausePaddingRelative * glm::length(gui.pauseButtonSize) * 0.5f);
+	ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, gui.pauseRoundingRelative * glm::length(gui.pauseButtonSize));
+	ImGui::PushStyleColor(ImGuiCol_ChildBg, { 0, 0, 0, gui.pauseAlpha });
+	ImGui::BeginChild("Inner Menu", { 0, 0 }, ImGuiChildFlags_AlwaysUseWindowPadding | ImGuiChildFlags_AutoResizeX | ImGuiChildFlags_AutoResizeY);
+
+	ImGui::PushFont(gui.headerFont);
+	if (ImGui::Button("Continue", gui.pauseButtonSize) || ImGui::IsKeyPressed(ImGuiKey_Escape)) { // use imgui to capture mouse because there is no menu implemented yet
+		glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+		gui.state = GuiData::eGAME;
+	}
+
+	if (server::isRunning()) {
+		if (ImGui::Button("Cancel", gui.pauseButtonSize)) {
+			terminateServer();
+		}
+	}
+	else {
+		if (ImGui::Button("Host", gui.pauseButtonSize)) {
+			runServer(network);
+			waitServerStartup();
+			runClient(network, world);
+			if (client::isRunning())
+				switchToGame(world, render);
+		}
+	}
+
+	if (ImGui::Button("Join", gui.pauseButtonSize)) {
+		runClient(network, world);
+		if (client::isRunning())
+			switchToGame(world, render);
+	}
+
+	if (ImGui::Button("Settings", gui.pauseButtonSize)) {
+		gui.state = GuiData::eSETTINGS;
+	}
+	ImGui::PopFont();
+
+	gui.pauseSize = ImGui::GetWindowSize();
+	ImGui::EndChild();
+	ImGui::PopStyleColor();
+	ImGui::PopStyleVar(4); // End Inner
+
+	ImGui::End();
+	ImGui::PopStyleColor();
+	ImGui::PopStyleVar(); // End Outer
+
+	//ImGui::ShowDemoWindow();
+
+	//ImGui::Begin("Frame Profile");
+	//logger::drawFrameProfileImGui();
+	//ImGui::End();
+
+
+}
+
+void drawStats(GuiData& gui, std::shared_ptr<Player> spPlayer) {
+	glm::vec2 displaySize = ImGui::GetIO().DisplaySize;
+	
+	ImGui::SetNextWindowPos(gui.statsOffsetRelative * displaySize + gui.statsOffsetUpperRight - glm::vec2(gui.statsSize.x, 0));
+	ImGui::SetNextWindowSize(gui.statsSize);
+
+	ImGuiWindowFlags windowFlags = ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove;
+	ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
+	ImGui::PushStyleColor(ImGuiCol_WindowBg, { 0, 0, 0, gui.statsAlpha });
+	ImGui::Begin("stats", 0, windowFlags);
+
+	ImGui::Text("Kills: %lu", spPlayer->getKills());
+	ImGui::Text("Deaths: %lu", spPlayer->getDeaths());
+	ImGui::Text("Damage: %i", static_cast<int>(std::ceil(spPlayer->getDamage())));
+
+	ImGui::End();
+	ImGui::PopStyleColor();
+	ImGui::PopStyleVar();
+
+}
+
+void drawPauseMenuClient(WorldData& world, RenderData& render, NetworkData& network, GuiData& gui, Zap::Window& window) {
+	glm::vec2 displaySize = ImGui::GetIO().DisplaySize;
+	
+	ImGui::SetNextWindowPos({ 0, 0 }); // Outer Window
+	ImGui::SetNextWindowSize(displaySize);
+
+	ImGuiWindowFlags windowFlags = ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove;
+	ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
+	ImGui::PushStyleColor(ImGuiCol_WindowBg, { 0, 0, 0, gui.pauseOuterAlpha });
+	ImGui::Begin("Pause Menu", 0, windowFlags);
+
+	ImGui::SetNextWindowPos(gui.pauseMidRelative * displaySize - gui.pauseSize / 2.f); // Inner Window
+
+	ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, gui.pauseRoundingRelative * glm::length(gui.pauseButtonSize));
+	ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, gui.pausePaddingRelative * glm::length(gui.pauseButtonSize));
+	ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, gui.pausePaddingRelative * glm::length(gui.pauseButtonSize) * 0.5f);
+	ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, gui.pauseRoundingRelative * glm::length(gui.pauseButtonSize));
+	ImGui::PushStyleColor(ImGuiCol_ChildBg, { 0, 0, 0, gui.pauseAlpha });
+	ImGui::BeginChild("Inner Menu", { 0, 0 }, ImGuiChildFlags_AlwaysUseWindowPadding | ImGuiChildFlags_AutoResizeX | ImGuiChildFlags_AutoResizeY);
+
+	ImGui::PushFont(gui.headerFont);
+	if (ImGui::Button("Continue", gui.pauseButtonSize) || ImGui::IsKeyPressed(ImGuiKey_Escape)) { // use imgui to capture mouse because there is no menu implemented yet
+		glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+		gui.state = GuiData::eGAME;
+	}
+
+	if (ImGui::Button("Main Menu", gui.pauseButtonSize)) {
+		if (client::isRunning())
+			terminateClient(network, world);
+		if (server::isRunning())
+			terminateServer();
+		switchToMainMenu(world, render);
+	}
+	ImGui::PopFont();
+
+	gui.pauseSize = ImGui::GetWindowSize();
+	ImGui::EndChild();
+	ImGui::PopStyleColor();
+	ImGui::PopStyleVar(4); // End Inner
+
+	ImGui::End();
+	ImGui::PopStyleColor();
+	ImGui::PopStyleVar(); // End Outer
+}
+
 void pushErrorPopup(GuiData& gui, std::string msg) {
 	gui.errorMessages.push_back(msg);
 }
@@ -271,7 +439,6 @@ void updateMainMenu(WorldData& world, RenderData& render, NetworkData& network, 
 	logger::endRegion();
 
 	logger::beginRegion("gui");
-	glm::vec2 displaySize = ImGui::GetIO().DisplaySize;
 	GuiData::State oldState = gui.state;
 
 	if (auto spPlayer = world.wpPlayer.lock()) {
@@ -286,103 +453,15 @@ void updateMainMenu(WorldData& world, RenderData& render, NetworkData& network, 
 		gui.state = GuiData::ePAUSE;
 	}
 
-	if (oldState & GuiData::ePAUSE)
-	{
-		ImGui::SetNextWindowPos({ 0, 0 }); // Outer Window
-		ImGui::SetNextWindowSize(displaySize);
-
-		ImGuiWindowFlags windowFlags = ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove;
-		ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
-		ImGui::PushStyleColor(ImGuiCol_WindowBg, { 0, 0, 0, gui.pauseOuterAlpha });
-		ImGui::Begin("Main Menu", 0, windowFlags);
-
-		ImGui::SetNextWindowPos(gui.pauseMidRelative * displaySize - gui.pauseSize / 2.f); // Inner Window
-
-		ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, gui.pauseRoundingRelative * glm::length(gui.pauseButtonSize));
-		ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, gui.pausePaddingRelative * glm::length(gui.pauseButtonSize));
-		ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, gui.pausePaddingRelative * glm::length(gui.pauseButtonSize) * 0.5f);
-		ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, gui.pauseRoundingRelative * glm::length(gui.pauseButtonSize));
-		ImGui::PushStyleColor(ImGuiCol_ChildBg, { 0, 0, 0, gui.pauseAlpha });
-		ImGui::BeginChild("Inner Menu", { 0, 0 }, ImGuiChildFlags_AlwaysUseWindowPadding | ImGuiChildFlags_AutoResizeX | ImGuiChildFlags_AutoResizeY);
-
-		ImGui::PushFont(gui.headerFont);
-		if (ImGui::Button("Continue", gui.pauseButtonSize) || ImGui::IsKeyPressed(ImGuiKey_Escape)) { // use imgui to capture mouse because there is no menu implemented yet
-			glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
-			gui.state = GuiData::eGAME;
-		}
-
-		if (server::isRunning()) {
-			if (ImGui::Button("Cancel", gui.pauseButtonSize)) {
-				terminateServer();
-			}
-		}
-		else {
-			if (ImGui::Button("Host", gui.pauseButtonSize)) {
-				runServer(network);
-				waitServerStartup();
-				runClient(network, world);
-				if (client::isRunning())
-					switchToGame(world, render);
-			}
-		}
-
-		if (ImGui::Button("Join", gui.pauseButtonSize)) {
-			runClient(network, world);
-			if (client::isRunning())
-				switchToGame(world, render);
-		}
-
-		if (ImGui::Button("Settings", gui.pauseButtonSize)) {
-			gui.state = GuiData::eSETTINGS;
-		}
-		ImGui::PopFont();
-
-		gui.pauseSize = ImGui::GetWindowSize();
-		ImGui::EndChild();
-		ImGui::PopStyleColor();
-		ImGui::PopStyleVar(4); // End Inner
-
-		ImGui::End();
-		ImGui::PopStyleColor();
-		ImGui::PopStyleVar(); // End Outer
-
-		//ImGui::ShowDemoWindow();
-
-		//ImGui::Begin("Frame Profile");
-		//logger::drawFrameProfileImGui();
-		//ImGui::End();
-
+	if (oldState & GuiData::ePAUSE) {
+		drawPauseMainMenu(world, render, network, gui, window);
 	}
 
 	if (oldState & GuiData::eSETTINGS) {
-		ImGui::Begin("Settings");
-
-		glm::vec2 region = ImGui::GetContentRegionAvail();
-		ImGui::BeginChild("Inner Menu", region - glm::vec2(0, 25));
-
-		ImGui::SeparatorText("Network");
-		drawNetworkInterface(network, world);
-
-		ImGui::EndChild();
-		if (ImGui::Button("Back") || ImGui::IsKeyPressed(ImGuiKey_Escape)) {
-			gui.state = GuiData::ePAUSE;
-		}
-		ImGui::End();
+		drawSettings(world, network, gui);
 	}
 
-	ImGui::PushFont(gui.textFont);
-	for (size_t i = 0; i < gui.errorMessages.size(); i++) {
-		ImGuiWindowFlags flags = ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoDocking | ImGuiWindowFlags_AlwaysAutoResize;
-		ImGui::SetNextWindowFocus();
-		ImGui::Begin(("ErrorMsg##" + std::to_string(i)).c_str(), 0, flags);
-		ImGui::Text(gui.errorMessages[i].c_str());
-		if (ImGui::Button("Close")) {
-			gui.errorMessages.erase(gui.errorMessages.begin() + i);
-			i--;
-		}
-		ImGui::End();
-	}
-	ImGui::PopFont();
+	drawErrorMessages(gui);
 
 	logger::endRegion();
 }
@@ -395,12 +474,14 @@ void update(WorldData& world, RenderData& render, NetworkData& network, GuiData&
 			spPlayer->updateMechanics(controls, dt);
 			if (gui.state & GuiData::eGAME)
 				spPlayer->updateInputs(controls, dt);
+#ifdef _DEBUG
 			if (ImGui::IsKeyPressed(ImGuiKey_R)) {
 				spPlayer->kill();
 				spPlayer->spawn();
 			}
 			if (ImGui::IsKeyPressed(ImGuiKey_K))
 				spPlayer->kill();
+#endif // _DEBUG
 		}
 		for (auto spPlayerPair : world.game.players) {
 			spPlayerPair.second->updateAnimations(dt);
@@ -437,67 +518,14 @@ void update(WorldData& world, RenderData& render, NetworkData& network, GuiData&
 			spPlayer->disableInput();
 
 		if(ImGui::IsKeyDown(ImGuiKey_Tab)) {
-			ImGui::SetNextWindowPos(gui.statsOffsetRelative * displaySize + gui.statsOffsetUpperRight - glm::vec2(gui.statsSize.x, 0));
-			ImGui::SetNextWindowSize(gui.statsSize);
-
-			ImGuiWindowFlags windowFlags = ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove;
-			ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
-			ImGui::PushStyleColor(ImGuiCol_WindowBg, {0, 0, 0, gui.statsAlpha});
-			ImGui::Begin("stats", 0, windowFlags);
-
-			ImGui::Text("Kills: %lu", spPlayer->getKills());
-			ImGui::Text("Deaths: %lu", spPlayer->getDeaths());
-			ImGui::Text("Damage: %i", static_cast<int>(std::ceil(spPlayer->getDamage())));
-
-			ImGui::End();
-			ImGui::PopStyleColor();
-			ImGui::PopStyleVar();
+			drawStats(gui, spPlayer);
 		}
 
 		drawHud(gui, *spPlayer, dt);
 	}
 
 	if (oldState & GuiData::ePAUSE) {
-		ImGui::SetNextWindowPos({0, 0}); // Outer Window
-		ImGui::SetNextWindowSize(displaySize);
-
-		ImGuiWindowFlags windowFlags = ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove;
-		ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
-		ImGui::PushStyleColor(ImGuiCol_WindowBg, { 0, 0, 0, gui.pauseOuterAlpha });
-		ImGui::Begin("Pause Menu", 0, windowFlags);
-
-		ImGui::SetNextWindowPos(gui.pauseMidRelative*displaySize - gui.pauseSize/2.f); // Inner Window
-
-		ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, gui.pauseRoundingRelative * glm::length(gui.pauseButtonSize));
-		ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, gui.pausePaddingRelative * glm::length(gui.pauseButtonSize));
-		ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, gui.pausePaddingRelative * glm::length(gui.pauseButtonSize) * 0.5f);
-		ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, gui.pauseRoundingRelative * glm::length(gui.pauseButtonSize));
-		ImGui::PushStyleColor(ImGuiCol_ChildBg, { 0, 0, 0, gui.pauseAlpha });
-		ImGui::BeginChild("Inner Menu", {0, 0}, ImGuiChildFlags_AlwaysUseWindowPadding | ImGuiChildFlags_AutoResizeX | ImGuiChildFlags_AutoResizeY);
-		
-		ImGui::PushFont(gui.headerFont);
-		if (ImGui::Button("Continue", gui.pauseButtonSize) || ImGui::IsKeyPressed(ImGuiKey_Escape)) { // use imgui to capture mouse because there is no menu implemented yet
-			glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
-			gui.state = GuiData::eGAME;
-		}
-
-		if (ImGui::Button("Main Menu", gui.pauseButtonSize)) {
-			if (client::isRunning())
-				terminateClient(network, world);
-			if (server::isRunning())
-				terminateServer();
-			switchToMainMenu(world, render);
-		}
-		ImGui::PopFont();
-
-		gui.pauseSize = ImGui::GetWindowSize();
-		ImGui::EndChild();
-		ImGui::PopStyleColor();
-		ImGui::PopStyleVar(4); // End Inner
-
-		ImGui::End();
-		ImGui::PopStyleColor();
-		ImGui::PopStyleVar(); // End Outer
+		drawPauseMenuClient(world, render, network, gui, window);
 	}
 
 	if (false) // disabled TODO add settings to enable debug information
