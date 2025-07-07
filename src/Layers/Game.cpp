@@ -252,6 +252,10 @@ void drawServerInterface(NetworkData& network) {
 	ImGui::End();
 }
 
+void pushErrorPopup(GuiData& gui, std::string msg) {
+	gui.errorMessages.push_back(msg);
+}
+
 void updateMainMenu(WorldData& world, RenderData& render, NetworkData& network, GuiData& gui, Controls& controls, float dt, Zap::Window& window) {
 	logger::beginRegion("players");
 	{
@@ -340,7 +344,7 @@ void updateMainMenu(WorldData& world, RenderData& render, NetworkData& network, 
 
 		ImGui::End();
 		ImGui::PopStyleColor();
-		ImGui::PopStyleVar(); // End Oute
+		ImGui::PopStyleVar(); // End Outer
 
 		//ImGui::ShowDemoWindow();
 
@@ -363,6 +367,13 @@ void updateMainMenu(WorldData& world, RenderData& render, NetworkData& network, 
 		if (ImGui::Button("Back") || ImGui::IsKeyPressed(ImGuiKey_Escape)) {
 			gui.state = GuiData::ePAUSE;
 		}
+		ImGui::End();
+	}
+
+	for (size_t i = 0; i < gui.errorMessages.size(); i++) {
+		ImGuiWindowFlags flags = ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoDocking;
+		ImGui::Begin(("ErrorMsg##" + std::to_string(i)).c_str(), 0, flags);
+		ImGui::Text(gui.errorMessages[i].c_str());
 		ImGui::End();
 	}
 
@@ -505,6 +516,17 @@ void gameLoop(RenderData& render, WorldData& world, NetworkData& network, GuiDat
 		auto startFrame = std::chrono::high_resolution_clock::now();
 
 		logger::beginRegion("update");
+		{ // handle client errors
+			std::lock_guard<std::mutex> lk(network.mClient);
+			for (ClientError& error : network.clientErrorStack) {
+				pushErrorPopup(gui, error.description);
+				// process error actions
+				if (error.actions & eSWITCH_MAIN_MENU)
+					switchToMainMenu(world, render);
+			}
+			network.clientErrorStack.clear();
+		}
+
 		switch (world.status)
 		{
 		case eGAME:
@@ -557,6 +579,9 @@ void gameLoop(RenderData& render, WorldData& world, NetworkData& network, GuiDat
 }
 
 void switchToMainMenu(WorldData& world, RenderData& render) {
+	std::lock_guard<std::mutex> lk(world.mPlayer);
+	world.game.players.clear(); // delete all players when leaving the game
+
 	world.wpScene = world.mainMenu.spScene;
 	world.wpPlayer = world.mainMenu.spPlayer;
 	render.pbRender->changeScene(world.mainMenu.spScene.get());

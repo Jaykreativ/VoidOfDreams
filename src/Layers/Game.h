@@ -26,6 +26,9 @@
 #include "Shares/Controls.h"
 #include "Shares/World.h"
 #include "Shares/Render.h"
+#include "Shares/GuiData.h"
+
+void pushErrorPopup(GuiData& gui, std::string msg);
 
 void switchToMainMenu(WorldData& world, RenderData& render);
 

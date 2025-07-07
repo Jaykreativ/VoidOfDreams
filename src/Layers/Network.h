@@ -1,7 +1,9 @@
 #pragma once
 
 #include "Shares/NetworkData.h"
+#include "Shares/Render.h"
 #include "Shares/World.h"
+#include "Shares/GuiData.h"
 
 namespace client {
 	bool isRunning();

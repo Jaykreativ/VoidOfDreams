@@ -59,6 +59,7 @@ namespace client {
 		client::_isRunning = true;
 
 		std::lock_guard<std::mutex> lk(network.mNetwork);
+		network.clientErrorStack.clear();
 
 		addrinfo hints;
 		addrinfo* serverInfo;
@@ -129,7 +130,7 @@ namespace client {
 		return true;
 	}
 
-	void stop(NetworkData& network, WorldData& world) {
+	void stop(NetworkData& network) {
 		if (!client::_isRunning)
 			return;
 		client::_isRunning = false;
@@ -144,20 +145,24 @@ namespace client {
 		sock::closeSocket(_serverSocket.stream);
 		sock::closeSocket(_serverSocket.dgram);
 
-		{ // delete all players as the client is being terminated
-			std::lock_guard<std::mutex> lk(world.mPlayer);
-			world.game.players.clear();
-		}
-
 		printf("client done\n");
 	}
 
 	// terminates the client from a client thread
-	void terminateInternal(NetworkData& network, WorldData& world) {
+	void terminateInternal(NetworkData& network) {
 		std::lock_guard<std::mutex> lk(_mTerminate);
 		_shouldStop = true;
 		_receiver.detach();
-		stop(network, world);
+		stop(network);
+	}
+
+	void pushError(NetworkData& network, ClientErrorAction action, std::string description) {
+		printf("%s\n", description.c_str());
+
+		std::lock_guard<std::mutex> lk(network.mClient);
+		network.clientErrorStack.push_back({ action, description });
+		if (action & eTERMINATE_CLIENT)
+			terminateInternal(network);
 	}
 
 	void handlePacket(NetworkData& network, WorldData& world, std::shared_ptr<Packet> spPacket, int type) {
@@ -256,8 +261,7 @@ namespace client {
 	// return false if failed
 	bool handlePoll(NetworkData& network, WorldData& world) {
 		if (_pollfds[0].revents & POLLHUP) {
-			printf("server closed connection\n");
-			terminateInternal(network, world);
+			pushError(network, eTERMINATE_CLIENT | eSWITCH_MAIN_MENU, "server closed connection");
 			return false;
 		}
 		if (_pollfds[0].revents & POLLIN) {
@@ -376,7 +380,7 @@ namespace client {
 
 bool runClient(NetworkData& network, WorldData& world) {
 	if (!client::start(network)) {
-		client::stop(network, world);
+		client::stop(network);
 		return false;
 	}
 	client::_shouldStop = false;
@@ -393,7 +397,7 @@ void terminateClient(NetworkData& network, WorldData& world) {
 	//client::sender.join();
 	if(client::_receiver.joinable())
 		client::_receiver.join();
-	client::stop(network, world);
+	client::stop(network);
 	client::_shouldStop = false;
 }
 

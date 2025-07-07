@@ -103,8 +103,8 @@ public:
 	void syncDamage(Player& damager, float damage, float newHealth);
 
 private:
-	bool m_recvInput = false;
-	bool m_active = false;
+	bool m_recvInput = false; // UI can block input
+	bool m_active = false; // switches between active and spectator mode TODO integrate into player modes
 
 	enum Mode {
 		eWEAPON = 0x0,

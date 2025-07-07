@@ -52,6 +52,8 @@ struct GuiData {
 
 	HudData hud;
 
+	std::vector<std::string> errorMessages = {};
+
 	glm::vec2 statsOffsetRelative = { 1, 0.4 };
 	glm::vec2 statsOffsetUpperRight = { -10, 0 };
 	glm::vec2 statsSize = { 100, 70 };
