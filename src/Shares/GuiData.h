@@ -40,7 +40,9 @@ struct GuiData {
 		eNONE = 0x0,
 		eGAME = 0x1,
 		ePAUSE = 0x2,
-		eSETTINGS = 0x4
+		eSETTINGS = 0x4,
+		eHOST = 0x8,
+		eMATCHMAKING = 0x10
 	} state = ePAUSE;
 
 	//font
@@ -66,4 +68,6 @@ struct GuiData {
 	glm::vec2 pauseButtonSize = { 320, 64 };
 	float pauseOuterAlpha = 0.2;
 	float pauseAlpha = 0.5;
+
+	int matchmakingSelectedRoomIndex = -1;
 };

@@ -268,6 +268,83 @@ void drawSettings(WorldData& world, NetworkData& network, GuiData& gui) {
 	ImGui::End();
 }
 
+void drawHostInterface(GuiData& gui) {
+	ImGui::Begin("Host");
+
+	glm::vec2 region = ImGui::GetContentRegionAvail();
+	ImGui::BeginChild("Inner Menu", region - glm::vec2(0, 25));
+
+	static const uint32_t bufSize = 50;
+	static char buf[bufSize] = "Room";
+	ImGui::InputText("Name", buf, bufSize);
+
+	if (ImGui::Button("Host")) {
+
+	}
+
+	ImGui::EndChild();
+
+	if (ImGui::Button("Back") || ImGui::IsKeyPressed(ImGuiKey_Escape)) {
+		gui.state = GuiData::ePAUSE;
+	}
+	ImGui::End();
+}
+
+void drawMatchmakingInterface(GuiData& gui) {
+	ImGui::Begin("Matchmaking");
+
+	glm::vec2 region = ImGui::GetContentRegionAvail();
+	ImGui::BeginChild("Inner Menu", region - glm::vec2(0, 25));
+
+	int oldIndex = gui.matchmakingSelectedRoomIndex;
+	region = ImGui::GetContentRegionAvail();
+	float width = region.x;
+	float height = region.y;
+	ImGuiChildFlags flags = 0;
+	if (oldIndex >= 0) {
+		width = 0;
+		flags |= ImGuiChildFlags_Border;
+		flags |= ImGuiChildFlags_AutoResizeX;
+	}
+	ImGui::BeginChild("RoomSelection", {width, height}, flags);
+	ImGui::SeparatorText("Rooms");
+
+	for (uint32_t i = 0; i < 4; i++) {
+		bool selected = gui.matchmakingSelectedRoomIndex == i;
+		if (ImGui::Selectable(("Room" + std::to_string(i)).c_str(), selected)) {
+			if (selected)
+				gui.matchmakingSelectedRoomIndex = -1;
+			else
+				gui.matchmakingSelectedRoomIndex = i;
+		}
+	}
+	ImGui::EndChild();
+
+	if (oldIndex >= 0) {
+		ImGui::SameLine();
+		region = ImGui::GetContentRegionAvail();
+		ImGui::BeginChild("RoomInfo", region);
+
+		ImGui::SeparatorText("Players");
+		for (uint32_t i = 0; i < 4; i++) {
+			ImGui::Text("Player%i", i);
+		}
+
+		if (ImGui::Button("Join")) {
+
+		}
+
+		ImGui::EndChild();
+	}
+
+	ImGui::EndChild();
+
+	if (ImGui::Button("Back") || ImGui::IsKeyPressed(ImGuiKey_Escape)) {
+		gui.state = GuiData::ePAUSE;
+	}
+	ImGui::End();
+}
+
 void drawErrorMessages(GuiData& gui) {
 	ImGui::PushFont(gui.textFont); // display error messages
 	for (size_t i = 0; i < gui.errorMessages.size(); i++) {
@@ -459,6 +536,18 @@ void updateMainMenu(WorldData& world, RenderData& render, NetworkData& network, 
 
 	if (oldState & GuiData::eSETTINGS) {
 		drawSettings(world, network, gui);
+	}
+
+	if (ImGui::IsKeyPressed(ImGuiKey_H))
+		gui.state = GuiData::eHOST;
+	if (oldState & GuiData::eHOST) {
+		drawHostInterface(gui);
+	}
+
+	if (ImGui::IsKeyPressed(ImGuiKey_M))
+		gui.state = GuiData::eMATCHMAKING;
+	if (oldState & GuiData::eMATCHMAKING) {
+		drawMatchmakingInterface(gui);
 	}
 
 	drawErrorMessages(gui);
