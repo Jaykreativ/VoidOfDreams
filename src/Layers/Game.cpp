@@ -2,6 +2,7 @@
 
 #include "Log.h"
 #include "Layers/Network.h"
+#include "Layers/NetworkHandler.h"
 #include "Shares/NetworkData.h"
 #include "Shares/Render.h"
 #include "Shares/World.h"
@@ -781,6 +782,11 @@ void resize(Zap::ResizeEvent& eventParams, void* customParams) {
 }
 
 void runGame() {
+	NetworkHandlerServer server(12525);
+	Sleep(100);
+	NetworkHandlerClient client("127.0.0.1", 12525);
+	Sleep(1000);
+	return;
 	RenderData render = {};
 	WorldData world = {};
 	NetworkData network = {};
