@@ -23,6 +23,28 @@ void NetworkHandler::assertSocket(int val, std::string msg) {
 	}
 }
 
+void NetworkHandler::recvIncoming(int socketStream) {
+	sockaddr_storage addr;
+	int addrlen = sizeof(sockaddr_storage);
+
+	int type;
+	auto spPacket = Packet::receiveFrom(type, socketStream);
+
+	std::lock_guard<std::mutex> lk(m_mIncomingPackets);
+	m_incomingPackets.push_back({ type, spPacket });
+}
+
+void NetworkHandler::recvIncomingDgram(int socketDgram) {
+	sockaddr_storage addr;
+	int addrlen = sizeof(sockaddr_storage);
+
+	int type;
+	auto spPacket = Packet::receiveFromDgram(type, socketDgram, reinterpret_cast<sockaddr*>(&addr), &addrlen);
+
+	std::lock_guard<std::mutex> lk(m_mIncomingPackets);
+	m_incomingPackets.push_back({ type, spPacket });
+}
+
 NetworkHandlerServer::NetworkHandlerServer(uint16_t port)
 	: NetworkHandler()
 {
@@ -45,7 +67,7 @@ NetworkHandlerServer::~NetworkHandlerServer() {
 	assertSocket(sock::closeSocket(m_serverSocket.stream), "closeSocket(serverSocket.stream)");
 	assertSocket(sock::closeSocket(m_serverSocket.dgram), "closeSocket(serverSocket.dgram)");
 	for(auto& clientSocket : m_clientSockets)
-		assertSocket(sock::closeSocket(m_serverSocket.stream), "closeSocket(clientSocket.stream)");
+		assertSocket(sock::closeSocket(clientSocket.stream), "closeSocket(clientSocket.stream)");
 	m_clientSockets.clear();
 
 	m_pollfds.clear();
@@ -72,6 +94,20 @@ void NetworkHandlerServer::acceptClient() {
 	printf("client connected: %s\n", sock::addrToPresentation(reinterpret_cast<sockaddr*>(&clientAddr)).c_str());
 }
 
+void NetworkHandlerServer::disconnectClient(int index) {
+	SocketData socket = m_clientSockets[index];
+	printf("client disconnected: %s\n", sock::addrToPresentation(reinterpret_cast<sockaddr*>(&socket.addr)).c_str());
+
+	if (sock::closeSocket(socket.stream) < 0) {
+		sock::printLastError("close(stream)");
+		exit(sock::lastError());
+	}
+
+	m_clientSockets.erase(m_clientSockets.begin() + index); // delete the clients socket data
+	m_pollfds.erase(m_pollfds.begin() + index + 1); // delete the clients pollfd, +1 for the server pollfd
+	m_eraseOffset++;
+}
+
 void NetworkHandlerServer::handlePoll(int pollCount) {
 	int checkedPollCount = 0;
 
@@ -79,6 +115,30 @@ void NetworkHandlerServer::handlePoll(int pollCount) {
 	if (serverStreamPollfd.revents & POLLIN) { // accept client
 		acceptClient();
 		checkedPollCount++;
+	}
+	pollfd serverDgramPollfd = m_pollfds[1];
+	if (serverDgramPollfd.revents & POLLIN) { // recvClientDgram
+		int type = 0;
+		recvIncomingDgram(m_serverSocket.dgram);
+		checkedPollCount++;
+	}
+
+	// go through all clients
+	// i is the index of the client in clientSockets
+	m_eraseOffset = 0; // offset the index by the times erase was used as erase shifts all remaining indices by -1
+	for (size_t i = 0; i < m_pollfds.size() - 2; i++) { // go through all client sockets
+		pollfd poll = m_pollfds[i + 2]; // +2 for the 2 server sockets
+		if (poll.revents & POLLHUP) {
+			disconnectClient(i - m_eraseOffset);
+		}
+		if (poll.revents & POLLIN) {
+			recvIncoming(m_clientSockets[i - m_eraseOffset].stream);
+		}
+
+		if (poll.revents & (POLLIN | POLLHUP)) // add checked if poll had events
+			checkedPollCount++;
+		if (checkedPollCount >= pollCount) // return when all polls are checked
+			return;
 	}
 }
 
@@ -170,6 +230,28 @@ NetworkHandlerClient::NetworkHandlerClient(std::string ip, uint16_t port)
 	setupServerSocket(serverInfo->ai_family, serverInfo->ai_protocol, serverInfo->ai_addr, serverInfo->ai_addrlen);
 
 	freeaddrinfo(serverInfo);
+
+	m_pollStream.fd = m_serverSocket.stream;
+	m_pollStream.events = POLLIN;
+	m_pollStream.revents = 0;
+	m_pollDgram.fd = m_serverSocket.dgram;
+	m_pollDgram.events = POLLIN;
+	m_pollDgram.revents = 0;
+
+	m_recvLoopThread = std::thread(&NetworkHandlerClient::recvLoop, this);
+}
+
+NetworkHandlerClient::~NetworkHandlerClient() {
+	{
+		std::lock_guard<std::mutex> lk(m_mFlags);
+		m_isValid = false; // invalidate object after destruction
+	}
+
+	if (m_recvLoopThread.joinable())
+		m_recvLoopThread.join();
+
+	assertSocket(sock::closeSocket(m_serverSocket.stream), "closeSocket(serverSocket.stream)");
+	assertSocket(sock::closeSocket(m_serverSocket.dgram), "closeSocket(serverSocket.dgram)");
 }
 
 void NetworkHandlerClient::setupServerSocket(int family, int protocol, sockaddr* addr, int addrlen) {
@@ -185,6 +267,23 @@ void NetworkHandlerClient::setupServerSocket(int family, int protocol, sockaddr*
 	assertSocket(connect(m_serverSocket.stream, addr, addrlen), "connect(stream)");
 }
 
-void NetworkHandlerClient::recvLoop() {
+void NetworkHandlerClient::handlePoll(int pollCount) {
+	if (m_pollStream.revents & POLLIN) { // received a tcp packet
+		recvIncoming(m_serverSocket.stream);
+	}
+	if (m_pollDgram.revents & POLLIN) { // received a udp packet
+		recvIncomingDgram(m_serverSocket.dgram);
+	}
+}
 
+void NetworkHandlerClient::recvLoop() {
+	while (shouldRunThreads()) {
+		pollfd pollfds[2] = { m_pollStream, m_pollDgram };
+		int pollCount = sock::pollState(pollfds, 2, 100); // fetch events of the given pollfds
+		if (pollCount == 0)
+			continue;
+		assertSocket(pollCount, "poll");
+
+		handlePoll(pollCount);
+	}
 }

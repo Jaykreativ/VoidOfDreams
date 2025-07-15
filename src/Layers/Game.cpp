@@ -784,8 +784,11 @@ void resize(Zap::ResizeEvent& eventParams, void* customParams) {
 void runGame() {
 	NetworkHandlerServer server(12525);
 	Sleep(100);
-	NetworkHandlerClient client("127.0.0.1", 12525);
-	Sleep(1000);
+	{
+		NetworkHandlerClient client("127.0.0.1", 12525);
+		Sleep(1000);
+	}
+	Sleep(500);
 	return;
 	RenderData render = {};
 	WorldData world = {};
