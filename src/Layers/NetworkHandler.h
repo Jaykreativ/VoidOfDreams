@@ -3,6 +3,8 @@
 #include "SockUitls.h"
 #include "Objects/Packets.h"
 
+#include "Zap/UUID.h"
+
 #include <cstdint>
 #include <string>
 #include <mutex>
@@ -25,6 +27,14 @@ struct SocketData { // combine the socket and its address into one type, cause t
 	}
 };
 
+struct IncomingPacket {
+	bool isDgram;
+	int type;
+	std::shared_ptr<Packet> spPacket;
+	int streamSocket; // if isDgram is true this socket is invalid
+	sockaddr_storage addr; // if isDgram is false this address is invalid
+};
+
 class NetworkHandler {
 public:
 	NetworkHandler();
@@ -38,12 +48,11 @@ protected:
 	// multithreading
 	std::mutex m_mFlags;
 
-	struct IncomingPacket {
-		int type;
-		std::shared_ptr<Packet> spPacket;
-	};
+
 	std::mutex m_mIncomingPackets;
 	std::vector<IncomingPacket> m_incomingPackets = {};
+
+	void terminateThreads();
 
 	bool shouldRunThreads();
 
@@ -52,6 +61,9 @@ protected:
 	void recvIncoming(int socketStream);
 
 	void recvIncomingDgram(int socketDgram);
+
+	std::thread m_loopThread;
+	virtual void loop() = 0;
 
 	std::thread m_recvLoopThread;
 	virtual void recvLoop() = 0;
@@ -70,19 +82,19 @@ private:
 	std::vector<pollfd> m_pollfds = {};
 
 	SocketData m_serverSocket = {};
-	std::mutex m_mClientSockets;
-	std::vector<SocketData> m_clientSockets = {}; // stores clientsockets to send the worldstate to
+	std::unordered_map<Zap::UUID, SocketData> m_clientSocketMap = {}; // stores clientsockets to send the worldstate to
 
 	uint32_t m_eraseOffset = 0;
 
 	void setupServerSocket(uint16_t port);
 
-	std::thread m_loopThread;
+	void handleIncomingPackets();
+
 	void loop();
 
 	void acceptClient();
 
-	void disconnectClient(int index);
+	//void disconnectClient(int index);
 
 	void handlePoll(int pollCount);
 
@@ -94,13 +106,26 @@ public:
 	NetworkHandlerClient(std::string ip, uint16_t port);
 	~NetworkHandlerClient();
 
+	// thread safe function
+	// returns true if the client is fully registered by the server
+	bool isFullyConnected();
 private:
-	pollfd m_pollDgram;
-	pollfd m_pollStream;
+	Zap::UUID m_id;
+
+	std::mutex m_mConnectionStatus;
+	bool m_isDgramRegistered = false; // connection status
+	bool m_isStreamRegistered = false;
+
+	pollfd m_pollDgram = {};
+	pollfd m_pollStream = {};
 
 	SocketData m_serverSocket = {};
 
 	void setupServerSocket(int family, int protocol, sockaddr* addr, int addrlen);
+
+	void handleIncomingPackets();
+
+	void loop();
 
 	void handlePoll(int pollCount);
 

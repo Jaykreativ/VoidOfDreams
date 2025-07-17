@@ -56,6 +56,59 @@ void Packet::sendToDgram(int socket, const sockaddr* addr, int flags) {
 	}
 }
 
+void createPacket(int type, std::shared_ptr<Packet>& spPacket) {
+	switch (type)
+	{
+		//case eMESSAGE: {
+		//	spPacket = std::make_shared<MessagePacket>();
+		//	spPacket->unpackData(buf, dataSize);
+		//	break;
+		//}
+	case eHello: {
+		spPacket = std::make_shared<HelloPacket>();
+		break;
+	}
+	case eWelcome: {
+		spPacket = std::make_shared<WelcomePacket>();
+		break;
+	}
+	case eCONNECT: {
+		spPacket = std::make_shared<ConnectPacket>();
+		break;
+	}
+	case eUDP_CONNECT: {
+		spPacket = std::make_shared<UDPConnectPacket>();
+		break;
+	}
+	case eDISCONNECT: {
+		spPacket = std::make_shared<DisconnectPacket>();
+		break;
+	}
+	case eMOVE: {
+		spPacket = std::make_shared<MovePacket>();
+		break;
+	}
+	case eDamage: {
+		spPacket = std::make_shared<DamagePacket>();
+		break;
+	}
+	case eSpawn: {
+		spPacket = std::make_shared<SpawnPacket>();
+		break;
+	}
+	case eDeath: {
+		spPacket = std::make_shared<DeathPacket>();
+		break;
+	}
+	case eRay: {
+		spPacket = std::make_shared<RayPacket>();
+		break;
+	}
+	default:
+		break;
+	}
+}
+
 std::shared_ptr<Packet> Packet::receiveFrom(int& type, int socket, int flags) {
 	char* buf = new char[headerSize()];
 	int bytesRead = recv(socket, buf, headerSize(), 0); // get just header
@@ -78,48 +131,7 @@ std::shared_ptr<Packet> Packet::receiveFrom(int& type, int socket, int flags) {
 	}
 
 	std::shared_ptr<Packet> spPacket;
-	switch (type)
-	{
-		//case eMESSAGE: {
-		//	spPacket = std::make_shared<MessagePacket>();
-		//	spPacket->unpackData(buf, dataSize);
-		//	break;
-		//}
-	case eCONNECT: {
-		spPacket = std::make_shared<ConnectPacket>();
-		break;
-	}
-	case eUDP_CONNECT: {
-		spPacket = std::make_shared<UDPConnectPacket>();
-		break;
-	}
-	case eDISCONNECT: {
-		spPacket = std::make_shared<DisconnectPacket>();
-		break;
-	}
-	case eMOVE: {
-		spPacket = std::make_shared<MovePacket>();
-		break;
-	}
-	case eDamage: {
-		spPacket = std::make_shared<DamagePacket>();
-		break;
-	}
-	case eSpawn: {
-		spPacket = std::make_shared<SpawnPacket>();
-		break;
-	}
-	case eDeath: {
-		spPacket = std::make_shared<DeathPacket>();
-		break;
-	}
-	case eRay: {
-		spPacket = std::make_shared<RayPacket>();
-		break;
-	}
-	default:
-		break;
-	}
+	createPacket(type, spPacket);
 	spPacket->unpackGeneralData(constBuf);
 	spPacket->unpackData(constBuf, dataSize-spPacket->generalDataSize());
 	delete[] buf;
@@ -140,48 +152,7 @@ std::shared_ptr<Packet> Packet::receiveFromDgram(int& type, int socket, sockaddr
 	constBuf += headerSize();
 
 	std::shared_ptr<Packet> spPacket;
-	switch (type)
-	{
-		//case eMESSAGE: {
-		//	spPacket = std::make_shared<MessagePacket>();
-		//	spPacket->unpackData(ptr, dataSize);
-		//	break;
-		//}
-	case eCONNECT: {
-		spPacket = std::make_shared<ConnectPacket>();
-		break;
-	}
-	case eUDP_CONNECT: {
-		spPacket = std::make_shared<UDPConnectPacket>();
-		break;
-	}
-	case eDISCONNECT: {
-		spPacket = std::make_shared<DisconnectPacket>();
-		break;
-	}
-	case eMOVE: {
-		spPacket = std::make_shared<MovePacket>();
-		break;
-	}
-	case eDamage: {
-		spPacket = std::make_shared<DamagePacket>();
-		break;
-	}
-	case eSpawn: {
-		spPacket = std::make_shared<SpawnPacket>();
-		break;
-	}
-	case eDeath: {
-		spPacket = std::make_shared<DeathPacket>();
-		break;
-	}
-	case eRay: {
-		spPacket = std::make_shared<RayPacket>();
-		break;
-	}
-	default:
-		break;
-	}
+	createPacket(type, spPacket);
 	spPacket->unpackGeneralData(constBuf);
 	spPacket->unpackData(constBuf, dataSize - spPacket->generalDataSize());
 	return spPacket;
@@ -197,7 +168,7 @@ uint32_t Packet::headerSize() {
 }
 
 uint32_t Packet::generalDataSize() {
-	return sizeof(uint32_t) + username.size();
+	return 0;
 }
 
 void Packet::packHeader(char* buf, const int type) {
@@ -214,12 +185,9 @@ void Packet::unpackHeader(const char* buf, uint32_t& size, int& type) {
 
 void Packet::packGeneralData(char*& buf, const int type) {
 	packHeader(buf, type); buf += headerSize();
-	packString(buf, username);
 }
 
-void Packet::unpackGeneralData(const char*& buf) {
-	username = unpackString(buf);
-}
+void Packet::unpackGeneralData(const char*& buf) {}
 
 // MessagePacket
 //uint32_t MessagePacket::dataSize() {
@@ -243,6 +211,36 @@ void Packet::unpackGeneralData(const char*& buf) {
 //		uint32_t msgSize = ntohl(reinterpret_cast<const uint32_t*>(buf)[0]); buf += sizeof(uint32_t);
 //		msg = std::string(buf, msgSize); buf += msgSize;
 //}
+
+// HelloPacket
+uint32_t HelloPacket::dataSize() {
+	return sizeof(uint64_t);
+}
+
+void HelloPacket::pack(char* buf) {
+	packGeneralData(buf, eHello);
+	/* data */
+	reinterpret_cast<uint64_t*>(buf)[0] = htonll(id);
+}
+
+void HelloPacket::unpackData(const char* buf, uint32_t size) {
+	id = ntohf(reinterpret_cast<const uint64_t*>(buf)[0]);
+}
+
+// WelcomePacket
+uint32_t WelcomePacket::dataSize() {
+	return sizeof(bool);
+}
+
+void WelcomePacket::pack(char* buf) {
+	packGeneralData(buf, eWelcome);
+	/* data */
+	reinterpret_cast<bool*>(buf)[0] = fromDgram;
+}
+
+void WelcomePacket::unpackData(const char* buf, uint32_t size) {
+	fromDgram = reinterpret_cast<const bool*>(buf)[0];
+}
 
 // ConnectPacket
 uint32_t ConnectPacket::dataSize() {

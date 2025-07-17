@@ -2,6 +2,8 @@
 
 #include "SockUitls.h"
 
+#include "Zap/UUID.h"
+
 #include "glm.hpp"
 
 #include <string>
@@ -10,13 +12,17 @@
 #define UDP_PACKET_BUFFER_SIZE 1472
 
 enum PacketType {
-	eMESSAGE = 1,
-	eCONNECT = 2,
-	eDISCONNECT = 3,
-	eMOVE = 4,
-	eDamage = 5,
-	eSpawn = 6,
-	eDeath = 7,
+	eHello = 1,
+	eWelcome = 2,
+
+	// useless remove
+	eMESSAGE = 10,
+	eCONNECT = 20,
+	eDISCONNECT = 30,
+	eMOVE = 40,
+	eDamage = 50,
+	eSpawn = 60,
+	eDeath = 70,
 	eUDP_CONNECT = 8,
 	eRay = 100
 };
@@ -94,6 +100,38 @@ protected:
 //	// takes just the data part
 //	void unpackData(const char* buf, uint32_t size);
 //};
+
+class HelloPacket : public Packet {
+	friend class Packet;
+public:
+	// data
+	Zap::UUID id;
+
+protected:
+	uint32_t dataSize();
+
+	// packs the data into the given buffer, buffer needs to have the same size as packet.fullSize()
+	void pack(char* buf);
+
+	// takes just the data part
+	void unpackData(const char* buf, uint32_t size);
+};
+
+class WelcomePacket : public Packet {
+	friend class Packet;
+public:
+	// data
+	bool fromDgram;
+
+protected:
+	uint32_t dataSize();
+
+	// packs the data into the given buffer, buffer needs to have the same size as packet.fullSize()
+	void pack(char* buf);
+
+	// takes just the data part
+	void unpackData(const char* buf, uint32_t size);
+};
 
 class ConnectPacket : public Packet {
 	friend class Packet;
