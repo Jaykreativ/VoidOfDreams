@@ -14,6 +14,8 @@
 enum PacketType {
 	eHello = 1,
 	eWelcome = 2,
+	eReplication = 3,
+	eDisconnect = 4,
 
 	// useless remove
 	eMESSAGE = 10,
@@ -124,6 +126,40 @@ public:
 	bool fromDgram;
 
 protected:
+	uint32_t dataSize();
+
+	// packs the data into the given buffer, buffer needs to have the same size as packet.fullSize()
+	void pack(char* buf);
+
+	// takes just the data part
+	void unpackData(const char* buf, uint32_t size);
+};
+
+class ReplicationPacket : public Packet {
+	friend class Packet;
+public:
+	enum Type {
+		eCREATE,
+		eUPDATE,
+		eDESTROY
+	};
+
+	void write(float data);
+
+	float readf();
+
+	//data
+	uint32_t type;
+	uint32_t classId = 0;
+	uint32_t status = 0;
+	Zap::UUID objectId = 0;
+
+protected:
+	size_t m_readOffset = 0;
+
+	// data
+	std::vector<char> m_data = {};
+
 	uint32_t dataSize();
 
 	// packs the data into the given buffer, buffer needs to have the same size as packet.fullSize()

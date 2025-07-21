@@ -242,6 +242,54 @@ void WelcomePacket::unpackData(const char* buf, uint32_t size) {
 	fromDgram = reinterpret_cast<const bool*>(buf)[0];
 }
 
+// ReplicationPacket
+uint32_t ReplicationPacket::dataSize() {
+	return sizeof(uint32_t)*3 + sizeof(Zap::UUID) + m_data.size();
+}
+
+void ReplicationPacket::write(float val) {
+	auto oldSize = m_data.size();
+	auto nval = htonf(val);
+	m_data.resize(m_data.size() + sizeof(nval));
+	memcpy(&m_data[oldSize], &val, sizeof(nval));
+}
+
+float ReplicationPacket::readf() {
+	float val;
+	size_t readSize = m_readOffset + sizeof(val);
+	assert(m_data.size() >= readSize);
+	memcpy(&val, &m_data[m_readOffset], sizeof(val));
+	m_readOffset += sizeof(val);
+	return val;
+}
+
+void ReplicationPacket::pack(char* buf) {
+	packGeneralData(buf, eWelcome);
+	/* data */
+	uint32_t* uintBuf = reinterpret_cast<uint32_t*>(buf);
+	uintBuf[0] = htonl(type);
+	uintBuf[1] = htonl(classId);
+	uintBuf[2] = htonl(status);
+	uint64_t* idBuf = reinterpret_cast<uint64_t*>(&uintBuf[3]);
+	idBuf[0] = htonll(objectId);
+	buf = reinterpret_cast<char*>(&idBuf[2]);
+	if(m_data.size() > 0)
+		memcpy(buf, m_data.data(), m_data.size());
+}
+
+void ReplicationPacket::unpackData(const char* buf, uint32_t size) {
+	const uint32_t* uintBuf = reinterpret_cast<const uint32_t*>(buf);
+	type = ntohl(uintBuf[0]);
+	classId = ntohl(uintBuf[1]);
+	status = ntohl(uintBuf[2]);
+	const uint64_t* idBuf = reinterpret_cast<const uint64_t*>(buf);
+	objectId = ntohl(uintBuf[0]);
+	buf = reinterpret_cast<const char*>(&idBuf[1]);
+	size_t dataSize = size - sizeof(uint32_t) * 3 - sizeof(Zap::UUID);
+	m_data.resize(dataSize);
+	memcpy(m_data.data(), buf, dataSize);
+}
+
 // ConnectPacket
 uint32_t ConnectPacket::dataSize() {
 	return 0;
