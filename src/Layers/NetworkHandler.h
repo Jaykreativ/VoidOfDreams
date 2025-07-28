@@ -1,6 +1,7 @@
 #pragma once
 
 #include "SockUitls.h"
+#include "Layers/ReplicationManager.h"
 #include "Objects/Packets.h"
 
 #include "Zap/UUID.h"
@@ -84,6 +85,8 @@ private:
 	SocketData m_serverSocket = {};
 	std::unordered_map<Zap::UUID, SocketData> m_clientSocketMap = {}; // stores clientsockets to send the worldstate to
 
+	ReplicationManagerServer m_replicationManager;
+
 	uint32_t m_eraseOffset = 0;
 
 	void setupServerSocket(uint16_t port);
@@ -109,6 +112,8 @@ public:
 	// thread safe function
 	// returns true if the client is fully registered by the server
 	bool isFullyConnected();
+
+	void replicateWorldState(WorldData& world);
 private:
 	Zap::UUID m_id;
 
@@ -121,7 +126,14 @@ private:
 
 	SocketData m_serverSocket = {};
 
+	std::mutex m_mReplicationManager;
+	ReplicationManagerClient m_replicationManager;
+
 	void setupServerSocket(int family, int protocol, sockaddr* addr, int addrlen);
+
+	void handleWelcomePacket(IncomingPacket& inPacket);
+
+	void handleReplicationPacket(IncomingPacket& inPacket);
 
 	void handleIncomingPackets();
 

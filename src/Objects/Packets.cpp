@@ -72,6 +72,10 @@ void createPacket(int type, std::shared_ptr<Packet>& spPacket) {
 		spPacket = std::make_shared<WelcomePacket>();
 		break;
 	}
+	case eReplication: {
+		spPacket = std::make_shared<ReplicationPacket>();
+		break;
+	}
 	case eCONNECT: {
 		spPacket = std::make_shared<ConnectPacket>();
 		break;
@@ -264,7 +268,7 @@ float ReplicationPacket::readf() {
 }
 
 void ReplicationPacket::pack(char* buf) {
-	packGeneralData(buf, eWelcome);
+	packGeneralData(buf, eReplication);
 	/* data */
 	uint32_t* uintBuf = reinterpret_cast<uint32_t*>(buf);
 	uintBuf[0] = htonl(type);

@@ -2,6 +2,23 @@
 
 #include "Log.h"
 
+ObjectCreationRegistry& ObjectCreationRegistry::get() {
+	static ObjectCreationRegistry registry;
+	return registry;
+}
+
+void ObjectCreationRegistry::addFunction(uint32_t classId, ObjectCreationFunction creationFunction) {
+	m_registry[classId] = creationFunction;
+}
+
+ReplicationObject* ObjectCreationRegistry::create(uint32_t classId, WorldData& world) {
+	if (!m_registry.count(classId)) {
+		logger::error("ObjectCreationRegistry::create(): creation function for class not registered");
+		return nullptr;
+	}
+	return m_registry.at(classId)(world);
+}
+
 bool LinkingContext::hasObject(ReplicationObject* pObject) {
 	return m_objectToIdMap.count(pObject);
 }
@@ -52,7 +69,7 @@ void ReplicationManagerClient::addReplication(std::shared_ptr<ReplicationPacket>
 	m_replications.push_back(spPacket);
 }
 
-void ReplicationManagerClient::processReplication() {
+void ReplicationManagerClient::processReplication(WorldData& world) {
 
 }
 
@@ -63,9 +80,9 @@ std::shared_ptr<ReplicationPacket> ReplicationManagerServer::replicateCreate(Rep
 	auto spPacket = std::make_shared<ReplicationPacket>();
 	spPacket->type = ReplicationPacket::eCREATE;
 	spPacket->classId = object->classId();
-	spPacket->status = std::numeric_limits<uint32_t>::max();
+	spPacket->status = UINT32_MAX;
 	spPacket->objectId = m_linkingContext.getId(object, true);
-	object->writeToReplication(spPacket, std::numeric_limits<uint32_t>::max()); // every bit is enabled
+	object->writeToReplication(spPacket, UINT32_MAX); // every bit is enabled
 	return spPacket;
 }
 

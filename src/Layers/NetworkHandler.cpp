@@ -107,10 +107,65 @@ void NetworkHandlerServer::handleIncomingPackets() {
 	m_incomingPackets.clear();
 }
 
+// Tests
+class TestObject : public ReplicationObject {
+public:
+	float val = 0;
+
+private:
+	uint32_t classId() { return 'TEST'; }
+
+	void readFromReplication(std::shared_ptr<ReplicationPacket> spPacket, uint32_t status) {
+		if (spPacket->status) {
+			printf("Test read %f\n", spPacket->readf());
+		}
+	}
+
+	void writeToReplication(std::shared_ptr<ReplicationPacket> spPacket, uint32_t status) {
+		if (spPacket->status) {
+			spPacket->write(val);
+		}
+	}
+};
+//
+
 void NetworkHandlerServer::loop() {
+	// Tests
+	TestObject obj;
+	obj.val = 2.5;
+
+	int counter = 0;
+	std::vector<std::shared_ptr<ReplicationPacket>> hector;
+	//
 	while (shouldRunThreads()) {
 		Sleep(1);
 		handleIncomingPackets();
+
+		// Tests
+		if (counter == 10) {
+			printf("10\n");
+			hector.push_back(m_replicationManager.replicateCreate(&obj));
+		}
+		if (counter == 60) {
+			printf("60\n");
+			hector.push_back(m_replicationManager.replicateUpdate(&obj, 0));
+			obj.val = 5;
+		}
+		if (counter == 110) {
+			printf("110\n");
+			hector.push_back(m_replicationManager.replicateUpdate(&obj, 1));
+		}
+		if (counter == 160) {
+			printf("160\n");
+			hector.push_back(m_replicationManager.replicateDestroy(&obj));
+		}
+
+		for (auto& clientPair : m_clientSocketMap)
+			for (auto& packet : hector)
+				packet->sendTo(clientPair.second.stream);
+		hector.clear();
+		counter++;
+		//
 	}
 }
 
@@ -289,6 +344,11 @@ bool NetworkHandlerClient::isFullyConnected() {
 	return m_isDgramRegistered && m_isStreamRegistered;
 }
 
+void NetworkHandlerClient::replicateWorldState(WorldData& world) {
+	std::lock_guard<std::mutex> lk(m_mReplicationManager);
+	m_replicationManager.processReplication(world);
+}
+
 void NetworkHandlerClient::setupServerSocket(int family, int protocol, sockaddr* addr, int addrlen) {
 	m_serverSocket.stream = socket(family, SOCK_STREAM, protocol);
 	assertSocket(m_serverSocket.stream, "socket(stream)");
@@ -302,25 +362,39 @@ void NetworkHandlerClient::setupServerSocket(int family, int protocol, sockaddr*
 	assertSocket(connect(m_serverSocket.stream, addr, addrlen), "connect(stream)");
 }
 
+void NetworkHandlerClient::handleWelcomePacket(IncomingPacket& inPacket) {
+	std::lock_guard<std::mutex> lk(m_mConnectionStatus);
+	if (reinterpret_cast<WelcomePacket*>(inPacket.spPacket.get())->fromDgram) {
+		if (!m_isDgramRegistered) {
+			m_isDgramRegistered = true;
+			printf("dgram fully registered\n");
+		}
+	}
+	else {
+		if (!m_isStreamRegistered) {
+			m_isStreamRegistered = true;
+			printf("stream fully registered\n");
+		}
+	}
+
+}
+
+void NetworkHandlerClient::handleReplicationPacket(IncomingPacket& inPacket) {
+	std::lock_guard<std::mutex> lk(m_mReplicationManager);
+	m_replicationManager.addReplication(std::dynamic_pointer_cast<ReplicationPacket>(inPacket.spPacket));
+}
+
 void NetworkHandlerClient::handleIncomingPackets() {
 	std::lock_guard<std::mutex> lk(m_mIncomingPackets);
-	for (IncomingPacket inPacket : m_incomingPackets) {
+	for (IncomingPacket& inPacket : m_incomingPackets) {
 		switch (inPacket.type)
 		{
 		case PacketType::eWelcome: {
-			std::lock_guard<std::mutex> lk(m_mConnectionStatus);
-			if (reinterpret_cast<WelcomePacket*>(inPacket.spPacket.get())->fromDgram) {
-				if(!m_isDgramRegistered) {
-					m_isDgramRegistered = true;
-					printf("dgram fully registered\n");
-				}
-			}
-			else {
-				if(!m_isStreamRegistered) {
-					m_isStreamRegistered = true;
-					printf("stream fully registered\n");
-				}
-			}
+			handleWelcomePacket(inPacket);
+			break;
+		}
+		case PacketType::eReplication: {
+			handleReplicationPacket(inPacket);
 			break;
 		}
 		default:
