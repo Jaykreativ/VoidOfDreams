@@ -1,5 +1,4 @@
 #include "Layers/Game.h"
-#include "Layers/Network.h"
 
 #include "glm.hpp"
 #include "imgui.h"
@@ -131,7 +130,7 @@ void Player::updateMechanics(Controls& controls, float dt) {
 		m_energy = std::min<float>(m_energy, 100.f);
 		m_spawnProtection -= dt;
 
-		client::sendPlayerMove(*this);
+		//client::sendPlayerMove(*this);
 	}
 	else {
 		m_spawnTimeout -= dt;
@@ -156,10 +155,10 @@ void Player::damage(float damage) {
 		return;
 	m_health -= damage;
 	if (m_health <= 0) {
-		client::sendPlayerDamage(damage + m_health, m_health, m_username, "");
+		//client::sendPlayerDamage(damage + m_health, m_health, m_username, "");
 		kill();
 	}
-	client::sendPlayerDamage(damage, m_health, m_username, "");
+	//client::sendPlayerDamage(damage, m_health, m_username, "");
 }
 
 void Player::damage(float damage, const Player& damager) {
@@ -170,7 +169,7 @@ void Player::damage(float damage, const Player& damager) {
 	if (m_health <= 0) {
 		kill(damager);
 	}
-	client::sendPlayerDamage(damage, m_health, m_username, damager.m_username);
+	//client::sendPlayerDamage(damage, m_health, m_username, damager.m_username);
 }
 
 void Player::localSpawn(Zap::ActorLoader& loader) {
@@ -198,13 +197,13 @@ void Player::localKill() {
 void Player::spawn(Zap::ActorLoader loader) {
 	localSpawn(loader);
 	m_spawnProtection = 5;
-	client::sendPlayerSpawn(m_username);
+	//client::sendPlayerSpawn(m_username);
 }
 
 void Player::kill() {
 	if (m_active) {
 		m_spawnTimeout = 5;
-		client::sendPlayerDeath(m_username, "");
+		//client::sendPlayerDeath(m_username, "");
 	}
 	localKill();
 }
@@ -212,7 +211,7 @@ void Player::kill() {
 void Player::kill(const Player& killer) {
 	if (m_active) {
 		m_spawnTimeout = 5;
-		client::sendPlayerDeath(m_username, killer.m_username);
+		//client::sendPlayerDeath(m_username, killer.m_username);
 	}
 	localKill();
 }

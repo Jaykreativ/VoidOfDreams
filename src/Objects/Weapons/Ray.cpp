@@ -1,6 +1,6 @@
 #include "Ray.h"
 
-#include "Layers/Network.h"
+#include "Shares/World.h"
 
 #include "Zap/Scene/Actor.h"
 #include "Zap/Scene/Material.h"
@@ -80,7 +80,7 @@ void Ray::update(Player& player, PlayerInventory::iterator iterator) {
 	if (m_isTriggered && player.isWeaponMode() && (player.getEnergy() >= _energyCost)) {
 		glm::vec3 origin = player.getTransform()[3] + (m_alternateSide-.5f)*2*player.getTransform()[0];
 		glm::vec3 direction = player.getCameraTransform()[2];
-		client::sendRay(origin, direction, player.getUsername());
+		//client::sendRay(origin, direction, player.getUsername());
 		player.spendEnergy(_energyCost);
 
 		// shoot beam

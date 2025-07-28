@@ -1,7 +1,6 @@
 #include "Game.h"
 
 #include "Log.h"
-#include "Layers/Network.h"
 #include "Layers/NetworkHandler.h"
 #include "Shares/NetworkData.h"
 #include "Shares/Render.h"
@@ -218,39 +217,39 @@ void drawHud(GuiData& gui, Player& player, float dt) {
 }
 
 void drawNetworkInterface(NetworkData& network, WorldData& world) {
-	bool serverRunning = server::isRunning();
-	bool clientRunning = client::isRunning();
-
-	if (serverRunning || clientRunning)
-		ImGui::BeginDisabled();
-	static char usernameBuf[50] = "";
-	memcpy(usernameBuf, network.username.data(), std::min<int>(50, network.username.size()));
-	ImGui::InputText("username", usernameBuf, 50);
-	network.username = usernameBuf;
-	
-	static char ipBuf[50] = "";
-	memcpy(ipBuf, network.ip.data(), std::min<int>(50, network.ip.size()));
-	ImGui::InputText("ip", ipBuf, 50);
-	network.ip = ipBuf;
-
-	static char portBuf[6] = "";
-	memcpy(portBuf, network.port.data(), std::min<int>(6, network.port.size()));
-	ImGui::InputText("port", portBuf, 6);
-	network.port = portBuf;
-	if (serverRunning || clientRunning)
-		ImGui::EndDisabled();
+	//bool serverRunning = server::isRunning();
+	//bool clientRunning = client::isRunning();
+	//
+	//if (serverRunning || clientRunning)
+	//	ImGui::BeginDisabled();
+	//static char usernameBuf[50] = "";
+	//memcpy(usernameBuf, network.username.data(), std::min<int>(50, network.username.size()));
+	//ImGui::InputText("username", usernameBuf, 50);
+	//network.username = usernameBuf;
+	//
+	//static char ipBuf[50] = "";
+	//memcpy(ipBuf, network.ip.data(), std::min<int>(50, network.ip.size()));
+	//ImGui::InputText("ip", ipBuf, 50);
+	//network.ip = ipBuf;
+	//
+	//static char portBuf[6] = "";
+	//memcpy(portBuf, network.port.data(), std::min<int>(6, network.port.size()));
+	//ImGui::InputText("port", portBuf, 6);
+	//network.port = portBuf;
+	//if (serverRunning || clientRunning)
+	//	ImGui::EndDisabled();
 }
 
 void drawServerInterface(NetworkData& network) {
-	ImGui::Begin("Server");
-	if (server::isRunning()) {
-		std::lock_guard<std::mutex> lk(network.mServer);
-		for (auto& name : network.playerList)
-			ImGui::Text(name.c_str());
-	}
-	else
-		ImGui::Text("You're not the host, only the host can see this window");
-	ImGui::End();
+	//ImGui::Begin("Server");
+	//if (server::isRunning()) {
+	//	std::lock_guard<std::mutex> lk(network.mServer);
+	//	for (auto& name : network.playerList)
+	//		ImGui::Text(name.c_str());
+	//}
+	//else
+	//	ImGui::Text("You're not the host, only the host can see this window");
+	//ImGui::End();
 }
 
 void drawSettings(WorldData& world, NetworkData& network, GuiData& gui) {
@@ -388,24 +387,24 @@ void drawPauseMainMenu(WorldData& world, RenderData& render, NetworkData& networ
 		gui.state = GuiData::eGAME;
 	}
 
-	if (server::isRunning()) {
-		if (ImGui::Button("Cancel", gui.pauseButtonSize)) {
-			terminateServer();
-		}
-	}
-	else {
+	//if (server::isRunning()) {
+	//	if (ImGui::Button("Cancel", gui.pauseButtonSize)) {
+	//		terminateServer();
+	//	}
+	//}
+	//else {
 		if (ImGui::Button("Host", gui.pauseButtonSize)) {
-			runServer(network);
-			waitServerStartup();
-			runClient(network, world);
-			if (client::isRunning())
+			//runServer(network);
+			//waitServerStartup();
+			//runClient(network, world);
+			//if (client::isRunning())
 				switchToGame(world, render);
 		}
-	}
+	//}
 
 	if (ImGui::Button("Join", gui.pauseButtonSize)) {
-		runClient(network, world);
-		if (client::isRunning())
+		//runClient(network, world);
+		//if (client::isRunning())
 			switchToGame(world, render);
 	}
 
@@ -480,10 +479,10 @@ void drawPauseMenuClient(WorldData& world, RenderData& render, NetworkData& netw
 	}
 
 	if (ImGui::Button("Main Menu", gui.pauseButtonSize)) {
-		if (client::isRunning())
-			terminateClient(network, world);
-		if (server::isRunning())
-			terminateServer();
+		//if (client::isRunning())
+		//	terminateClient(network, world);
+		//if (server::isRunning())
+		//	terminateServer();
 		switchToMainMenu(world, render);
 	}
 	ImGui::PopFont();
@@ -618,18 +617,18 @@ void update(WorldData& world, RenderData& render, NetworkData& network, GuiData&
 		drawPauseMenuClient(world, render, network, gui, window);
 	}
 
-	if (false) // disabled TODO add settings to enable debug information
-	{
-		drawServerInterface(network);
-
-		ImGui::Begin("Frame Profile");
-		logger::drawFrameProfileImGui();
-		ImGui::End();
-
-		//ImGui::Begin("Timeline");
-		//logger::drawTimelineImGui();
-		//ImGui::End();
-	}
+	//if (false) // disabled TODO add settings to enable debug information
+	//{
+	//	drawServerInterface(network);
+	//
+	//	ImGui::Begin("Frame Profile");
+	//	logger::drawFrameProfileImGui();
+	//	ImGui::End();
+	//
+	//	//ImGui::Begin("Timeline");
+	//	//logger::drawTimelineImGui();
+	//	//ImGui::End();
+	//}
 	logger::endRegion();
 }
 
@@ -641,16 +640,6 @@ void gameLoop(RenderData& render, WorldData& world, NetworkData& network, GuiDat
 		auto startFrame = std::chrono::high_resolution_clock::now();
 
 		logger::beginRegion("update");
-		{ // handle client errors
-			std::lock_guard<std::mutex> lk(network.mClient);
-			for (ClientError& error : network.clientErrorStack) {
-				pushErrorPopup(gui, error.description);
-				// process error actions
-				if (error.actions & eSWITCH_MAIN_MENU)
-					switchToMainMenu(world, render);
-			}
-			network.clientErrorStack.clear();
-		}
 
 		switch (world.status)
 		{
@@ -782,14 +771,6 @@ void resize(Zap::ResizeEvent& eventParams, void* customParams) {
 }
 
 void runGame() {
-	NetworkHandlerServer server(12525);
-	Sleep(100);
-	{
-		NetworkHandlerClient client("127.0.0.1", 12525);
-		Sleep(1000);
-	}
-	Sleep(500);
-	return;
 	RenderData render = {};
 	WorldData world = {};
 	NetworkData network = {};
@@ -842,9 +823,6 @@ void runGame() {
 	render.window->show();
 
 	gameLoop(render, world, network, gui, controls);
-
-	terminateClient(network, world); // terminate networking if still running
-	terminateServer();
 
 	world.game.players.clear();
 	world.game.rayBeams.clear();
