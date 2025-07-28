@@ -2,13 +2,17 @@
 
 #include "Log.h"
 
+void ObjectCreationRegistry::initCreationRegistry() {
+	get().addFunctions('TEST', { TestObject::create, TestObject::destroy });
+}
+
 ObjectCreationRegistry& ObjectCreationRegistry::get() {
 	static ObjectCreationRegistry registry;
 	return registry;
 }
 
-void ObjectCreationRegistry::addFunction(uint32_t classId, ObjectCreationFunction creationFunction) {
-	m_registry[classId] = creationFunction;
+void ObjectCreationRegistry::addFunctions(uint32_t classId, FunctionPair functions) {
+	m_registry[classId] = functions;
 }
 
 ReplicationObject* ObjectCreationRegistry::create(uint32_t classId, WorldData& world) {
@@ -16,7 +20,15 @@ ReplicationObject* ObjectCreationRegistry::create(uint32_t classId, WorldData& w
 		logger::error("ObjectCreationRegistry::create(): creation function for class not registered");
 		return nullptr;
 	}
-	return m_registry.at(classId)(world);
+	return m_registry.at(classId).creation(world);
+}
+
+void ObjectCreationRegistry::destroy(uint32_t classId, WorldData& world, ReplicationObject* object) {
+	if (!m_registry.count(classId)) {
+		logger::error("ObjectCreationRegistry::destroy(): destruction function for class not registered");
+		return;
+	}
+	m_registry.at(classId).destruction(world, object);
 }
 
 bool LinkingContext::hasObject(ReplicationObject* pObject) {
@@ -70,7 +82,27 @@ void ReplicationManagerClient::addReplication(std::shared_ptr<ReplicationPacket>
 }
 
 void ReplicationManagerClient::processReplication(WorldData& world) {
-
+	for (auto& replication : m_replications) {
+		switch (replication->type) {
+		case ReplicationPacket::eCREATE: {
+			auto* pObject = ObjectCreationRegistry::get().create(replication->classId, world);
+			m_linkingContext.addObject(pObject, replication->objectId);
+			pObject->readFromReplication(replication, replication->status);
+			break;
+		}
+		case ReplicationPacket::eUPDATE: {
+			auto* pObject = m_linkingContext.getObject(replication->objectId);
+			pObject->readFromReplication(replication, replication->status);
+			break;
+		}
+		case ReplicationPacket::eDESTROY: {
+			auto* pObject = m_linkingContext.getObject(replication->objectId);
+			ObjectCreationRegistry::get().destroy(replication->classId, world, pObject);
+			break;
+		}
+		}
+	}
+	m_replications.clear();
 }
 
 std::shared_ptr<ReplicationPacket> ReplicationManagerServer::replicateCreate(ReplicationObject* object) {

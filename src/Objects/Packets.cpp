@@ -253,17 +253,18 @@ uint32_t ReplicationPacket::dataSize() {
 
 void ReplicationPacket::write(float val) {
 	auto oldSize = m_data.size();
-	auto nval = htonf(val);
-	m_data.resize(m_data.size() + sizeof(nval));
-	memcpy(&m_data[oldSize], &val, sizeof(nval));
+	uint32_t nval = htonf(val);
+	m_data.resize(oldSize + sizeof(nval));
+	memcpy(&m_data[oldSize], &nval, sizeof(nval));
 }
 
 float ReplicationPacket::readf() {
-	float val;
-	size_t readSize = m_readOffset + sizeof(val);
+	uint32_t nval;
+	size_t readSize = m_readOffset + sizeof(nval);
 	assert(m_data.size() >= readSize);
-	memcpy(&val, &m_data[m_readOffset], sizeof(val));
-	m_readOffset += sizeof(val);
+	memcpy(&nval, &m_data[m_readOffset], sizeof(nval));
+	m_readOffset += sizeof(nval);
+	float val = ntohf(nval);
 	return val;
 }
 
@@ -276,7 +277,7 @@ void ReplicationPacket::pack(char* buf) {
 	uintBuf[2] = htonl(status);
 	uint64_t* idBuf = reinterpret_cast<uint64_t*>(&uintBuf[3]);
 	idBuf[0] = htonll(objectId);
-	buf = reinterpret_cast<char*>(&idBuf[2]);
+	buf = reinterpret_cast<char*>(&idBuf[1]);
 	if(m_data.size() > 0)
 		memcpy(buf, m_data.data(), m_data.size());
 }
@@ -286,12 +287,14 @@ void ReplicationPacket::unpackData(const char* buf, uint32_t size) {
 	type = ntohl(uintBuf[0]);
 	classId = ntohl(uintBuf[1]);
 	status = ntohl(uintBuf[2]);
-	const uint64_t* idBuf = reinterpret_cast<const uint64_t*>(buf);
-	objectId = ntohl(uintBuf[0]);
+	const uint64_t* idBuf = reinterpret_cast<const uint64_t*>(&uintBuf[3]);
+	objectId = ntohll(idBuf[0]);
 	buf = reinterpret_cast<const char*>(&idBuf[1]);
 	size_t dataSize = size - sizeof(uint32_t) * 3 - sizeof(Zap::UUID);
-	m_data.resize(dataSize);
-	memcpy(m_data.data(), buf, dataSize);
+	if (dataSize > 0) {
+		m_data.resize(dataSize);
+		memcpy(m_data.data(), buf, dataSize);
+	}
 }
 
 // ConnectPacket

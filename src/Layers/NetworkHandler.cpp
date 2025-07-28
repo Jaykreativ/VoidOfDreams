@@ -1,5 +1,7 @@
 #include "NetworkHandler.h"
 
+#include "Shares/World.h"
+
 #include <chrono>
 
 #define SERVER_BACKLOG 10
@@ -107,34 +109,12 @@ void NetworkHandlerServer::handleIncomingPackets() {
 	m_incomingPackets.clear();
 }
 
-// Tests
-class TestObject : public ReplicationObject {
-public:
-	float val = 0;
-
-private:
-	uint32_t classId() { return 'TEST'; }
-
-	void readFromReplication(std::shared_ptr<ReplicationPacket> spPacket, uint32_t status) {
-		if (spPacket->status) {
-			printf("Test read %f\n", spPacket->readf());
-		}
-	}
-
-	void writeToReplication(std::shared_ptr<ReplicationPacket> spPacket, uint32_t status) {
-		if (spPacket->status) {
-			spPacket->write(val);
-		}
-	}
-};
-//
-
 void NetworkHandlerServer::loop() {
 	// Tests
 	TestObject obj;
 	obj.val = 2.5;
 
-	int counter = 0;
+	int counter = -1000;
 	std::vector<std::shared_ptr<ReplicationPacket>> hector;
 	//
 	while (shouldRunThreads()) {

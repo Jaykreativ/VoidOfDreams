@@ -23,22 +23,65 @@ private:
 	friend class ReplicationManagerServer;
 };
 
-typedef ReplicationObject* (*ObjectCreationFunction)(WorldData&);
-class ObjectCreationRegistry {
+// Tests
+class TestObject : public ReplicationObject {
 public:
+	float val = 0;
+
+	static ReplicationObject* create(WorldData& world) {
+		printf("Test create\n");
+		return new TestObject();
+	}
+
+	static void destroy(WorldData& world, ReplicationObject* object) {
+		printf("Test destroy\n");
+		delete object;
+	}
+private:
+
+	uint32_t classId() { return 'TEST'; }
+
+	void readFromReplication(std::shared_ptr<ReplicationPacket> spPacket, uint32_t status) {
+		if (spPacket->status) {
+			printf("Test read %f\n", spPacket->readf());
+		}
+	}
+
+	void writeToReplication(std::shared_ptr<ReplicationPacket> spPacket, uint32_t status) {
+		if (spPacket->status) {
+			spPacket->write(val);
+		}
+	}
+};
+//
+
+typedef ReplicationObject* (*ObjectCreationFunction)(WorldData&);
+typedef void (*ObjectDestructionFunction)(WorldData&, ReplicationObject*);
+class ObjectCreationRegistry {
+private:
+	struct FunctionPair {
+		ObjectCreationFunction creation;
+		ObjectDestructionFunction destruction;
+	};
+public:
+	static void initCreationRegistry();
+
 	static ObjectCreationRegistry& get();
 
-	void addFunction(uint32_t classId, ObjectCreationFunction creationFunction);
+	void addFunctions(uint32_t classId, FunctionPair functions);
 
-	// calls the class creation function
+	// calls the replication objects class creation function
 	// returns nullptr on failure
 	ReplicationObject* create(uint32_t classId, WorldData& world);
+
+	// calls the replication objects class destruction function
+	void destroy(uint32_t classId, WorldData& world, ReplicationObject* object);
 
 private:
 	ObjectCreationRegistry(){}
 	~ObjectCreationRegistry(){}
 
-	std::unordered_map<uint32_t, ObjectCreationFunction> m_registry = {};
+	std::unordered_map<uint32_t, FunctionPair> m_registry = {};
 };
 
 class LinkingContext {

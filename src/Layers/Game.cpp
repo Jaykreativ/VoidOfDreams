@@ -639,6 +639,12 @@ void gameLoop(RenderData& render, WorldData& world, NetworkData& network, GuiDat
 		logger::beginRegion("loop"); // define regions for profiling
 		auto startFrame = std::chrono::high_resolution_clock::now();
 
+		logger::beginRegion("replication");
+		if (network.client->isFullyConnected() && network.client->isValid()) {
+			network.client->replicateWorldState(world);
+		}
+		logger::endRegion();
+
 		logger::beginRegion("update");
 
 		switch (world.status)
@@ -771,11 +777,17 @@ void resize(Zap::ResizeEvent& eventParams, void* customParams) {
 }
 
 void runGame() {
+	ObjectCreationRegistry::initCreationRegistry(); // map class ids to their respective creation function
+
 	RenderData render = {};
 	WorldData world = {};
 	NetworkData network = {};
 	GuiData gui = {};
 	Controls controls = {};
+
+	network.server = std::make_unique<NetworkHandlerServer>(12525);
+	Sleep(100);
+	network.client = std::make_unique<NetworkHandlerClient>("127.0.0.1", 12525);
 
 	render.window = new Zap::Window(1000, 600, "Void of Dreams");
 	render.window->init();

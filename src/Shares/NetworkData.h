@@ -1,5 +1,7 @@
 #pragma once
 
+#include "Layers/NetworkHandler.h"
+
 #include <string>
 #include <thread>
 #include <mutex>
@@ -17,6 +19,9 @@ struct ClientError {
 };
 
 struct NetworkData {
+	std::unique_ptr<NetworkHandlerServer> server;
+	std::unique_ptr<NetworkHandlerClient> client;
+
 	std::mutex mNetwork;
 	std::string username = "user"; // this username serves as an id for the client
 	std::string port = "12525";
