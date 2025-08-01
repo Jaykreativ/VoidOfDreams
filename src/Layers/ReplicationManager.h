@@ -23,8 +23,8 @@ private:
 	friend class ReplicationManagerServer;
 };
 
-typedef ReplicationObject* (*ObjectCreationFunction)(WorldData&);
-typedef void (*ObjectDestructionFunction)(WorldData&, ReplicationObject*);
+typedef ReplicationObject* (*ObjectCreationFunction)(WorldDataClient&);
+typedef void (*ObjectDestructionFunction)(WorldDataClient&, ReplicationObject*);
 class ObjectCreationRegistry {
 private:
 	struct FunctionPair {
@@ -40,10 +40,10 @@ public:
 
 	// calls the replication objects class creation function
 	// returns nullptr on failure
-	ReplicationObject* create(uint32_t classId, WorldData& world);
+	ReplicationObject* create(uint32_t classId, WorldDataClient& world);
 
 	// calls the replication objects class destruction function
-	void destroy(uint32_t classId, WorldData& world, ReplicationObject* object);
+	void destroy(uint32_t classId, WorldDataClient& world, ReplicationObject* object);
 
 private:
 	ObjectCreationRegistry(){}
@@ -88,7 +88,7 @@ public:
 
 	// processes the replication commands pushed by the network
 	// has access to all objects it needs to replicate
-	void processReplication(WorldData& world);
+	void processReplication(WorldDataClient& world);
 
 private:
 	std::vector<std::shared_ptr<ReplicationPacket>> m_replications = {};

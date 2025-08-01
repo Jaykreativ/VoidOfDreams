@@ -292,7 +292,7 @@ bool NetworkHandlerClient::isFullyConnected() {
 	return m_isDgramRegistered && m_isStreamRegistered;
 }
 
-void NetworkHandlerClient::replicateWorldState(WorldData& world) {
+void NetworkHandlerClient::replicateWorldState(WorldDataClient& world) {
 	std::lock_guard<std::mutex> lk(m_mReplicationManager);
 	m_replicationManager.processReplication(world);
 }

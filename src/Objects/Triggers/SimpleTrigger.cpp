@@ -11,8 +11,8 @@ SimpleTrigger::SimpleTrigger(ImGuiMouseButton_ mouseButton)
 {}
 
 void SimpleTrigger::update(Player& player, PlayerInventory::iterator iterator) {
-	if (!player.receivesInput())
-		return;
+	//if (!player.receivesInput())
+	//	return;
 
 	bool trigger = false;
 	if (m_isKey) {

@@ -30,12 +30,12 @@
 
 void pushErrorPopup(GuiData& gui, std::string msg);
 
-void switchToMainMenu(WorldData& world, RenderData& render);
+void switchToMainMenu(WorldDataClient& world, RenderData& render);
 
-void switchToGame(WorldData& world, RenderData& render);
+void switchToGame(WorldDataClient& world, RenderData& render);
 
-void setupLocalPlayer(WorldData& world, std::string username);
+void setupLocalPlayer(WorldDataClient& world, std::string username);
 
-void setupExternalPlayer(WorldData& world, std::string username);
+void setupExternalPlayer(WorldDataClient& world, std::string username);
 
 void runGame();

@@ -2,9 +2,7 @@
 
 #include "Log.h"
 
-void ObjectCreationRegistry::initCreationRegistry() {
-	get().addFunctions('TEST', { TestObject::create, TestObject::destroy });
-}
+void ObjectCreationRegistry::initCreationRegistry() {}
 
 ObjectCreationRegistry& ObjectCreationRegistry::get() {
 	static ObjectCreationRegistry registry;
@@ -15,7 +13,7 @@ void ObjectCreationRegistry::addFunctions(uint32_t classId, FunctionPair functio
 	m_registry[classId] = functions;
 }
 
-ReplicationObject* ObjectCreationRegistry::create(uint32_t classId, WorldData& world) {
+ReplicationObject* ObjectCreationRegistry::create(uint32_t classId, WorldDataClient& world) {
 	if (!m_registry.count(classId)) {
 		logger::error("ObjectCreationRegistry::create(): creation function for class not registered");
 		return nullptr;
@@ -23,7 +21,7 @@ ReplicationObject* ObjectCreationRegistry::create(uint32_t classId, WorldData& w
 	return m_registry.at(classId).creation(world);
 }
 
-void ObjectCreationRegistry::destroy(uint32_t classId, WorldData& world, ReplicationObject* object) {
+void ObjectCreationRegistry::destroy(uint32_t classId, WorldDataClient& world, ReplicationObject* object) {
 	if (!m_registry.count(classId)) {
 		logger::error("ObjectCreationRegistry::destroy(): destruction function for class not registered");
 		return;
@@ -81,7 +79,7 @@ void ReplicationManagerClient::addReplication(std::shared_ptr<ReplicationPacket>
 	m_replications.push_back(spPacket);
 }
 
-void ReplicationManagerClient::processReplication(WorldData& world) {
+void ReplicationManagerClient::processReplication(WorldDataClient& world) {
 	for (auto& replication : m_replications) {
 		switch (replication->type) {
 		case ReplicationPacket::eCREATE: {

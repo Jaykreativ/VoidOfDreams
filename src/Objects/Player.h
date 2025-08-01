@@ -17,23 +17,23 @@ public:
 	// only updates mechanics in game, not in main menu
 	void updateMechanics(Controls& controls, float dt);
 
-	void update(Controls& controls, float dt);
+	virtual void update(Controls& controls, float dt);
 
 	void damage(float damage);
-	void damage(float damage, const Player& damager);
+	virtual void damage(float damage, const Player& damager);
 
 	// spawn player without network sync
-	void localSpawn();
+	virtual void localSpawn();
 
 	// kill player without network sync
-	void localKill();
+	virtual void localKill();
 
 	void spawn();
 
 	void kill();
 	void kill(const Player& killer);
 
-	void spendEnergy(float energy);
+	virtual void spendEnergy(float energy);
 
 	bool isAlive();
 

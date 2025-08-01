@@ -10,7 +10,7 @@ const float _damage = 10;
 
 const std::filesystem::path _beamModel = "Models/Cube.obj";
 
-Ray::Beam::Beam(WorldData& world, glm::vec3 origin, glm::vec3 direction, float length)
+Ray::Beam::Beam(WorldDataClient& world, glm::vec3 origin, glm::vec3 direction, float length)
 	: m_world(world)
 {
 	Zap::ModelLoader loader;
@@ -55,7 +55,7 @@ void Ray::Beam::BeamAnimation::update(float dt) {
 	addDeltaTime(dt);
 }
 
-Ray::Ray(WorldData& world)
+Ray::Ray(WorldDataClient& world)
 	: m_world(world)
 {}
 
@@ -78,30 +78,30 @@ public:
 
 void Ray::update(Player& player, PlayerInventory::iterator iterator) {
 	if (m_isTriggered && player.isWeaponMode() && (player.getEnergy() >= _energyCost)) {
-		glm::vec3 origin = player.getTransform()[3] + (m_alternateSide-.5f)*2*player.getTransform()[0];
-		glm::vec3 direction = player.getCameraTransform()[2];
-		//client::sendRay(origin, direction, player.getUsername());
-		player.spendEnergy(_energyCost);
-
-		// shoot beam
-		Zap::Scene::RaycastOutput out = {};
-		RayFilter filter;
-		filter.excludedActor = player.getPhysicsActor();
-		bool hit = false;
-		{
-			std::lock_guard<std::mutex> lk(m_world.mScene);
-			hit = m_world.game.spScene->raycast(origin, glm::normalize(direction), 1000, &out, &filter);
-		}
-		if (hit)
-			m_world.game.rayBeams.push_back(std::make_unique<Beam>(m_world, origin, glm::normalize(direction), out.distance));
-		else
-			m_world.game.rayBeams.push_back(std::make_unique<Beam>(m_world, origin, glm::normalize(direction), 1000));
-		m_alternateSide = !m_alternateSide;
+		//glm::vec3 origin = player.getTransform()[3] + (m_alternateSide-.5f)*2*player.getTransform()[0];
+		//glm::vec3 direction = player.getCameraTransform()[2];
+		////client::sendRay(origin, direction, player.getUsername());
+		//player.spendEnergy(_energyCost);
+		//
+		//// shoot beam
+		//Zap::Scene::RaycastOutput out = {};
+		//RayFilter filter;
+		//filter.excludedActor = player.getPhysicsActor();
+		//bool hit = false;
+		//{
+		//	std::lock_guard<std::mutex> lk(m_world.mScene);
+		//	hit = m_world.game.spScene->raycast(origin, glm::normalize(direction), 1000, &out, &filter);
+		//}
+		//if (hit)
+		//	m_world.game.rayBeams.push_back(std::make_unique<Beam>(m_world, origin, glm::normalize(direction), out.distance));
+		//else
+		//	m_world.game.rayBeams.push_back(std::make_unique<Beam>(m_world, origin, glm::normalize(direction), 1000));
+		//m_alternateSide = !m_alternateSide;
 	}
 	m_isTriggered = false; // one time trigger
 }
 
-void Ray::processRay(glm::vec3 origin, glm::vec3 direction, WorldData& world, Player& checkPlayer, Player& senderPlayer) {
+void Ray::processRay(glm::vec3 origin, glm::vec3 direction, WorldDataClient& world, Player& checkPlayer, Player& senderPlayer) {
 	Zap::Scene::RaycastOutput out = {};
 	RayFilter filter;
 	filter.excludedActor = senderPlayer.getPhysicsActor();

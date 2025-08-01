@@ -113,7 +113,7 @@ public:
 	// returns true if the client is fully registered by the server
 	bool isFullyConnected();
 
-	void replicateWorldState(WorldData& world);
+	void replicateWorldState(WorldDataClient& world);
 private:
 	Zap::UUID m_id;
 

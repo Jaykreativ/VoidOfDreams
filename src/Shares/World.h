@@ -20,17 +20,17 @@ enum WorldStatus {
 
 struct MainMenuWorldData {
 	std::shared_ptr<Zap::Scene> spScene;
-	std::shared_ptr<Player> spPlayer;
+	std::shared_ptr<PlayerClient> spPlayer;
 };
 
 struct GameWorldData {
 	std::shared_ptr<Zap::Scene> spScene;
-	std::unordered_map<std::string, std::shared_ptr<Player>> players = {};
+	std::unordered_map<std::string, std::shared_ptr<PlayerClient>> players = {};
 
 	std::vector<std::unique_ptr<Ray::Beam>> rayBeams = {};
 };
 
-struct WorldData {
+struct WorldDataClient {
 	std::mutex mScene;
 	WorldStatus status = eMAIN_MENU; // start in main menu
 
@@ -39,7 +39,7 @@ struct WorldData {
 	std::vector<std::weak_ptr<Animation>> animations;
 
 	std::mutex mPlayer;
-	std::weak_ptr<Player> wpPlayer;
+	std::weak_ptr<PlayerClient> wpPlayer;
 
 	GameWorldData game = {};
 	MainMenuWorldData mainMenu = {};

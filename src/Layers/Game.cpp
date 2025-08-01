@@ -122,7 +122,7 @@ private:
 	HudData& m_hud;
 };
 
-void drawHud(GuiData& gui, Player& player, float dt) {
+void drawHud(GuiData& gui, PlayerClient& player, float dt) {
 	ImGui::SetNextWindowSize(ImGui::GetIO().DisplaySize);
 	ImGui::SetNextWindowPos({0, 0});
 	ImGui::Begin("Hud", nullptr, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoDocking | ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoFocusOnAppearing);
@@ -216,7 +216,7 @@ void drawHud(GuiData& gui, Player& player, float dt) {
 
 }
 
-void drawNetworkInterface(NetworkData& network, WorldData& world) {
+void drawNetworkInterface(NetworkData& network, WorldDataClient& world) {
 	//bool serverRunning = server::isRunning();
 	//bool clientRunning = client::isRunning();
 	//
@@ -252,7 +252,7 @@ void drawServerInterface(NetworkData& network) {
 	//ImGui::End();
 }
 
-void drawSettings(WorldData& world, NetworkData& network, GuiData& gui) {
+void drawSettings(WorldDataClient& world, NetworkData& network, GuiData& gui) {
 	ImGui::Begin("Settings");
 
 	glm::vec2 region = ImGui::GetContentRegionAvail();
@@ -361,7 +361,7 @@ void drawErrorMessages(GuiData& gui) {
 	ImGui::PopFont();
 }
 
-void drawPauseMainMenu(WorldData& world, RenderData& render, NetworkData& network, GuiData& gui, Zap::Window& window) {
+void drawPauseMainMenu(WorldDataClient& world, RenderData& render, NetworkData& network, GuiData& gui, Zap::Window& window) {
 	glm::vec2 displaySize = ImGui::GetIO().DisplaySize;
 
 	ImGui::SetNextWindowPos({ 0, 0 }); // Outer Window
@@ -452,7 +452,7 @@ void drawStats(GuiData& gui, std::shared_ptr<Player> spPlayer) {
 
 }
 
-void drawPauseMenuClient(WorldData& world, RenderData& render, NetworkData& network, GuiData& gui, Zap::Window& window) {
+void drawPauseMenuClient(WorldDataClient& world, RenderData& render, NetworkData& network, GuiData& gui, Zap::Window& window) {
 	glm::vec2 displaySize = ImGui::GetIO().DisplaySize;
 	
 	ImGui::SetNextWindowPos({ 0, 0 }); // Outer Window
@@ -501,11 +501,11 @@ void pushErrorPopup(GuiData& gui, std::string msg) {
 	gui.errorMessages.push_back(msg);
 }
 
-void updateMainMenu(WorldData& world, RenderData& render, NetworkData& network, GuiData& gui, Controls& controls, float dt, Zap::Window& window) {
+void updateMainMenu(WorldDataClient& world, RenderData& render, NetworkData& network, GuiData& gui, Controls& controls, float dt, Zap::Window& window) {
 	logger::beginRegion("players");
 	{
 		std::lock_guard<std::mutex> lk(world.mPlayer);
-		if (std::shared_ptr<Player> spPlayer = world.wpPlayer.lock()) {
+		if (std::shared_ptr<PlayerClient> spPlayer = world.wpPlayer.lock()) {
 			if (gui.state & GuiData::eGAME) {
 				spPlayer->updateInputs(controls, dt);
 			}
@@ -555,11 +555,11 @@ void updateMainMenu(WorldData& world, RenderData& render, NetworkData& network, 
 	logger::endRegion();
 }
 
-void update(WorldData& world, RenderData& render, NetworkData& network, GuiData& gui, Controls& controls, float dt, Zap::Window& window) {
+void update(WorldDataClient& world, RenderData& render, NetworkData& network, GuiData& gui, Controls& controls, float dt, Zap::Window& window) {
 	logger::beginRegion("players");
 	{
 		std::lock_guard<std::mutex> lk(world.mPlayer);
-		if (std::shared_ptr<Player> spPlayer = world.wpPlayer.lock()) {
+		if (std::shared_ptr<PlayerClient> spPlayer = world.wpPlayer.lock()) {
 			spPlayer->updateMechanics(controls, dt);
 			if (gui.state & GuiData::eGAME)
 				spPlayer->updateInputs(controls, dt);
@@ -632,7 +632,7 @@ void update(WorldData& world, RenderData& render, NetworkData& network, GuiData&
 	logger::endRegion();
 }
 
-void gameLoop(RenderData& render, WorldData& world, NetworkData& network, GuiData& gui, Controls& controls) {
+void gameLoop(RenderData& render, WorldDataClient& world, NetworkData& network, GuiData& gui, Controls& controls) {
 	float deltaTime = 0;
 	while (!render.window->shouldClose()) {
 		logger::beginFrame();
@@ -663,7 +663,7 @@ void gameLoop(RenderData& render, WorldData& world, NetworkData& network, GuiDat
 			std::lock_guard<std::mutex> lk(world.mScene);
 			if (std::shared_ptr<Zap::Scene> spScene = world.wpScene.lock()) { // update scene only if present
 				std::lock_guard<std::mutex> lk(world.mPlayer);
-				if (std::shared_ptr<Player> spPlayer = world.wpPlayer.lock()) { // enable rendering only if player is selected
+				if (std::shared_ptr<PlayerClient> spPlayer = world.wpPlayer.lock()) { // enable rendering only if player is selected
 					logger::beginRegion("engine");
 					render.pbRender->updateCamera(spPlayer->getCamera());
 					render.pbRender->enable();
@@ -698,7 +698,7 @@ void gameLoop(RenderData& render, WorldData& world, NetworkData& network, GuiDat
 	}
 }
 
-void switchToMainMenu(WorldData& world, RenderData& render) {
+void switchToMainMenu(WorldDataClient& world, RenderData& render) {
 	std::lock_guard<std::mutex> lk(world.mPlayer);
 	world.game.players.clear(); // delete all players when leaving the game
 
@@ -708,7 +708,7 @@ void switchToMainMenu(WorldData& world, RenderData& render) {
 	world.status = eMAIN_MENU;
 }
 
-void switchToGame(WorldData& world, RenderData& render) {
+void switchToGame(WorldDataClient& world, RenderData& render) {
 	world.wpScene = world.game.spScene;
 	render.pbRender->changeScene(world.game.spScene.get());
 	world.status = eGAME;
@@ -733,10 +733,10 @@ void freeGUI(GuiData& gui) {
 	gui.fontImage.destroy();
 }
 
-void setupLocalPlayer(WorldData& world, std::string username) {
+void setupLocalPlayer(WorldDataClient& world, std::string username) {
 	{
 		std::lock_guard<std::mutex> lk(world.mScene);
-		world.game.players[username] = std::make_shared<Player>(*world.game.spScene, username);
+		world.game.players[username] = std::make_shared<PlayerClient>(*world.game.spScene);
 	}
 	world.wpPlayer = world.game.players.at(username);
 	if (std::shared_ptr<Player> spPlayer = world.wpPlayer.lock()) {
@@ -747,23 +747,23 @@ void setupLocalPlayer(WorldData& world, std::string username) {
 	}
 }
 
-void setupExternalPlayer(WorldData& world, std::string username) {
+void setupExternalPlayer(WorldDataClient& world, std::string username) {
 	std::lock_guard<std::mutex> lk(world.mScene);
-	world.game.players[username] = std::make_shared<Player>(*world.game.spScene, username);
+	world.game.players[username] = std::make_shared<PlayerClient>(*world.game.spScene);
 }
 
-void setupMainMenuWorld(WorldData& world) {
+void setupMainMenuWorld(WorldDataClient& world) {
 	Zap::ActorLoader loader;
 	loader.flags |= Zap::ActorLoader::eReuseActor;
 	loader.load("Actors/Light2.zac", world.mainMenu.spScene.get());
 	loader.load("Actors/Cube.zac", world.mainMenu.spScene.get());
-	world.mainMenu.spPlayer = std::make_shared<Player>(*world.mainMenu.spScene.get(), "user", loader);
+	world.mainMenu.spPlayer = std::make_shared<PlayerClient>(*world.mainMenu.spScene.get());
 	world.mainMenu.spPlayer->spawn();
 	world.mainMenu.spPlayer->setTransform(glm::mat4(1));
 	world.wpPlayer = world.mainMenu.spPlayer;
 }
 
-void setupWorld(WorldData& world) {
+void setupWorld(WorldDataClient& world) {
 	Zap::ActorLoader loader;
 	loader.flags |= Zap::ActorLoader::eReuseActor;
 	loader.load("Actors/Light.zac", world.game.spScene.get());  // Loading actor from file, they can be changed using the editor
@@ -780,7 +780,7 @@ void runGame() {
 	ObjectCreationRegistry::initCreationRegistry(); // map class ids to their respective creation function
 
 	RenderData render = {};
-	WorldData world = {};
+	WorldDataClient world = {};
 	NetworkData network = {};
 	GuiData gui = {};
 	Controls controls = {};

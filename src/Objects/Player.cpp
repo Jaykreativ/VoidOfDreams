@@ -186,12 +186,12 @@ void Player::localSpawn() {
 }
 
 void PlayerClient::localSpawn() {
-	Player::localSpawn();
 	Zap::ActorLoader loader;
 	loader.flags = loader.flags | Zap::ActorLoader::eReuseActor;
 	m_core = loader.load(std::filesystem::path(ACTOR_DIR) / std::filesystem::path("PlayerCore.zac"), &m_scene);
 	m_hull = loader.load(std::filesystem::path(ACTOR_DIR) / std::filesystem::path("PlayerHull.zac"), &m_scene);
 	m_recordEvents |= eSPAWN;
+	Player::localSpawn();
 }
 
 void Player::localKill() {
