@@ -23,38 +23,6 @@ private:
 	friend class ReplicationManagerServer;
 };
 
-// Tests
-class TestObject : public ReplicationObject {
-public:
-	float val = 0;
-
-	static ReplicationObject* create(WorldData& world) {
-		printf("Test create\n");
-		return new TestObject();
-	}
-
-	static void destroy(WorldData& world, ReplicationObject* object) {
-		printf("Test destroy\n");
-		delete object;
-	}
-private:
-
-	uint32_t classId() { return 'TEST'; }
-
-	void readFromReplication(std::shared_ptr<ReplicationPacket> spPacket, uint32_t status) {
-		if (spPacket->status) {
-			printf("Test read %f\n", spPacket->readf());
-		}
-	}
-
-	void writeToReplication(std::shared_ptr<ReplicationPacket> spPacket, uint32_t status) {
-		if (spPacket->status) {
-			spPacket->write(val);
-		}
-	}
-};
-//
-
 typedef ReplicationObject* (*ObjectCreationFunction)(WorldData&);
 typedef void (*ObjectDestructionFunction)(WorldData&, ReplicationObject*);
 class ObjectCreationRegistry {

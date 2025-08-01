@@ -7,28 +7,27 @@
 
 #include <string>
 
-Player::Player(Zap::Scene& scene, std::string username, Zap::ActorLoader loader)
+Player::Player(Zap::Scene& scene, std::string username)
 	: m_scene(scene), m_username(username)
 {
+	Zap::ActorLoader loader;
 	loader.flags = loader.flags | Zap::ActorLoader::eReuseActor;
 	m_base = loader.load(std::filesystem::path(ACTOR_DIR) / std::filesystem::path("PlayerBase.zac"), &m_scene);
-
-	m_camera = Zap::Actor(); // creating a camera to follow player
-	m_scene.attachActor(m_camera);
-	m_camera.addTransform(glm::mat4(1));
-	m_camera.addCamera();
 }
 
 Player::~Player() {
 	m_base.destroy();
-	m_camera.destroy();
 	if (m_active) {
-		m_core.destroy();
 		m_hull.destroy();
 	}
 }
 
-void Player::updateCamera(Controls& controls) {
+void PlayerClient::updateCamera(Controls& controls) {
+	if (m_mode == eWEAPON)
+		controls.cameraMode = Controls::eFIRST_PERSON;
+	else
+		controls.cameraMode = Controls::eTHIRD_PERSON;
+
 	glm::mat4 transform = m_base.cmpTransform_getTransform();
 	glm::vec3 zDir = glm::normalize(transform[2]);
 
@@ -50,7 +49,7 @@ void Player::updateCamera(Controls& controls) {
 	m_camera.cmpTransform_setTransform(m_base.cmpTransform_getTransform());
 }
 
-void Player::updateAnimations(float dt) {
+void PlayerClient::updateAnimations(float dt) {
 	if (m_active) {
 		m_core.cmpTransform_rotate(-90 * dt, { 2, 3, 5 });
 
@@ -59,7 +58,7 @@ void Player::updateAnimations(float dt) {
 	}
 }
 
-void Player::updateInputs(Controls& controls, float dt) {
+void PlayerClient::updateInputs(Controls& controls, float dt) {
 	if (!receivesInput())
 		return;
 
@@ -117,10 +116,6 @@ void Player::updateInputs(Controls& controls, float dt) {
 }
 
 void Player::updateMechanics(Controls& controls, float dt) {
-	if (m_mode == eWEAPON)
-		controls.cameraMode = Controls::eFIRST_PERSON;
-	else
-		controls.cameraMode = Controls::eTHIRD_PERSON;
 	if (m_active) {
 		m_energy = std::min<float>(m_energy, 100);
 
@@ -129,8 +124,6 @@ void Player::updateMechanics(Controls& controls, float dt) {
 		m_energy += (m_energy * 0.1 + 5) * dt;
 		m_energy = std::min<float>(m_energy, 100.f);
 		m_spawnProtection -= dt;
-
-		//client::sendPlayerMove(*this);
 	}
 	else {
 		m_spawnTimeout -= dt;
@@ -142,9 +135,17 @@ void Player::updateMechanics(Controls& controls, float dt) {
 void Player::update(Controls& controls, float dt) {
 	if (m_active) {
 		glm::vec3 pos = m_hull.cmpTransform_getPos(); // hull determines the position
-		m_core.cmpTransform_setPos(pos);
 		m_base.cmpTransform_setPos(pos);
 	}
+}
+
+void PlayerClient::update(Controls& controls, float dt) {
+	Player::update(controls, dt);
+	if (m_active) {
+		glm::vec3 pos = m_hull.cmpTransform_getPos(); // hull determines the position
+		m_core.cmpTransform_setPos(pos);
+	}
+
 	updateCamera(controls);
 	m_events = m_recordEvents;
 	m_recordEvents = eNONE;
@@ -165,37 +166,52 @@ void Player::damage(float damage, const Player& damager) {
 	if (m_spawnProtection > 0)
 		return;
 	m_health -= damage;
-	m_recordEvents |= eDAMAGE_TAKEN;
 	if (m_health <= 0) {
 		kill(damager);
 	}
 	//client::sendPlayerDamage(damage, m_health, m_username, damager.m_username);
 }
 
-void Player::localSpawn(Zap::ActorLoader& loader) {
-	loader.flags = loader.flags | Zap::ActorLoader::eReuseActor;
-	m_core = loader.load(std::filesystem::path(ACTOR_DIR) / std::filesystem::path("PlayerCore.zac"), &m_scene);
-	m_hull = loader.load(std::filesystem::path(ACTOR_DIR) / std::filesystem::path("PlayerHull.zac"), &m_scene);
+void PlayerClient::damage(float damage, const Player& damager) {
+	Player::damage(damage, damager);
+	m_recordEvents |= eDAMAGE_TAKEN;
+}
+
+void Player::localSpawn() {
 	m_hull.cmpRigidDynamic_setAngularDamping(.5);
 	m_hull.cmpRigidDynamic_setLinearDamping(.9);
 	m_energy = getMaxEnergy();
 	m_health = getMaxHealth();
-	m_recordEvents |= eSPAWN;
 	m_active = true;
+}
+
+void PlayerClient::localSpawn() {
+	Player::localSpawn();
+	Zap::ActorLoader loader;
+	loader.flags = loader.flags | Zap::ActorLoader::eReuseActor;
+	m_core = loader.load(std::filesystem::path(ACTOR_DIR) / std::filesystem::path("PlayerCore.zac"), &m_scene);
+	m_hull = loader.load(std::filesystem::path(ACTOR_DIR) / std::filesystem::path("PlayerHull.zac"), &m_scene);
+	m_recordEvents |= eSPAWN;
 }
 
 void Player::localKill() {
 	if (m_active) {
-		m_core.destroy();
 		m_hull.destroy();
 		m_deaths++;
-		m_recordEvents |= eDEATH;
 	}
 	m_active = false;
 }
 
-void Player::spawn(Zap::ActorLoader loader) {
-	localSpawn(loader);
+void PlayerClient::localKill() {
+	Player::localKill();
+	if (m_active) {
+		m_core.destroy();
+		m_recordEvents |= eDEATH;
+	}
+}
+
+void Player::spawn() {
+	localSpawn();
 	m_spawnProtection = 5;
 	//client::sendPlayerSpawn(m_username);
 }
@@ -218,18 +234,22 @@ void Player::kill(const Player& killer) {
 
 void Player::spendEnergy(float energy) {
 	m_energy -= energy;
+}
+
+void PlayerClient::spendEnergy(float energy) {
+	Player::spendEnergy(energy);
 	m_recordEvents |= eENERGY_SPENT;
 }
 
-void Player::disableInput() {
+void PlayerClient::disableInput() {
 	m_recvInput = false;
 }
 
-void Player::enableInput() {
+void PlayerClient::enableInput() {
 	m_recvInput = true;
 }
 
-bool Player::receivesInput() {
+bool PlayerClient::receivesInput() {
 	return m_recvInput;
 }
 
@@ -289,7 +309,7 @@ std::string Player::getUsername() {
 	return m_username;
 }
 
-Zap::Actor Player::getCamera() {
+Zap::Actor PlayerClient::getCamera() {
 	return m_camera;
 }
 
@@ -297,7 +317,7 @@ Zap::Actor Player::getPhysicsActor() {
 	return m_hull;
 }
 
-glm::mat4 Player::getCameraTransform() {
+glm::mat4 PlayerClient::getCameraTransform() {
 	return m_camera.cmpTransform_getTransform();
 }
 
@@ -314,34 +334,25 @@ glm::mat4 Player::getTransform() {
 	return m_hull.cmpTransform_getTransform();
 }
 
-bool Player::hasTakenDamage() { return ZP_IS_FLAG_ENABLED(m_events, eDAMAGE_TAKEN); }
-bool Player::hasSpentEnergy() { return ZP_IS_FLAG_ENABLED(m_events, eENERGY_SPENT); }
-bool Player::hasDied()        { return ZP_IS_FLAG_ENABLED(m_events, eDEATH); }
-bool Player::hasSpawned()     { return ZP_IS_FLAG_ENABLED(m_events, eSPAWN); }
-bool Player::hasDoneDamage()  { return ZP_IS_FLAG_ENABLED(m_events, eDAMAGE_DONE); }
-bool Player::hasKilled()      { return ZP_IS_FLAG_ENABLED(m_events, eKILL); }
+bool PlayerClient::hasTakenDamage() { return ZP_IS_FLAG_ENABLED(m_events, eDAMAGE_TAKEN); }
+bool PlayerClient::hasSpentEnergy() { return ZP_IS_FLAG_ENABLED(m_events, eENERGY_SPENT); }
+bool PlayerClient::hasDied()        { return ZP_IS_FLAG_ENABLED(m_events, eDEATH); }
+bool PlayerClient::hasSpawned()     { return ZP_IS_FLAG_ENABLED(m_events, eSPAWN); }
+bool PlayerClient::hasDoneDamage()  { return ZP_IS_FLAG_ENABLED(m_events, eDAMAGE_DONE); }
+bool PlayerClient::hasKilled()      { return ZP_IS_FLAG_ENABLED(m_events, eKILL); }
 
-void Player::syncSpawn() {
-	Zap::ActorLoader loader;
-	localSpawn(loader);
+PlayerClient::PlayerClient(Zap::Scene& scene)
+	: Player(scene, "User")
+{
+	m_camera = Zap::Actor(); // creating a camera to follow player
+	m_scene.attachActor(m_camera);
+	m_camera.addTransform(glm::mat4(1));
+	m_camera.addCamera();
 }
 
-void Player::syncDeath() {
-	localKill();
-}
-void Player::syncDeath(Player& killer) {
-	localKill();
-	killer.m_kills++;
-	killer.m_recordEvents |= eKILL;
-}
-
-void Player::syncMove(glm::mat4 transform) {
-	if(m_active)
-		setTransform(transform);
-}
-
-void Player::syncDamage(Player& damager, float damage, float newHealth) {
-	m_health = newHealth;
-	damager.m_damage += damage;
-	damager.m_recordEvents |= eDAMAGE_DONE;
+PlayerClient::~PlayerClient() {
+	m_camera.destroy();
+	if (m_active) {
+		m_core.destroy();
+	}
 }

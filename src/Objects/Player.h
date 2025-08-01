@@ -10,14 +10,11 @@
 
 class Player {
 public:
-	Player(Zap::Scene& scene, std::string username, Zap::ActorLoader loader = Zap::ActorLoader());
+	Player(Zap::Scene& scene, std::string username);
 	~Player();
 
-	void updateAnimations(float dt);
-
-	void updateInputs(Controls& controls, float dt);
-
-	// only this clients player is updated
+	// only this clients player mechanics are beeing updated
+	// only updates mechanics in game, not in main menu
 	void updateMechanics(Controls& controls, float dt);
 
 	void update(Controls& controls, float dt);
@@ -25,24 +22,18 @@ public:
 	void damage(float damage);
 	void damage(float damage, const Player& damager);
 
-	// spawn player without without network sync
-	void localSpawn(Zap::ActorLoader& loader);
+	// spawn player without network sync
+	void localSpawn();
 
-	// kill player without without network sync
+	// kill player without network sync
 	void localKill();
 
-	void spawn(Zap::ActorLoader loader = Zap::ActorLoader());
+	void spawn();
 
 	void kill();
 	void kill(const Player& killer);
 
 	void spendEnergy(float energy);
-
-	void disableInput();
-
-	void enableInput();
-
-	bool receivesInput();
 
 	bool isAlive();
 
@@ -72,17 +63,77 @@ public:
 
 	std::string getUsername();
 
-	Zap::Actor getCamera();
-
 	Zap::Actor getPhysicsActor();
-
-	glm::mat4 getCameraTransform();
 
 	glm::vec3 getMovementDirection();
 
 	void setTransform(glm::mat4 transform);
 
 	glm::mat4 getTransform();
+
+protected:
+	// synchronized
+	Zap::Actor m_base; // this is the actual transform of the player
+
+	bool m_active = false; // switches between active and spectator mode TODO integrate into player modes
+	enum Mode {
+		eWEAPON = 0x0,
+		eABILITY = 0x1
+	} m_mode = eWEAPON;
+
+	float m_health = 100;
+	float m_energy = 100;
+
+	uint32_t m_kills = 0;
+	uint32_t m_deaths = 0;
+	float m_damage = 0;
+	//
+
+	Zap::Scene& m_scene;
+
+	PlayerInventory m_inventory;
+
+	Zap::Actor m_hull; // the rotating hull
+
+	std::string m_username;
+
+	glm::vec3 m_movementDir = { 0, 0, 0 };
+	float m_spawnProtection = 5;
+	float m_spawnTimeout = 5;
+};
+
+class PlayerServer : public Player {
+
+};
+
+class PlayerClient : public Player {
+public:
+	PlayerClient(Zap::Scene& scene);
+	~PlayerClient();
+
+	void updateAnimations(float dt);
+
+	void updateInputs(Controls& controls, float dt);
+
+	void update(Controls& controls, float dt);
+
+	void damage(float damage, const Player& damager);
+
+	void localSpawn();
+
+	void localKill();
+
+	void spendEnergy(float energy);
+
+	void disableInput();
+
+	void enableInput();
+
+	bool receivesInput();
+
+	Zap::Actor getCamera();
+
+	glm::mat4 getCameraTransform();
 
 	// events
 	bool hasTakenDamage();
@@ -92,45 +143,11 @@ public:
 	bool hasDoneDamage();
 	bool hasKilled();
 
-	// network interaction/synchronization
-	void syncSpawn();
-
-	void syncDeath();
-	void syncDeath(Player& killer);
-
-	void syncMove(glm::mat4 transform);
-
-	void syncDamage(Player& damager, float damage, float newHealth);
-
 private:
 	bool m_recvInput = false; // UI can block input
-	bool m_active = false; // switches between active and spectator mode TODO integrate into player modes
 
-	enum Mode {
-		eWEAPON = 0x0,
-		eABILITY = 0x1
-	} m_mode = eWEAPON;
-
-	Zap::Actor m_base; // this is the actual transform of the player
 	Zap::Actor m_core; // the bright core in the centre
-	Zap::Actor m_hull; // the rotating hull
 	Zap::Actor m_camera;
-
-	PlayerInventory m_inventory;
-
-	float m_health = 100;
-	float m_energy = 100;
-
-	uint32_t m_kills = 0;
-	uint32_t m_deaths = 0;
-	float m_damage = 0;
-
-	std::string m_username;
-	Zap::Scene& m_scene;
-
-	glm::vec3 m_movementDir = { 0, 0, 0 };
-	float m_spawnProtection = 5;
-	float m_spawnTimeout = 5;
 
 	// events
 	enum Events {

@@ -110,42 +110,10 @@ void NetworkHandlerServer::handleIncomingPackets() {
 }
 
 void NetworkHandlerServer::loop() {
-	// Tests
-	TestObject obj;
-	obj.val = 2.5;
-
-	int counter = -1000;
-	std::vector<std::shared_ptr<ReplicationPacket>> hector;
-	//
 	while (shouldRunThreads()) {
 		Sleep(1);
 		handleIncomingPackets();
 
-		// Tests
-		if (counter == 10) {
-			printf("10\n");
-			hector.push_back(m_replicationManager.replicateCreate(&obj));
-		}
-		if (counter == 60) {
-			printf("60\n");
-			hector.push_back(m_replicationManager.replicateUpdate(&obj, 0));
-			obj.val = 5;
-		}
-		if (counter == 110) {
-			printf("110\n");
-			hector.push_back(m_replicationManager.replicateUpdate(&obj, 1));
-		}
-		if (counter == 160) {
-			printf("160\n");
-			hector.push_back(m_replicationManager.replicateDestroy(&obj));
-		}
-
-		for (auto& clientPair : m_clientSocketMap)
-			for (auto& packet : hector)
-				packet->sendTo(clientPair.second.stream);
-		hector.clear();
-		counter++;
-		//
 	}
 }
 
