@@ -2,6 +2,8 @@
 
 #include "Log.h"
 #include "Layers/NetworkHandler.h"
+#include "Layers/SimulationHandler.h"
+#include "Layers/InputHandler.h"
 #include "Shares/NetworkData.h"
 #include "Shares/Render.h"
 #include "Shares/World.h"
@@ -502,15 +504,14 @@ void pushErrorPopup(GuiData& gui, std::string msg) {
 }
 
 void updateMainMenu(WorldDataClient& world, RenderData& render, NetworkData& network, GuiData& gui, Controls& controls, float dt, Zap::Window& window) {
+	static InputHandlerClient inputHandler;
+	inputHandler.takeInput(controls, !(gui.state & GuiData::eGAME));
 	logger::beginRegion("players");
 	{
 		std::lock_guard<std::mutex> lk(world.mPlayer);
 		if (std::shared_ptr<PlayerClient> spPlayer = world.wpPlayer.lock()) {
-			if (gui.state & GuiData::eGAME) {
-				spPlayer->updateInputs(controls, dt);
-			}
-			spPlayer->updateAnimations(dt);
-			spPlayer->update(controls, dt);
+			spPlayer->updateFocused(dt, controls, inputHandler);
+			spPlayer->update(dt);
 		}
 	}
 	logger::endRegion();
@@ -556,40 +557,10 @@ void updateMainMenu(WorldDataClient& world, RenderData& render, NetworkData& net
 }
 
 void update(WorldDataClient& world, RenderData& render, NetworkData& network, GuiData& gui, Controls& controls, float dt, Zap::Window& window) {
-	logger::beginRegion("players");
-	{
-		std::lock_guard<std::mutex> lk(world.mPlayer);
-		if (std::shared_ptr<PlayerClient> spPlayer = world.wpPlayer.lock()) {
-			spPlayer->updateMechanics(controls, dt);
-			if (gui.state & GuiData::eGAME)
-				spPlayer->updateInputs(controls, dt);
-#ifdef _DEBUG
-			if (ImGui::IsKeyPressed(ImGuiKey_R)) {
-				spPlayer->kill();
-				spPlayer->spawn();
-			}
-			if (ImGui::IsKeyPressed(ImGuiKey_K))
-				spPlayer->kill();
-#endif // _DEBUG
-		}
-		for (auto spPlayerPair : world.game.players) {
-			spPlayerPair.second->updateAnimations(dt);
-			spPlayerPair.second->update(controls, dt);
-		} 
-	}
-	logger::endRegion();
-
-	logger::beginRegion("animations");
-	for (size_t i = 0; i < world.animations.size(); i++) {
-		if (auto spAnimation = world.animations[i].lock()) {
-			spAnimation->update(dt);
-		}
-		else {
-			world.animations.erase(world.animations.begin() + i);
-			i--;
-		}
-	}
-	logger::endRegion();
+	static SimulationHandlerClient simulationHandler;
+	static InputHandlerClient inputHandler;
+	inputHandler.takeInput(controls, !(gui.state & GuiData::eGAME));
+	simulationHandler.simulate(dt, world, controls, inputHandler);
 
 	logger::beginRegion("gui");
 	glm::vec2 displaySize = ImGui::GetIO().DisplaySize;

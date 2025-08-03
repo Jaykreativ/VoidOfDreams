@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Layers/InputHandler.h"
 #include "Shares/Controls.h"
 #include "Objects/Inventory.h"
 
@@ -13,11 +14,8 @@ public:
 	Player(Zap::Scene& scene, std::string username);
 	~Player();
 
-	// only this clients player mechanics are beeing updated
-	// only updates mechanics in game, not in main menu
+	// should only update mechanics in game, not in main menu
 	void updateMechanics(Controls& controls, float dt);
-
-	virtual void update(Controls& controls, float dt);
 
 	void damage(float damage);
 	virtual void damage(float damage, const Player& damager);
@@ -65,8 +63,6 @@ public:
 
 	Zap::Actor getPhysicsActor();
 
-	glm::vec3 getMovementDirection();
-
 	void setTransform(glm::mat4 transform);
 
 	glm::mat4 getTransform();
@@ -97,13 +93,14 @@ protected:
 
 	std::string m_username;
 
-	glm::vec3 m_movementDir = { 0, 0, 0 };
 	float m_spawnProtection = 5;
 	float m_spawnTimeout = 5;
+
+	virtual void update(float dt);
 };
 
 class PlayerServer : public Player {
-
+	void update(float dt);
 };
 
 class PlayerClient : public Player {
@@ -111,11 +108,11 @@ public:
 	PlayerClient(Zap::Scene& scene);
 	~PlayerClient();
 
-	void updateAnimations(float dt);
+	// does all updates needed for the real player
+	void updateFocused(float dt, Controls& controls, InputHandlerClient& input);
 
-	void updateInputs(Controls& controls, float dt);
-
-	void update(Controls& controls, float dt);
+	// general update function for all players
+	void update(float dt);
 
 	void damage(float damage, const Player& damager);
 
@@ -165,4 +162,6 @@ private:
 	uint32_t m_events = eNONE;
 
 	void updateCamera(Controls& controls);
+
+	void updateAnimations(float dt);
 };
