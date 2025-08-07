@@ -16,8 +16,10 @@ ReplicationObject* playerCreate(WorldDataClient& world) {
 void playerDestroy(WorldDataClient& world, ReplicationObject* obj) {
 	auto it = world.game.players.begin();
 	for (auto spPlayer : world.game.players) {
-		if (spPlayer.get() == obj)
+		if (spPlayer.get() == obj) {
 			world.game.players.erase(it); // remove destroyed player
+			return;
+		}
 		it++;
 	}
 }

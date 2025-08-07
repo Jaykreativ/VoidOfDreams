@@ -56,7 +56,8 @@ ReplicationObject* LinkingContext::getObject(Zap::UUID id) {
 	if (hasObject(id))
 		return m_idToObjectMap.at(id);
 	else
-		logger::error("LinkingContext::getObject(): network id unknown, no object with this id registered");
+		logger::warning("LinkingContext::getObject(): network id unknown, no object with this id registered");
+	return nullptr;
 }
 
 void LinkingContext::addObject(ReplicationObject* pObject, Zap::UUID id) {
@@ -93,12 +94,14 @@ void ReplicationManagerClient::processReplication(WorldDataClient& world) {
 		}
 		case ReplicationPacket::eUPDATE: {
 			auto* pObject = m_linkingContext.getObject(replication->objectId);
-			pObject->readFromReplication(replication, replication->status);
+			if(pObject)
+				pObject->readFromReplication(replication, replication->status);
 			break;
 		}
 		case ReplicationPacket::eDESTROY: {
 			auto* pObject = m_linkingContext.getObject(replication->objectId);
-			ObjectCreationRegistry::get().destroy(replication->classId, world, pObject);
+			if (pObject)
+				ObjectCreationRegistry::get().destroy(replication->classId, world, pObject);
 			break;
 		}
 		}
@@ -107,9 +110,6 @@ void ReplicationManagerClient::processReplication(WorldDataClient& world) {
 }
 
 std::shared_ptr<ReplicationPacket> ReplicationManagerServer::replicateCreate(ReplicationObject* object) {
-	if (m_linkingContext.hasObject(object))
-		logger::error("ReplicationManagerServer::replicateCreate(): object creation already replicated");
-
 	auto spPacket = std::make_shared<ReplicationPacket>();
 	spPacket->type = ReplicationPacket::eCREATE;
 	spPacket->classId = object->classId();

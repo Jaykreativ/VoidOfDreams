@@ -80,6 +80,7 @@ private:
 	// (#0:tcp server)
 	// (#1:udp server)
 	// index can be converted to corresponding clientSocket index by -2
+	std::mutex m_mPollfds;
 	std::vector<pollfd> m_pollfds = {};
 
 	SocketData m_serverSocket = {};
@@ -110,13 +111,19 @@ private:
 
 	void setupServerSocket(uint16_t port);
 
+	void setupNewClient(ClientData& client);
+
 	void handleHelloPacket(IncomingPacket& inPacket);
+
+	void handleDisconnectPacket(IncomingPacket& inPacket);
 
 	void handleIncomingPackets();
 
 	void loop();
 
 	void acceptClient();
+
+	void disconnectClient(Zap::UUID id);
 
 	//void disconnectClient(int index);
 

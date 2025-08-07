@@ -76,36 +76,8 @@ void createPacket(int type, std::shared_ptr<Packet>& spPacket) {
 		spPacket = std::make_shared<ReplicationPacket>();
 		break;
 	}
-	case eCONNECT: {
-		spPacket = std::make_shared<ConnectPacket>();
-		break;
-	}
-	case eUDP_CONNECT: {
-		spPacket = std::make_shared<UDPConnectPacket>();
-		break;
-	}
-	case eDISCONNECT: {
+	case eDisconnect: {
 		spPacket = std::make_shared<DisconnectPacket>();
-		break;
-	}
-	case eMOVE: {
-		spPacket = std::make_shared<MovePacket>();
-		break;
-	}
-	case eDamage: {
-		spPacket = std::make_shared<DamagePacket>();
-		break;
-	}
-	case eSpawn: {
-		spPacket = std::make_shared<SpawnPacket>();
-		break;
-	}
-	case eDeath: {
-		spPacket = std::make_shared<DeathPacket>();
-		break;
-	}
-	case eRay: {
-		spPacket = std::make_shared<RayPacket>();
 		break;
 	}
 	default:
@@ -229,8 +201,8 @@ void HelloPacket::pack(char* buf) {
 }
 
 void HelloPacket::unpackData(const char* buf, uint32_t size) {
-	id = ntohf(reinterpret_cast<const uint64_t*>(buf)[0]); buf += sizeof(id);
-	unpackString(buf);
+	id = ntohll(reinterpret_cast<const uint64_t*>(buf)[0]); buf += sizeof(id);
+	username = unpackString(buf);
 }
 
 // WelcomePacket
@@ -367,118 +339,17 @@ void ReplicationPacket::unpackData(const char* buf, uint32_t size) {
 	}
 }
 
-// ConnectPacket
-uint32_t ConnectPacket::dataSize() {
-	return 0;
-}
-
-void ConnectPacket::pack(char* buf) {
-	packGeneralData(buf, eCONNECT);
-	/* data */
-}
-
-void ConnectPacket::unpackData(const char* buf, uint32_t size) {}
-
-// UDPConnectPacket
-uint32_t UDPConnectPacket::dataSize() {
-	return 0;
-}
-
-void UDPConnectPacket::pack(char* buf) {
-	packGeneralData(buf, eUDP_CONNECT);
-	/* data */
-}
-
-void UDPConnectPacket::unpackData(const char* buf, uint32_t size) {}
-
 // DisconnectPacket
 uint32_t DisconnectPacket::dataSize() {
-	return 0;
+	return sizeof(uint64_t);
 }
 
 void DisconnectPacket::pack(char* buf) {
-	packGeneralData(buf, eDISCONNECT);
+	packGeneralData(buf, eDisconnect);
 	/* data */
+	reinterpret_cast<uint64_t*>(buf)[0] = htonll(id); buf += sizeof(id);
 }
 
-void DisconnectPacket::unpackData(const char* buf, uint32_t size) {}
-
-// MovePacket
-uint32_t MovePacket::dataSize() {
-	return sizeof(glm::mat4);
-}
-
-void MovePacket::pack(char* buf) {
-	packGeneralData(buf, eMOVE);
-	/* data */
-	sock::htonMat4(transform, buf);
-}
-
-void MovePacket::unpackData(const char* buf, uint32_t size) {
-	sock::ntohMat4(buf, transform);
-}
-
-// DamagePacket
-uint32_t DamagePacket::dataSize() {
-	return usernameDamager.size() + sizeof(uint32_t) + 2*sizeof(float);
-}
-
-void DamagePacket::pack(char* buf) {
-	packGeneralData(buf, eDamage);
-	/* data */
-	packString(buf, usernameDamager);
-	uint32_t nDamage = htonf(damage);
-	memcpy(buf, &nDamage, sizeof(uint32_t)); buf += sizeof(uint32_t);
-	uint32_t nHealth = htonf(health);
-	memcpy(buf, &nHealth, sizeof(uint32_t));
-}
-
-void DamagePacket::unpackData(const char* buf, uint32_t size) {
-	usernameDamager = unpackString(buf);
-	damage = ntohf(reinterpret_cast<const uint32_t*>(buf)[0]);
-	health = ntohf(reinterpret_cast<const uint32_t*>(buf)[1]);
-}
-
-// SpawnPacket
-uint32_t SpawnPacket::dataSize() {
-	return 0;
-}
-
-void SpawnPacket::pack(char* buf) {
-	packGeneralData(buf, eSpawn);
-	/* data */
-}
-
-void SpawnPacket::unpackData(const char* buf, uint32_t size) {}
-
-// DeathPacket
-uint32_t DeathPacket::dataSize() {
-	return usernameKiller.size() + sizeof(uint32_t);
-}
-
-void DeathPacket::pack(char* buf) {
-	packGeneralData(buf, eDeath);
-	/* data */
-	packString(buf, usernameKiller);
-}
-
-void DeathPacket::unpackData(const char* buf, uint32_t size) {
-	usernameKiller = unpackString(buf);
-}
-
-// RayPacket
-uint32_t RayPacket::dataSize() {
-	return 2*sizeof(glm::vec3);
-}
-
-void RayPacket::pack(char* buf) {
-	packGeneralData(buf, eRay);
-	/* data */
-	sock::htonVec3(origin, buf); buf += sizeof(glm::vec3);
-	sock::htonVec3(direction, buf);
-}
-
-void RayPacket::unpackData(const char* buf, uint32_t size) {
-	sock::ntohVec3(buf, origin); buf += sizeof(glm::vec3);
-	sock::ntohVec3(buf, direction);
+void DisconnectPacket::unpackData(const char* buf, uint32_t size) {
+	id = ntohll(reinterpret_cast<const uint64_t*>(buf)[0]); buf += sizeof(id);
 }

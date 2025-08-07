@@ -107,6 +107,13 @@ void NetworkHandlerServer::sendToAllDgram(Packet& packet) {
 		packet.sendToDgram(m_serverSocket.dgram, reinterpret_cast<const sockaddr*>(&clientPair.second.socket.addr));
 }
 
+void NetworkHandlerServer::setupNewClient(ClientData& client) {
+	for (auto& playerPair : m_world.players) {
+		auto spPacket = m_replicationManager.replicateCreate(playerPair.second.get());
+		spPacket->sendTo(client.socket.stream);
+	}
+}
+
 void NetworkHandlerServer::handleHelloPacket(IncomingPacket& inPacket) {
 	HelloPacket* packet = reinterpret_cast<HelloPacket*>(inPacket.spPacket.get());
 	auto id = packet->id;
@@ -120,22 +127,44 @@ void NetworkHandlerServer::handleHelloPacket(IncomingPacket& inPacket) {
 	if (inPacket.isDgram) {
 		m_clients[id].socket.addr = inPacket.addr;
 		welcome.sendToDgram(m_serverSocket.dgram, reinterpret_cast<sockaddr*>(&inPacket.addr));
-		printf("register dgram address\n");
+		printf("register dgram address for client[username=%s, id=%llu]\n", username.c_str(), id);
 	}
 	else {
 		m_clients[id].socket.stream = inPacket.streamSocket;
 		welcome.sendTo(inPacket.streamSocket);
-		printf("register stream socket\n");
+		printf("register stream socket for client[username=%s, id=%llu]\n", username.c_str(), id);
 	}
+
+	auto& client = m_clients.at(id);
+	if (client.isFullyConnected()) { // do client initializing
+		setupNewClient(client);
+	}
+}
+
+void NetworkHandlerServer::handleDisconnectPacket(IncomingPacket& inPacket) {
+	DisconnectPacket* packet = reinterpret_cast<DisconnectPacket*>(inPacket.spPacket.get());
+	if(!inPacket.isDgram)
+		packet->sendTo(inPacket.streamSocket); // confirm disconnect
+	auto id = packet->id;
+	disconnectClient(id);
+
+	auto spPacket = m_replicationManager.replicateDestroy(m_world.players.at(id).get());
+	m_world.players.erase(id);
+
+	sendToAll(*spPacket);
 }
 
 void NetworkHandlerServer::handleIncomingPackets() {
 	std::lock_guard<std::mutex> lk(m_mIncomingPackets);
-	for (IncomingPacket inPacket : m_incomingPackets) {
+	for (IncomingPacket& inPacket : m_incomingPackets) {
 		switch (inPacket.type)
 		{
 		case PacketType::eHello: {
 			handleHelloPacket(inPacket);
+			break;
+		}
+		case PacketType::eDisconnect: {
+			handleDisconnectPacket(inPacket);
 			break;
 		}
 		default:
@@ -195,23 +224,27 @@ void NetworkHandlerServer::acceptClient() {
 	printf("client connected: %s\n", sock::addrToPresentation(reinterpret_cast<sockaddr*>(&clientAddr)).c_str());
 }
 
-//void NetworkHandlerServer::disconnectClient(int index) { TODO disconnect the client if no disconnect packet was sent, cleanup with looping through the map and searching for the invalid client manually
-//	SocketData socket = m_clientSocketMap[index];
-//	printf("client disconnected: %s\n", sock::addrToPresentation(reinterpret_cast<sockaddr*>(&socket.addr)).c_str());
-//
-//	if (sock::closeSocket(socket.stream) < 0) {
-//		sock::printLastError("close(stream)");
-//		exit(sock::lastError());
-//	}
-//
-//	m_clientSocketMap.erase(m_clientSocketMap.begin() + index); // delete the clients socket data
-//	m_pollfds.erase(m_pollfds.begin() + index + 1); // delete the clients pollfd, +1 for the server pollfd
-//	m_eraseOffset++;
-//}
+void NetworkHandlerServer::disconnectClient(Zap::UUID id) { // TODO disconnect the client if no disconnect packet was sent
+	printf("client[username=%s, id=%llu] disconnected\n", m_clients.at(id).username.c_str(), id);
+
+	{ // delete the clients pollfds
+		std::lock_guard<std::mutex> lk(m_mPollfds);
+		for (size_t i = 2; i < m_pollfds.size(); i++) {
+			if (m_pollfds[i].fd == m_clients.at(id).socket.stream) {
+				m_pollfds.erase(m_pollfds.begin()+i);
+				break;
+			}
+		}
+	}
+
+	sock::closeSocket(m_clients.at(id).socket.stream);
+	m_clients.erase(id);
+}
 
 void NetworkHandlerServer::handlePoll(int pollCount) {
 	int checkedPollCount = 0;
 
+	std::lock_guard<std::mutex> lk(m_mPollfds);
 	pollfd serverStreamPollfd = m_pollfds[0];
 	if (serverStreamPollfd.revents & POLLIN) { // accept client
 		acceptClient();
@@ -245,7 +278,11 @@ void NetworkHandlerServer::handlePoll(int pollCount) {
 
 void NetworkHandlerServer::recvLoop() {
 	while (shouldRunThreads()) {
-		int pollCount = sock::pollState(m_pollfds.data(), m_pollfds.size(), 100);// fetch events of the given pollfds
+		int pollCount = 0;
+		{
+			std::lock_guard<std::mutex> lk(m_mPollfds);
+			pollCount = sock::pollState(m_pollfds.data(), m_pollfds.size(), 100);// fetch events of the given pollfds
+		}
 		if (pollCount == 0)
 			continue;
 		assertSocket(pollCount, "poll");
@@ -306,6 +343,8 @@ void NetworkHandlerServer::setupServerSocket(uint16_t port) {
 NetworkHandlerClient::NetworkHandlerClient(std::string ip, uint16_t port, std::string username)
 	: NetworkHandler(), m_id(), m_username(username)
 {
+	printf("start client[id=%llu]\n", m_id);
+
 	addrinfo hints;
 	addrinfo* serverInfo;
 	memset(&hints, 0, sizeof(hints));
@@ -345,6 +384,18 @@ NetworkHandlerClient::NetworkHandlerClient(std::string ip, uint16_t port, std::s
 
 NetworkHandlerClient::~NetworkHandlerClient() {
 	terminateThreads();
+
+	DisconnectPacket disconnectPacket;
+	disconnectPacket.id = m_id;
+	disconnectPacket.sendTo(m_serverSocket.stream);
+	while (true) {
+		int type;
+		if (!Packet::receiveFrom(type, m_serverSocket.stream))
+			break;
+		if (type == PacketType::eDisconnect)
+			break;
+	}
+
 	assertSocket(sock::closeSocket(m_serverSocket.stream), "closeSocket(serverSocket.stream)");
 	assertSocket(sock::closeSocket(m_serverSocket.dgram), "closeSocket(serverSocket.dgram)");
 

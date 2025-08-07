@@ -16,24 +16,13 @@ enum PacketType {
 	eWelcome = 2,
 	eReplication = 3,
 	eDisconnect = 4,
-
-	// useless remove
-	eMESSAGE = 10,
-	eCONNECT = 20,
-	eDISCONNECT = 30,
-	eMOVE = 40,
-	eDamage = 50,
-	eSpawn = 60,
-	eDeath = 70,
-	eUDP_CONNECT = 8,
-	eRay = 100
 };
 
 class Packet {
 public:
 	// general data
 	// all packets have this data
-	std::string username = "";
+	/* ... */
 
 	// send this packet to the specified socket
 	// socket has to be a stream socket or a connected dgram socket
@@ -180,123 +169,11 @@ protected:
 	void unpackData(const char* buf, uint32_t size);
 };
 
-class ConnectPacket : public Packet {
-	friend class Packet;
-public:
-	// data
-
-protected:
-	uint32_t dataSize();
-
-	// packs the data into the given buffer, buffer needs to have the same size as packet.fullSize()
-	void pack(char* buf);
-
-	// takes just the data part
-	void unpackData(const char* buf, uint32_t size);
-};
-
-class UDPConnectPacket : public Packet {
-	friend class Packet;
-public:
-	// data
-
-protected:
-	uint32_t dataSize();
-
-	// packs the data into the given buffer, buffer needs to have the same size as packet.fullSize()
-	void pack(char* buf);
-
-	// takes just the data part
-	void unpackData(const char* buf, uint32_t size);
-};
-
 class DisconnectPacket : public Packet {
 	friend class Packet;
 public:
 	// data
-
-protected:
-	uint32_t dataSize();
-
-	// packs the data into the given buffer, buffer needs to have the same size as packet.fullSize()
-	void pack(char* buf);
-
-	// takes just the data part
-	void unpackData(const char* buf, uint32_t size);
-};
-
-class MovePacket : public Packet {
-	friend class Packet;
-public:
-	// data
-	glm::mat4 transform = glm::mat4(1);
-
-protected:
-	uint32_t dataSize();
-
-	// packs the data into the given buffer, buffer needs to have the same size as packet.fullSize()
-	void pack(char* buf);
-
-	// takes just the data part
-	void unpackData(const char* buf, uint32_t size);
-};
-
-class DamagePacket : public Packet {
-	friend class Packet;
-public:
-	//data
-	std::string usernameDamager = "";
-	float damage = 0;
-	float health = 0;
-
-protected:
-	uint32_t dataSize();
-
-	// packs the data into the given buffer, buffer needs to have the same size as packet.fullSize()
-	void pack(char* buf);
-
-	// takes just the data part
-	void unpackData(const char* buf, uint32_t size);
-};
-
-class SpawnPacket : public Packet {
-	friend class Packet;
-public:
-	//data
-
-protected:
-	uint32_t dataSize();
-
-	// packs the data into the given buffer, buffer needs to have the same size as packet.fullSize()
-	void pack(char* buf);
-
-	// takes just the data part
-	void unpackData(const char* buf, uint32_t size);
-};
-
-class DeathPacket : public Packet {
-	friend class Packet;
-public:
-	//data
-	std::string usernameKiller = "";
-
-protected:
-	uint32_t dataSize();
-
-	// packs the data into the given buffer, buffer needs to have the same size as packet.fullSize()
-	void pack(char* buf);
-
-	// takes just the data part
-	void unpackData(const char* buf, uint32_t size);
-};
-
-// Item Packetsgit 
-class RayPacket : public Packet {
-	friend class Packet;
-public:
-	//data
-	glm::vec3 origin = { 0, 0, 0 };
-	glm::vec3 direction = { 0, 0, 0 };
+	Zap::UUID id;
 
 protected:
 	uint32_t dataSize();

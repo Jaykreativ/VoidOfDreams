@@ -606,6 +606,12 @@ void gameLoop(RenderData& render, WorldDataClient& world, NetworkData& network, 
 		logger::beginRegion("loop"); // define regions for profiling
 		auto startFrame = std::chrono::high_resolution_clock::now();
 
+		// check for invalid server
+		if (network.server && !network.server->isValid()) {
+			switchToMainMenu(world, network, render);
+			printf("server crashed ):<\n");
+		}
+
 		logger::beginRegion("replication");
 		if (network.client && network.client->isFullyConnected() && network.client->isValid()) {
 			network.client->replicateWorldState(world);
