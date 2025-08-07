@@ -25,14 +25,15 @@
 
 #include "Shares/Controls.h"
 #include "Shares/World.h"
+#include "Shares/NetworkData.h"
 #include "Shares/Render.h"
 #include "Shares/GuiData.h"
 
 void pushErrorPopup(GuiData& gui, std::string msg);
 
-void switchToMainMenu(WorldDataClient& world, RenderData& render);
+void switchToMainMenu(WorldDataClient& world, NetworkData& network, RenderData& render);
 
-void switchToGame(WorldDataClient& world, RenderData& render);
+void switchToGame(WorldDataClient& world, NetworkData& network, RenderData& render);
 
 void setupLocalPlayer(WorldDataClient& world, std::string username);
 

@@ -8,6 +8,7 @@
 #include "Shares/Render.h"
 #include "Shares/World.h"
 #include "Shares/GuiData.h"
+#include "Objects/Player.h"
 #include "Objects/Inventory.h"
 #include "Objects/Weapons/Ray.h"
 #include "Objects/PermaAbilities/Dash.h"
@@ -123,6 +124,18 @@ public:
 private:
 	HudData& m_hud;
 };
+
+void host(NetworkData& network, WorldDataClient& world, RenderData& render) {
+	network.server = std::make_unique<NetworkHandlerServer>(std::stoi(network.port));
+	Sleep(10);
+	network.client = std::make_unique<NetworkHandlerClient>(network.ip, std::stoi(network.port), network.username);
+	switchToGame(world, network, render);
+}
+
+void join(NetworkData& network, WorldDataClient& world, RenderData& render) {
+	network.client = std::make_unique<NetworkHandlerClient>(network.ip, std::stoi(network.port), network.username);
+	switchToGame(world, network, render);
+}
 
 void drawHud(GuiData& gui, PlayerClient& player, float dt) {
 	ImGui::SetNextWindowSize(ImGui::GetIO().DisplaySize);
@@ -384,30 +397,17 @@ void drawPauseMainMenu(WorldDataClient& world, RenderData& render, NetworkData& 
 	ImGui::BeginChild("Inner Menu", { 0, 0 }, ImGuiChildFlags_AlwaysUseWindowPadding | ImGuiChildFlags_AutoResizeX | ImGuiChildFlags_AutoResizeY);
 
 	ImGui::PushFont(gui.headerFont);
-	if (ImGui::Button("Continue", gui.pauseButtonSize) || ImGui::IsKeyPressed(ImGuiKey_Escape)) { // use imgui to capture mouse because there is no menu implemented yet
+	if (ImGui::Button("Continue", gui.pauseButtonSize) || ImGui::IsKeyPressed(ImGuiKey_Escape)) {
 		glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
 		gui.state = GuiData::eGAME;
 	}
 
-	//if (server::isRunning()) {
-	//	if (ImGui::Button("Cancel", gui.pauseButtonSize)) {
-	//		terminateServer();
-	//	}
-	//}
-	//else {
-		if (ImGui::Button("Host", gui.pauseButtonSize)) {
-			//runServer(network);
-			//waitServerStartup();
-			//runClient(network, world);
-			//if (client::isRunning())
-				switchToGame(world, render);
-		}
-	//}
+	if (ImGui::Button("Host", gui.pauseButtonSize)) {
+		host(network, world, render);
+	}
 
 	if (ImGui::Button("Join", gui.pauseButtonSize)) {
-		//runClient(network, world);
-		//if (client::isRunning())
-			switchToGame(world, render);
+		join(network, world, render);
 	}
 
 	if (ImGui::Button("Settings", gui.pauseButtonSize)) {
@@ -481,11 +481,7 @@ void drawPauseMenuClient(WorldDataClient& world, RenderData& render, NetworkData
 	}
 
 	if (ImGui::Button("Main Menu", gui.pauseButtonSize)) {
-		//if (client::isRunning())
-		//	terminateClient(network, world);
-		//if (server::isRunning())
-		//	terminateServer();
-		switchToMainMenu(world, render);
+		switchToMainMenu(world, network, render);
 	}
 	ImGui::PopFont();
 
@@ -611,7 +607,7 @@ void gameLoop(RenderData& render, WorldDataClient& world, NetworkData& network, 
 		auto startFrame = std::chrono::high_resolution_clock::now();
 
 		logger::beginRegion("replication");
-		if (network.client->isFullyConnected() && network.client->isValid()) {
+		if (network.client && network.client->isFullyConnected() && network.client->isValid()) {
 			network.client->replicateWorldState(world);
 		}
 		logger::endRegion();
@@ -669,8 +665,11 @@ void gameLoop(RenderData& render, WorldDataClient& world, NetworkData& network, 
 	}
 }
 
-void switchToMainMenu(WorldDataClient& world, RenderData& render) {
-	std::lock_guard<std::mutex> lk(world.mPlayer);
+void switchToMainMenu(WorldDataClient& world, NetworkData& network, RenderData& render) {
+	if (network.client)
+		network.client.reset();
+	if (network.server)
+		network.server.reset();
 	world.game.players.clear(); // delete all players when leaving the game
 
 	world.wpScene = world.mainMenu.spScene;
@@ -679,7 +678,7 @@ void switchToMainMenu(WorldDataClient& world, RenderData& render) {
 	world.status = eMAIN_MENU;
 }
 
-void switchToGame(WorldDataClient& world, RenderData& render) {
+void switchToGame(WorldDataClient& world, NetworkData& network, RenderData& render) {
 	world.wpScene = world.game.spScene;
 	render.pbRender->changeScene(world.game.spScene.get());
 	world.status = eGAME;
@@ -702,25 +701,6 @@ void freeGUI(GuiData& gui) {
 	ImGui_ImplVulkan_RemoveTexture((VkDescriptorSet)gui.fontAtlas.TexID);
 	gui.fontSampler.destroy();
 	gui.fontImage.destroy();
-}
-
-void setupLocalPlayer(WorldDataClient& world, std::string username) {
-	{
-		std::lock_guard<std::mutex> lk(world.mScene);
-		world.game.players[username] = std::make_shared<PlayerClient>(*world.game.spScene);
-	}
-	world.wpPlayer = world.game.players.at(username);
-	if (std::shared_ptr<Player> spPlayer = world.wpPlayer.lock()) {
-		spPlayer->getInventory().setItem(std::make_shared<Ray>(world), 0);
-		spPlayer->getInventory().setItem(std::make_shared<SimpleTrigger>(ImGuiMouseButton_Left), 1);
-		spPlayer->getInventory().setItem(std::make_shared<Dash>(), 2);
-		spPlayer->getInventory().setItem(std::make_shared<SimpleTrigger>(ImGuiKey_LeftShift), 3);
-	}
-}
-
-void setupExternalPlayer(WorldDataClient& world, std::string username) {
-	std::lock_guard<std::mutex> lk(world.mScene);
-	world.game.players[username] = std::make_shared<PlayerClient>(*world.game.spScene);
 }
 
 void setupMainMenuWorld(WorldDataClient& world) {
@@ -755,10 +735,6 @@ void runGame() {
 	NetworkData network = {};
 	GuiData gui = {};
 	Controls controls = {};
-
-	network.server = std::make_unique<NetworkHandlerServer>(12525);
-	Sleep(100);
-	network.client = std::make_unique<NetworkHandlerClient>("127.0.0.1", 12525);
 
 	render.window = new Zap::Window(1000, 600, "Void of Dreams");
 	render.window->init();

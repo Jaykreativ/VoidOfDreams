@@ -218,17 +218,19 @@ void Packet::unpackGeneralData(const char*& buf) {}
 
 // HelloPacket
 uint32_t HelloPacket::dataSize() {
-	return sizeof(uint64_t);
+	return sizeof(uint64_t) + sizeof(uint32_t) + username.size();
 }
 
 void HelloPacket::pack(char* buf) {
 	packGeneralData(buf, eHello);
 	/* data */
-	reinterpret_cast<uint64_t*>(buf)[0] = htonll(id);
+	reinterpret_cast<uint64_t*>(buf)[0] = htonll(id); buf += sizeof(id);
+	packString(buf, username);
 }
 
 void HelloPacket::unpackData(const char* buf, uint32_t size) {
-	id = ntohf(reinterpret_cast<const uint64_t*>(buf)[0]);
+	id = ntohf(reinterpret_cast<const uint64_t*>(buf)[0]); buf += sizeof(id);
+	unpackString(buf);
 }
 
 // WelcomePacket
@@ -251,13 +253,49 @@ uint32_t ReplicationPacket::dataSize() {
 	return sizeof(uint32_t)*3 + sizeof(Zap::UUID) + m_data.size();
 }
 
+void ReplicationPacket::write(bool val) {
+	auto oldSize = m_data.size();
+	m_data.resize(oldSize + sizeof(val));
+	memcpy(&m_data[oldSize], &val, sizeof(val));
+}
 void ReplicationPacket::write(float val) {
 	auto oldSize = m_data.size();
 	uint32_t nval = htonf(val);
 	m_data.resize(oldSize + sizeof(nval));
 	memcpy(&m_data[oldSize], &nval, sizeof(nval));
 }
+void ReplicationPacket::write(uint32_t val) {
+	auto oldSize = m_data.size();
+	uint32_t nval = htonl(val);
+	m_data.resize(oldSize + sizeof(nval));
+	memcpy(&m_data[oldSize], &nval, sizeof(nval));
+}
+void ReplicationPacket::write(glm::vec3 val) {
+	write(val.x);
+	write(val.y);
+	write(val.z);
+}
+void ReplicationPacket::write(glm::vec4 val) {
+	write(val.x);
+	write(val.y);
+	write(val.z);
+	write(val.w);
+}
+void ReplicationPacket::write(glm::mat4 val) {
+	write(val[0]);
+	write(val[1]);
+	write(val[2]);
+	write(val[3]);
+}
 
+bool ReplicationPacket::readb() {
+	bool val;
+	size_t readSize = m_readOffset + sizeof(val);
+	assert(m_data.size() >= readSize);
+	memcpy(&val, &m_data[m_readOffset], sizeof(val));
+	m_readOffset += sizeof(val);
+	return val;
+}
 float ReplicationPacket::readf() {
 	uint32_t nval;
 	size_t readSize = m_readOffset + sizeof(nval);
@@ -265,6 +303,38 @@ float ReplicationPacket::readf() {
 	memcpy(&nval, &m_data[m_readOffset], sizeof(nval));
 	m_readOffset += sizeof(nval);
 	float val = ntohf(nval);
+	return val;
+}
+uint32_t ReplicationPacket::readu32() {
+	uint32_t nval;
+	size_t readSize = m_readOffset + sizeof(nval);
+	assert(m_data.size() >= readSize);
+	memcpy(&nval, &m_data[m_readOffset], sizeof(nval));
+	m_readOffset += sizeof(nval);
+	uint32_t val = ntohl(nval);
+	return val;
+}
+glm::vec3 ReplicationPacket::readVec3() {
+	glm::vec3 val;
+	val.x = readf();
+	val.y = readf();
+	val.z = readf();
+	return val;
+}
+glm::vec4 ReplicationPacket::readVec4() {
+	glm::vec4 val;
+	val.x = readf();
+	val.y = readf();
+	val.z = readf();
+	val.w = readf();
+	return val;
+}
+glm::mat4 ReplicationPacket::readMat4() {
+	glm::mat4 val;
+	val[0] = readVec4();
+	val[1] = readVec4();
+	val[2] = readVec4();
+	val[3] = readVec4();
 	return val;
 }
 

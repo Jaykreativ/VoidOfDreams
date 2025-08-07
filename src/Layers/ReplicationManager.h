@@ -9,7 +9,7 @@
 
 // interface class required for object replication
 class ReplicationObject {
-private:
+protected:
 	virtual uint32_t classId() = 0;
 
 	// reads all members indicated by the status flag from the specified ReplicationPacket

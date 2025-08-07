@@ -1,7 +1,5 @@
 #pragma once
 
-#include "Objects/Player.h"
-#include "Objects/Animation.h"
 #include "Objects/Weapons/Ray.h"
 
 #include "Zap/Zap.h"
@@ -13,9 +11,18 @@
 #include <memory>
 #include <mutex>
 
+class PlayerServer;
+class PlayerClient;
+class Animation;
+
 enum WorldStatus {
 	eGAME = 0x1,
 	eMAIN_MENU = 0x2
+};
+
+struct WorldDataServer {
+	std::shared_ptr<Zap::Scene> spScene;
+	std::unordered_map<Zap::UUID, std::shared_ptr<PlayerServer>> players = {};
 };
 
 struct MainMenuWorldData {
@@ -25,7 +32,7 @@ struct MainMenuWorldData {
 
 struct GameWorldData {
 	std::shared_ptr<Zap::Scene> spScene;
-	std::unordered_map<std::string, std::shared_ptr<PlayerClient>> players = {};
+	std::vector<std::shared_ptr<PlayerClient>> players = {};
 
 	std::vector<std::unique_ptr<Ray::Beam>> rayBeams = {};
 };

@@ -1,12 +1,13 @@
 #include "NetworkHandler.h"
 
 #include "Shares/World.h"
+#include "Objects/Player.h"
 
 #include <chrono>
 
 #define SERVER_BACKLOG 10
 
-#define CLIENT_HELLO_FREQUENCY_S 0.5f
+#define CLIENT_HELLO_FREQUENCY_S 0.1f
 
 NetworkHandler::NetworkHandler() {}
 
@@ -60,9 +61,23 @@ void NetworkHandler::recvIncomingDgram(int socketDgram) {
 	m_incomingPackets.push_back({ true, type, spPacket, 0, addr });
 }
 
+bool NetworkHandlerServer::ClientData::isFullyConnected() {
+	return m_isDgramConnected && m_isStreamConnected;
+}
+
+void NetworkHandlerServer::ClientData::connectionMade(bool isDgram) {
+	m_isDgramConnected |= isDgram;
+	m_isStreamConnected |= !isDgram;
+}
+
 NetworkHandlerServer::NetworkHandlerServer(uint16_t port)
 	: NetworkHandler()
 {
+	Zap::SceneDesc desc{};
+	desc.gravity = { 0, 0, 0 };
+	m_world.spScene = std::make_shared<Zap::Scene>();
+	m_world.spScene->init(desc);
+
 	setupServerSocket(port);
 
 	m_loopThread = std::thread(&NetworkHandlerServer::loop, this);
@@ -73,11 +88,45 @@ NetworkHandlerServer::~NetworkHandlerServer() {
 	terminateThreads();
 	assertSocket(sock::closeSocket(m_serverSocket.stream), "closeSocket(serverSocket.stream)");
 	assertSocket(sock::closeSocket(m_serverSocket.dgram), "closeSocket(serverSocket.dgram)");
-	for(auto& clientSocket : m_clientSocketMap)
-		assertSocket(sock::closeSocket(clientSocket.second.stream), "closeSocket(clientSocket.stream)");
-	m_clientSocketMap.clear();
+	for(auto& clientSocket : m_clients)
+		assertSocket(sock::closeSocket(clientSocket.second.socket.stream), "closeSocket(clientSocket.stream)");
+	m_clients.clear();
 
 	m_pollfds.clear();
+
+	m_world.spScene->destroy();
+	printf("server terminated\n");
+}
+
+void NetworkHandlerServer::sendToAll(Packet& packet) {
+	for(auto clientPair : m_clients)
+		packet.sendTo(clientPair.second.socket.stream);
+}
+void NetworkHandlerServer::sendToAllDgram(Packet& packet) {
+	for(auto clientPair : m_clients)
+		packet.sendToDgram(m_serverSocket.dgram, reinterpret_cast<const sockaddr*>(&clientPair.second.socket.addr));
+}
+
+void NetworkHandlerServer::handleHelloPacket(IncomingPacket& inPacket) {
+	HelloPacket* packet = reinterpret_cast<HelloPacket*>(inPacket.spPacket.get());
+	auto id = packet->id;
+	m_clients[id].connectionMade(inPacket.isDgram);
+	auto username = packet->username;
+	m_clients[id].username = username;
+
+	// send a welcome packet to the new client
+	WelcomePacket welcome;
+	welcome.fromDgram = inPacket.isDgram;
+	if (inPacket.isDgram) {
+		m_clients[id].socket.addr = inPacket.addr;
+		welcome.sendToDgram(m_serverSocket.dgram, reinterpret_cast<sockaddr*>(&inPacket.addr));
+		printf("register dgram address\n");
+	}
+	else {
+		m_clients[id].socket.stream = inPacket.streamSocket;
+		welcome.sendTo(inPacket.streamSocket);
+		printf("register stream socket\n");
+	}
 }
 
 void NetworkHandlerServer::handleIncomingPackets() {
@@ -86,20 +135,7 @@ void NetworkHandlerServer::handleIncomingPackets() {
 		switch (inPacket.type)
 		{
 		case PacketType::eHello: {
-			auto id = reinterpret_cast<HelloPacket*>(inPacket.spPacket.get())->id;
-			WelcomePacket welcome;
-			welcome.fromDgram = inPacket.isDgram;
-			if (inPacket.isDgram) {
-				m_clientSocketMap[id].addr = inPacket.addr;
-				welcome.sendToDgram(m_serverSocket.dgram, reinterpret_cast<sockaddr*>(&inPacket.addr));
-				printf("register dgram address\n");
-			}
-			else {
-				m_clientSocketMap[id].stream = inPacket.streamSocket;
-				welcome.sendTo(inPacket.streamSocket);
-				printf("register stream socket\n");
-			}
-			
+			handleHelloPacket(inPacket);
 			break;
 		}
 		default:
@@ -110,10 +146,36 @@ void NetworkHandlerServer::handleIncomingPackets() {
 }
 
 void NetworkHandlerServer::loop() {
+	int count = 0;
 	while (shouldRunThreads()) {
-		Sleep(1);
+		Sleep(50);
 		handleIncomingPackets();
 
+		for (auto& clientPair : m_clients) {
+			auto id = clientPair.first;
+			auto& client = clientPair.second;
+
+			if (client.isFullyConnected()) {
+				if (m_world.players.count(id)) {
+					glm::mat4 mat(1);
+					mat[3] = glm::vec4(sin(count++/5.f+id%1000)*5, 0, 0, 1);
+					m_world.players.at(id)->setTransform(mat);
+					auto spPacket = m_replicationManager.replicateUpdate(m_world.players.at(id).get(), 0);
+					sendToAll(*spPacket);
+				}
+				else { // when the client has no corresponding player, create a new player
+					auto spPlayer = std::make_shared<PlayerServer>(*m_world.spScene);
+					m_world.players[id] = spPlayer;
+					//spPlayer->getInventory().setItem(std::make_shared<Ray>(m_world), 0);
+					//spPlayer->getInventory().setItem(std::make_shared<SimpleTrigger>(ImGuiMouseButton_Left), 1);
+					//spPlayer->getInventory().setItem(std::make_shared<Dash>(), 2);
+					//spPlayer->getInventory().setItem(std::make_shared<SimpleTrigger>(ImGuiKey_LeftShift), 3);
+					spPlayer->spawn();
+					auto spPacket = m_replicationManager.replicateCreate(m_world.players.at(id).get());
+					sendToAll(*spPacket);
+				}
+			}
+		}
 	}
 }
 
@@ -241,8 +303,8 @@ void NetworkHandlerServer::setupServerSocket(uint16_t port) {
 	freeaddrinfo(serverInfo);
 }
 
-NetworkHandlerClient::NetworkHandlerClient(std::string ip, uint16_t port)
-	: NetworkHandler(), m_id()
+NetworkHandlerClient::NetworkHandlerClient(std::string ip, uint16_t port, std::string username)
+	: NetworkHandler(), m_id(), m_username(username)
 {
 	addrinfo hints;
 	addrinfo* serverInfo;
@@ -285,6 +347,8 @@ NetworkHandlerClient::~NetworkHandlerClient() {
 	terminateThreads();
 	assertSocket(sock::closeSocket(m_serverSocket.stream), "closeSocket(serverSocket.stream)");
 	assertSocket(sock::closeSocket(m_serverSocket.dgram), "closeSocket(serverSocket.dgram)");
+
+	printf("client terminated\n");
 }
 
 bool NetworkHandlerClient::isFullyConnected() {
@@ -357,6 +421,7 @@ void NetworkHandlerClient::loop() {
 	std::chrono::steady_clock::time_point lastSent = std::chrono::high_resolution_clock::now();
 	HelloPacket hello; // send hello over tcp and udp
 	hello.id = m_id;
+	hello.username = m_username;
 	hello.sendTo(m_serverSocket.stream);
 	hello.sendToDgram(m_serverSocket.dgram, reinterpret_cast<sockaddr*>(&m_serverSocket.addr));
 

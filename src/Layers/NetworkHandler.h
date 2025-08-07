@@ -83,13 +83,34 @@ private:
 	std::vector<pollfd> m_pollfds = {};
 
 	SocketData m_serverSocket = {};
-	std::unordered_map<Zap::UUID, SocketData> m_clientSocketMap = {}; // stores clientsockets to send the worldstate to
+
+	struct ClientData {
+	public:
+		std::string username = "";
+		SocketData socket = {};
+
+		bool isFullyConnected();
+
+		// counts the number of connections established to the client, tcp and udp
+		// when called two times the client is fully connected
+		void connectionMade(bool isDgram);
+	private:
+		bool m_isDgramConnected = false;
+		bool m_isStreamConnected = false;
+	};
+	std::unordered_map<Zap::UUID, ClientData> m_clients = {};
+	WorldDataServer m_world = {};
 
 	ReplicationManagerServer m_replicationManager;
 
 	uint32_t m_eraseOffset = 0;
 
+	void sendToAll(Packet& packet);
+	void sendToAllDgram(Packet& packet);
+
 	void setupServerSocket(uint16_t port);
+
+	void handleHelloPacket(IncomingPacket& inPacket);
 
 	void handleIncomingPackets();
 
@@ -106,7 +127,7 @@ private:
 
 class NetworkHandlerClient : public NetworkHandler {
 public:
-	NetworkHandlerClient(std::string ip, uint16_t port);
+	NetworkHandlerClient(std::string ip, uint16_t port, std::string username);
 	~NetworkHandlerClient();
 
 	// thread safe function
@@ -116,6 +137,7 @@ public:
 	void replicateWorldState(WorldDataClient& world);
 private:
 	Zap::UUID m_id;
+	std::string m_username;
 
 	std::mutex m_mConnectionStatus;
 	bool m_isDgramRegistered = false; // connection status

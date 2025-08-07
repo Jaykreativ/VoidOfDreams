@@ -1,8 +1,10 @@
 #include "SimulationHandler.h"
 
+#include "Objects/Player.h"
+
 void SimulationHandler::simulate(float dt, WorldDataClient& world) {
-	for (auto spPlayerPair : world.game.players) {
-		spPlayerPair.second->update(dt);
+	for (auto spPlayer : world.game.players) {
+		spPlayer->update(dt);
 	}
 }
 

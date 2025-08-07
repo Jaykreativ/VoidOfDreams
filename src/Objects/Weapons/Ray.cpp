@@ -1,6 +1,7 @@
 #include "Ray.h"
 
 #include "Shares/World.h"
+#include "Objects/Player.h"
 
 #include "Zap/Scene/Actor.h"
 #include "Zap/Scene/Material.h"

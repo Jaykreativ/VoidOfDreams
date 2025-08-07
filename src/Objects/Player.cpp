@@ -7,8 +7,23 @@
 
 #include <string>
 
-Player::Player(Zap::Scene& scene, std::string username)
-	: m_scene(scene), m_username(username)
+ReplicationObject* playerCreate(WorldDataClient& world) {
+	auto sptr = std::make_shared<PlayerClient>(*world.game.spScene);
+	world.game.players.push_back(sptr);
+	return sptr.get();
+}
+
+void playerDestroy(WorldDataClient& world, ReplicationObject* obj) {
+	auto it = world.game.players.begin();
+	for (auto spPlayer : world.game.players) {
+		if (spPlayer.get() == obj)
+			world.game.players.erase(it); // remove destroyed player
+		it++;
+	}
+}
+
+Player::Player(Zap::Scene& scene)
+	: m_scene(scene)
 {
 	Zap::ActorLoader loader;
 	loader.flags = loader.flags | Zap::ActorLoader::eReuseActor;
@@ -82,6 +97,59 @@ void Player::update(float dt) {
 	}
 }
 
+uint32_t Player::classId() { return 'PLYR'; }
+
+void Player::readFromReplication(std::shared_ptr<ReplicationPacket> spPacket, uint32_t status) {
+	m_base.cmpTransform_setPos(spPacket->readVec3());
+	auto hullTransform = spPacket->readMat4();
+
+	bool oldActive = m_active;
+	m_active = spPacket->readb();
+	if (oldActive != m_active) {
+		if (m_active) { // detect spawn/kill
+			spawn();
+		}
+		else {
+			kill();
+		}
+	}
+
+	if (m_active) {
+		m_hull.cmpTransform_setTransform(hullTransform);
+		m_hull.cmpRigidDynamic_updatePose();
+	}
+
+	m_mode = spPacket->readu32();
+
+	m_health = spPacket->readf();
+	m_energy = spPacket->readf();
+	
+	m_kills = spPacket->readu32();
+	m_deaths = spPacket->readu32();
+	m_damage = spPacket->readf();
+}
+
+void Player::writeToReplication(std::shared_ptr<ReplicationPacket> spPacket, uint32_t status) {
+	spPacket->write(m_base.cmpTransform_getPos());
+	spPacket->write(m_hull.cmpTransform_getTransform());
+
+	spPacket->write(m_active);
+	spPacket->write(m_mode);
+
+	spPacket->write(m_health);
+	spPacket->write(m_energy);
+
+	spPacket->write(m_kills);
+	spPacket->write(m_deaths);
+	spPacket->write(m_damage);
+}
+
+PlayerServer::PlayerServer(Zap::Scene& scene)
+	: Player(scene)
+{}
+
+PlayerServer::~PlayerServer() {}
+
 void PlayerServer::update(float dt) {
 	Player::update(dt);
 }
@@ -151,6 +219,9 @@ void PlayerClient::damage(float damage, const Player& damager) {
 }
 
 void Player::localSpawn() {
+	Zap::ActorLoader loader;
+	loader.flags = loader.flags | Zap::ActorLoader::eReuseActor;
+	m_hull = loader.load(std::filesystem::path(ACTOR_DIR) / std::filesystem::path("PlayerHull.zac"), &m_scene);
 	m_hull.cmpRigidDynamic_setAngularDamping(.5);
 	m_hull.cmpRigidDynamic_setLinearDamping(.9);
 	m_energy = getMaxEnergy();
@@ -162,7 +233,6 @@ void PlayerClient::localSpawn() {
 	Zap::ActorLoader loader;
 	loader.flags = loader.flags | Zap::ActorLoader::eReuseActor;
 	m_core = loader.load(std::filesystem::path(ACTOR_DIR) / std::filesystem::path("PlayerCore.zac"), &m_scene);
-	m_hull = loader.load(std::filesystem::path(ACTOR_DIR) / std::filesystem::path("PlayerHull.zac"), &m_scene);
 	m_recordEvents |= eSPAWN;
 	Player::localSpawn();
 }
@@ -311,7 +381,7 @@ bool PlayerClient::hasDoneDamage()  { return ZP_IS_FLAG_ENABLED(m_events, eDAMAG
 bool PlayerClient::hasKilled()      { return ZP_IS_FLAG_ENABLED(m_events, eKILL); }
 
 PlayerClient::PlayerClient(Zap::Scene& scene)
-	: Player(scene, "User")
+	: Player(scene)
 {
 	m_camera = Zap::Actor(); // creating a camera to follow player
 	m_scene.attachActor(m_camera);

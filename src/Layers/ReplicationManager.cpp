@@ -1,8 +1,11 @@
 #include "ReplicationManager.h"
 
+#include "Objects/Player.h"
 #include "Log.h"
 
-void ObjectCreationRegistry::initCreationRegistry() {}
+void ObjectCreationRegistry::initCreationRegistry() {
+	ObjectCreationRegistry::get().addFunctions('PLYR', { playerCreate, playerDestroy });
+}
 
 ObjectCreationRegistry& ObjectCreationRegistry::get() {
 	static ObjectCreationRegistry registry;

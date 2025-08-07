@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Layers/ReplicationManager.h"
 #include "Layers/InputHandler.h"
 #include "Shares/Controls.h"
 #include "Objects/Inventory.h"
@@ -9,10 +10,13 @@
 #include "Zap/Scene/Scene.h"
 #include "Zap/Scene/Actor.h"
 
-class Player {
+ReplicationObject* playerCreate(WorldDataClient& world);
+void playerDestroy(WorldDataClient& world, ReplicationObject* obj);
+
+class Player : public ReplicationObject {
 public:
-	Player(Zap::Scene& scene, std::string username);
-	~Player();
+	Player(Zap::Scene& scene);
+	virtual ~Player();
 
 	// should only update mechanics in game, not in main menu
 	void updateMechanics(Controls& controls, float dt);
@@ -70,12 +74,14 @@ public:
 protected:
 	// synchronized
 	Zap::Actor m_base; // this is the actual transform of the player
+	Zap::Actor m_hull; // the rotating hull
 
 	bool m_active = false; // switches between active and spectator mode TODO integrate into player modes
 	enum Mode {
 		eWEAPON = 0x0,
 		eABILITY = 0x1
-	} m_mode = eWEAPON;
+	};
+	uint32_t m_mode = eWEAPON;
 
 	float m_health = 100;
 	float m_energy = 100;
@@ -89,17 +95,26 @@ protected:
 
 	PlayerInventory m_inventory;
 
-	Zap::Actor m_hull; // the rotating hull
-
 	std::string m_username;
 
 	float m_spawnProtection = 5;
 	float m_spawnTimeout = 5;
 
 	virtual void update(float dt);
+
+	virtual uint32_t classId();
+
+	virtual void readFromReplication(std::shared_ptr<ReplicationPacket> spPacket, uint32_t status);
+
+	virtual void writeToReplication(std::shared_ptr<ReplicationPacket> spPacket, uint32_t status);
+
 };
 
 class PlayerServer : public Player {
+public:
+	PlayerServer(Zap::Scene& scene);
+	~PlayerServer();
+
 	void update(float dt);
 };
 

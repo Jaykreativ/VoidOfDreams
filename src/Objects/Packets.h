@@ -108,6 +108,7 @@ class HelloPacket : public Packet {
 public:
 	// data
 	Zap::UUID id;
+	std::string username;
 
 protected:
 	uint32_t dataSize();
@@ -144,9 +145,19 @@ public:
 		eDESTROY
 	};
 
+	void write(bool data);
 	void write(float data);
+	void write(uint32_t data);
+	void write(glm::vec3 data);
+	void write(glm::vec4 data);
+	void write(glm::mat4 data);
 
+	bool readb();
 	float readf();
+	uint32_t readu32();
+	glm::vec3 readVec3();
+	glm::vec4 readVec4();
+	glm::mat4 readMat4();
 
 	//data
 	uint32_t type;
