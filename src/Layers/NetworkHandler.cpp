@@ -1,5 +1,6 @@
 #include "NetworkHandler.h"
 
+#include "Layers/SimulationHandler.h"
 #include "Shares/World.h"
 #include "Objects/Player.h"
 
@@ -77,6 +78,7 @@ NetworkHandlerServer::NetworkHandlerServer(uint16_t port)
 	desc.gravity = { 0, 0, 0 };
 	m_world.spScene = std::make_shared<Zap::Scene>();
 	m_world.spScene->init(desc);
+	setupWorldServer(m_world);
 
 	setupServerSocket(port);
 
@@ -175,24 +177,17 @@ void NetworkHandlerServer::handleIncomingPackets() {
 }
 
 void NetworkHandlerServer::loop() {
-	int count = 0;
+	float deltaTime = 0;
+	float deltaCompute = 0;
 	while (shouldRunThreads()) {
-		Sleep(50);
+		auto startTick = std::chrono::high_resolution_clock::now();;
 		handleIncomingPackets();
 
 		for (auto& clientPair : m_clients) {
 			auto id = clientPair.first;
 			auto& client = clientPair.second;
-
 			if (client.isFullyConnected()) {
-				if (m_world.players.count(id)) {
-					glm::mat4 mat(1);
-					mat[3] = glm::vec4(sin(count++/5.f+id%1000)*5, 0, 0, 1);
-					m_world.players.at(id)->setTransform(mat);
-					auto spPacket = m_replicationManager.replicateUpdate(m_world.players.at(id).get(), 0);
-					sendToAll(*spPacket);
-				}
-				else { // when the client has no corresponding player, create a new player
+				if (!m_world.players.count(id)) { // when the client has no corresponding player, create a new player
 					auto spPlayer = std::make_shared<PlayerServer>(*m_world.spScene);
 					m_world.players[id] = spPlayer;
 					//spPlayer->getInventory().setItem(std::make_shared<Ray>(m_world), 0);
@@ -200,11 +195,36 @@ void NetworkHandlerServer::loop() {
 					//spPlayer->getInventory().setItem(std::make_shared<Dash>(), 2);
 					//spPlayer->getInventory().setItem(std::make_shared<SimpleTrigger>(ImGuiKey_LeftShift), 3);
 					spPlayer->spawn();
+					spPlayer->getPhysicsActor().cmpRigidDynamic_addForce({0, 150, 0});
 					auto spPacket = m_replicationManager.replicateCreate(m_world.players.at(id).get());
 					sendToAll(*spPacket);
 				}
 			}
 		}
+
+		// simulation
+		static SimulationHandlerServer simulationHandler;
+		simulationHandler.simulate(deltaTime, m_world);
+
+		m_world.spScene->update();
+
+		// replication
+		for (auto& clientPair : m_clients) {
+			auto id = clientPair.first;
+			auto& client = clientPair.second;
+			if (client.isFullyConnected()) {
+				if (m_world.players.count(id)) { // player updates
+					auto spPacket = m_replicationManager.replicateUpdate(m_world.players.at(id).get(), 0);
+					sendToAll(*spPacket);
+				}
+			}
+		}
+
+		auto endTick = std::chrono::high_resolution_clock::now();
+		deltaCompute = std::chrono::duration_cast<std::chrono::duration<float>>(endTick - startTick).count();
+		Sleep(20 - deltaCompute); // lock to tickrate
+		endTick = std::chrono::high_resolution_clock::now();
+		deltaTime = std::chrono::duration_cast<std::chrono::duration<float>>(endTick - startTick).count();
 	}
 }
 

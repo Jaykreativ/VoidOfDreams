@@ -3,6 +3,7 @@
 #include "Objects/Weapons/Ray.h"
 
 #include "Zap/Zap.h"
+#include "Zap/FileLoader.h"
 #include "Zap/Scene/Scene.h"
 #include "Zap/Scene/Actor.h"
 
@@ -51,3 +52,16 @@ struct WorldDataClient {
 	GameWorldData game = {};
 	MainMenuWorldData mainMenu = {};
 };
+
+inline void setupWorldServer(WorldDataServer& world) {
+	Zap::ActorLoader loader;
+	loader.flags |= Zap::ActorLoader::eReuseActor;
+	loader.load("Actors/Cube.zac", world.spScene.get());
+}
+inline void setupWorldClient(WorldDataClient& world) {
+	Zap::ActorLoader loader;
+	loader.flags |= Zap::ActorLoader::eReuseActor;
+	loader.load("Actors/Cube.zac", world.game.spScene.get());
+	loader.load("Actors/Light.zac", world.game.spScene.get());  // Loading actor from file, they can be changed using the editor
+	loader.load("Actors/Light2.zac", world.game.spScene.get()); // All actors can be changed at runtime
+}

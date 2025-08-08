@@ -1,23 +1,28 @@
 #include "SimulationHandler.h"
 
+#include "Log.h"
 #include "Objects/Player.h"
 
-void SimulationHandler::simulate(float dt, WorldDataClient& world) {
-	for (auto spPlayer : world.game.players) {
+void SimulationHandlerServer::simulate(float dt, WorldDataServer& world) {
+	for (auto& playerPair : world.players) {
+		auto id = playerPair.first;
+		auto spPlayer = playerPair.second;
 		spPlayer->update(dt);
 	}
-}
-
-void SimulationHandlerServer::simulate(float dt, WorldDataClient& world) {
-	SimulationHandler::simulate(dt, world);
-
+	world.spScene->simulate(dt);
 }
 
 void SimulationHandlerClient::simulate(float dt, WorldDataClient& world, Controls& controls, InputHandlerClient& input) {
-	SimulationHandler::simulate(dt, world);
+	if (world.status == eGAME)
+		for (auto spPlayer : world.game.players) {
+			spPlayer->update(dt);
+		}
 	if (std::shared_ptr<PlayerClient> spPlayer = world.wpPlayer.lock()) {
 		spPlayer->updateFocused(dt, controls, input);
-		spPlayer->updateMechanics(controls, dt);
+		if (world.status == eGAME)
+			spPlayer->updateMechanics(controls, dt);
+		else
+			spPlayer->update(dt);
 	}
 
 	for (size_t i = 0; i < world.animations.size(); i++) {
@@ -29,4 +34,10 @@ void SimulationHandlerClient::simulate(float dt, WorldDataClient& world, Control
 			i--;
 		}
 	}
+
+	logger::beginRegion("physics");
+	if (std::shared_ptr<Zap::Scene> spScene = world.wpScene.lock()) {
+		spScene->simulate(dt);
+	}
+	logger::endRegion();
 }

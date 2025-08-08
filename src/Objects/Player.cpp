@@ -69,9 +69,6 @@ void PlayerClient::updateCamera(Controls& controls) {
 void PlayerClient::updateAnimations(float dt) {
 	if (m_active) {
 		m_core.cmpTransform_rotate(-90 * dt, { 2, 3, 5 });
-
-		auto v = m_hull.cmpRigidDynamic_getLinearVelocity();
-		m_hull.cmpRigidDynamic_addTorque(v*dt*0.1f);
 	}
 }
 
@@ -96,15 +93,15 @@ void Player::update(float dt) {
 	if (m_active) {
 		glm::vec3 pos = m_hull.cmpTransform_getPos(); // hull determines the position
 		m_base.cmpTransform_setPos(pos);
+
+		auto v = m_hull.cmpRigidDynamic_getLinearVelocity();
+		m_hull.cmpRigidDynamic_addTorque(v * dt * 0.1f);
 	}
 }
 
 uint32_t Player::classId() { return 'PLYR'; }
 
 void Player::readFromReplication(std::shared_ptr<ReplicationPacket> spPacket, uint32_t status) {
-	m_base.cmpTransform_setPos(spPacket->readVec3());
-	auto hullTransform = spPacket->readMat4();
-
 	bool oldActive = m_active;
 	m_active = spPacket->readb();
 	if (oldActive != m_active) {
@@ -115,13 +112,16 @@ void Player::readFromReplication(std::shared_ptr<ReplicationPacket> spPacket, ui
 			kill();
 		}
 	}
+	m_mode = spPacket->readu32();
+
+	m_base.cmpTransform_setPos(spPacket->readVec3());
 
 	if (m_active) {
-		m_hull.cmpTransform_setTransform(hullTransform);
+		m_hull.cmpTransform_setTransform(spPacket->readMat4());
+		m_hull.cmpRigidDynamic_setLinearVelocity(spPacket->readVec3());
+		m_hull.cmpRigidDynamic_setAngularVelocity(spPacket->readVec3());
 		m_hull.cmpRigidDynamic_updatePose();
 	}
-
-	m_mode = spPacket->readu32();
 
 	m_health = spPacket->readf();
 	m_energy = spPacket->readf();
@@ -132,11 +132,16 @@ void Player::readFromReplication(std::shared_ptr<ReplicationPacket> spPacket, ui
 }
 
 void Player::writeToReplication(std::shared_ptr<ReplicationPacket> spPacket, uint32_t status) {
-	spPacket->write(m_base.cmpTransform_getPos());
-	spPacket->write(m_hull.cmpTransform_getTransform());
-
 	spPacket->write(m_active);
 	spPacket->write(m_mode);
+
+	spPacket->write(m_base.cmpTransform_getPos());
+
+	if (m_active) {
+		spPacket->write(m_hull.cmpTransform_getTransform());
+		spPacket->write(m_hull.cmpRigidDynamic_getLinearVelocity());
+		spPacket->write(m_hull.cmpRigidDynamic_getAngularVelocity());
+	}
 
 	spPacket->write(m_health);
 	spPacket->write(m_energy);

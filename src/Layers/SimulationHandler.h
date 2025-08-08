@@ -6,12 +6,12 @@
 
 class SimulationHandler {
 public:
-	virtual void simulate(float dt, WorldDataClient& world);
+
 };
 
 class SimulationHandlerServer : public SimulationHandler {
 public:
-	void simulate(float dt, WorldDataClient& world);
+	void simulate(float dt, WorldDataServer& world);
 };
 
 class SimulationHandlerClient : public SimulationHandler {

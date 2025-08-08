@@ -499,19 +499,7 @@ void pushErrorPopup(GuiData& gui, std::string msg) {
 	gui.errorMessages.push_back(msg);
 }
 
-void updateMainMenu(WorldDataClient& world, RenderData& render, NetworkData& network, GuiData& gui, Controls& controls, float dt, Zap::Window& window) {
-	static InputHandlerClient inputHandler;
-	inputHandler.takeInput(controls, !(gui.state & GuiData::eGAME));
-	logger::beginRegion("players");
-	{
-		std::lock_guard<std::mutex> lk(world.mPlayer);
-		if (std::shared_ptr<PlayerClient> spPlayer = world.wpPlayer.lock()) {
-			spPlayer->updateFocused(dt, controls, inputHandler);
-			spPlayer->update(dt);
-		}
-	}
-	logger::endRegion();
-
+void updateMainMenuGui(WorldDataClient& world, RenderData& render, NetworkData& network, GuiData& gui, Controls& controls, float dt, Zap::Window& window) {
 	logger::beginRegion("gui");
 	GuiData::State oldState = gui.state;
 
@@ -552,12 +540,7 @@ void updateMainMenu(WorldDataClient& world, RenderData& render, NetworkData& net
 	logger::endRegion();
 }
 
-void update(WorldDataClient& world, RenderData& render, NetworkData& network, GuiData& gui, Controls& controls, float dt, Zap::Window& window) {
-	static SimulationHandlerClient simulationHandler;
-	static InputHandlerClient inputHandler;
-	inputHandler.takeInput(controls, !(gui.state & GuiData::eGAME));
-	simulationHandler.simulate(dt, world, controls, inputHandler);
-
+void updateGui(WorldDataClient& world, RenderData& render, NetworkData& network, GuiData& gui, Controls& controls, float dt, Zap::Window& window) {
 	logger::beginRegion("gui");
 	glm::vec2 displaySize = ImGui::GetIO().DisplaySize;
 	GuiData::State oldState = gui.state;
@@ -612,7 +595,7 @@ void gameLoop(RenderData& render, WorldDataClient& world, NetworkData& network, 
 			printf("server crashed ):<\n");
 		}
 
-		logger::beginRegion("replication");
+		logger::beginRegion("replication"); // replicate changes from the server
 		if (network.client && network.client->isFullyConnected() && network.client->isValid()) {
 			network.client->replicateWorldState(world);
 		}
@@ -620,36 +603,33 @@ void gameLoop(RenderData& render, WorldDataClient& world, NetworkData& network, 
 
 		logger::beginRegion("update");
 
-		switch (world.status)
+		static SimulationHandlerClient simulationHandler;
+		static InputHandlerClient inputHandler;
+		inputHandler.takeInput(controls, !(gui.state & GuiData::eGAME));
+		simulationHandler.simulate(deltaTime, world, controls, inputHandler); // simulate player behaviour and physics
+
+		switch (world.status) // update and draw gui
 		{
 		case eGAME:
-			update(world, render, network, gui, controls, deltaTime, *render.window);
+			updateGui(world, render, network, gui, controls, deltaTime, *render.window);
 			break;
 		case eMAIN_MENU:
-			updateMainMenu(world, render, network, gui, controls, deltaTime, *render.window);
+			updateMainMenuGui(world, render, network, gui, controls, deltaTime, *render.window);
 			break;
 		default:
 			break;
 		}
 
-		{
-			std::lock_guard<std::mutex> lk(world.mScene);
-			if (std::shared_ptr<Zap::Scene> spScene = world.wpScene.lock()) { // update scene only if present
-				std::lock_guard<std::mutex> lk(world.mPlayer);
-				if (std::shared_ptr<PlayerClient> spPlayer = world.wpPlayer.lock()) { // enable rendering only if player is selected
-					logger::beginRegion("engine");
-					render.pbRender->updateCamera(spPlayer->getCamera());
-					render.pbRender->enable();
-					spScene->update();
-					logger::endRegion();
-					logger::beginRegion("simulation");
-					spScene->simulate(deltaTime);
-					logger::endRegion();
-				}
-				else {
-					render.pbRender->disable();
-					ImGui::GetBackgroundDrawList()->AddRectFilled({ 0, 0 }, ImGui::GetMainViewport()->Size, ImGui::GetColorU32(render.pbRender->clearColor)); // improvised clear
-				}
+		// engine related updates and rendering
+		if (std::shared_ptr<Zap::Scene> spScene = world.wpScene.lock()) { // update scene only if present
+			if (std::shared_ptr<PlayerClient> spPlayer = world.wpPlayer.lock()) { // enable rendering only if player is selected
+				render.pbRender->updateCamera(spPlayer->getCamera());
+				render.pbRender->enable();
+				spScene->update();
+			}
+			else {
+				render.pbRender->disable();
+				ImGui::GetBackgroundDrawList()->AddRectFilled({ 0, 0 }, ImGui::GetMainViewport()->Size, ImGui::GetColorU32(render.pbRender->clearColor)); // improvised clear
 			}
 		}
 		logger::endRegion();
@@ -720,14 +700,6 @@ void setupMainMenuWorld(WorldDataClient& world) {
 	world.wpPlayer = world.mainMenu.spPlayer;
 }
 
-void setupWorld(WorldDataClient& world) {
-	Zap::ActorLoader loader;
-	loader.flags |= Zap::ActorLoader::eReuseActor;
-	loader.load("Actors/Light.zac", world.game.spScene.get());  // Loading actor from file, they can be changed using the editor
-	loader.load("Actors/Light2.zac", world.game.spScene.get()); // All actors can be changed at runtime
-	loader.load("Actors/Cube.zac", world.game.spScene.get());
-}
-
 void resize(Zap::ResizeEvent& eventParams, void* customParams) {
 	Zap::PBRenderer* pbRender = reinterpret_cast<Zap::PBRenderer*>(customParams);
 	pbRender->setViewport(eventParams.width, eventParams.height, 0, 0);
@@ -758,7 +730,7 @@ void runGame() {
 		render.pbRender = new Zap::PBRenderer(spScene.get());
 	render.pGui = new Zap::Gui();
 
-	setupWorld(world);
+	setupWorldClient(world);
 	setupMainMenuWorld(world);
 
 	render.renderer->setTarget(render.window);
