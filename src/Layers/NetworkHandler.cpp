@@ -62,11 +62,11 @@ void NetworkHandler::recvIncomingDgram(int socketDgram) {
 	m_incomingPackets.push_back({ true, type, spPacket, 0, addr });
 }
 
-bool NetworkHandlerServer::ClientData::isFullyConnected() {
+bool NetworkHandlerServer::ClientProxy::isFullyConnected() {
 	return m_isDgramConnected && m_isStreamConnected;
 }
 
-void NetworkHandlerServer::ClientData::connectionMade(bool isDgram) {
+void NetworkHandlerServer::ClientProxy::connectionMade(bool isDgram) {
 	m_isDgramConnected |= isDgram;
 	m_isStreamConnected |= !isDgram;
 }
@@ -109,7 +109,7 @@ void NetworkHandlerServer::sendToAllDgram(Packet& packet) {
 		packet.sendToDgram(m_serverSocket.dgram, reinterpret_cast<const sockaddr*>(&clientPair.second.socket.addr));
 }
 
-void NetworkHandlerServer::setupNewClient(ClientData& client) {
+void NetworkHandlerServer::setupNewClient(ClientProxy& client) {
 	for (auto& playerPair : m_world.players) {
 		auto spPacket = m_replicationManager.replicateCreate(playerPair.second.get());
 		spPacket->sendTo(client.socket.stream);

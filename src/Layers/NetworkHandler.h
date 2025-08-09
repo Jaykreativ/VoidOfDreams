@@ -85,7 +85,7 @@ private:
 
 	SocketData m_serverSocket = {};
 
-	struct ClientData {
+	struct ClientProxy {
 	public:
 		std::string username = "";
 		SocketData socket = {};
@@ -99,7 +99,7 @@ private:
 		bool m_isDgramConnected = false;
 		bool m_isStreamConnected = false;
 	};
-	std::unordered_map<Zap::UUID, ClientData> m_clients = {};
+	std::unordered_map<Zap::UUID, ClientProxy> m_clients = {};
 	WorldDataServer m_world = {};
 
 	ReplicationManagerServer m_replicationManager;
@@ -111,7 +111,7 @@ private:
 
 	void setupServerSocket(uint16_t port);
 
-	void setupNewClient(ClientData& client);
+	void setupNewClient(ClientProxy& client);
 
 	void handleHelloPacket(IncomingPacket& inPacket);
 

@@ -161,7 +161,7 @@ void PlayerServer::update(float dt) {
 	Player::update(dt);
 }
 
-void PlayerClient::updateFocused(float dt, Controls& controls, InputHandlerClient& input) {
+void PlayerClient::updateFocused(float dt, Controls& controls, const InputState& input, InputHandlerClient& inputHandler) {
 	updateCamera(controls);
 	float speed = 25;
 	auto transform = m_base.cmpTransform_getTransform();
@@ -185,6 +185,8 @@ void PlayerClient::updateFocused(float dt, Controls& controls, InputHandlerClien
 		else
 			m_mode = eWEAPON;
 	}
+
+	inputHandler.pushAction();
 }
 
 void PlayerClient::update(float dt) {

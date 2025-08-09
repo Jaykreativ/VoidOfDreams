@@ -2,60 +2,120 @@
 
 #include "InputHandler.h"
 
-glm::vec3 InputHandler::getMoveDir() {
+#include <chrono>
+
+bool InputState::hasSwitchedMode() const {
+	return m_switchMode;
+}
+
+glm::vec3 InputState::getMoveDir() const {
 	return m_moveDir;
 }
 
-void InputHandlerClient::takeInput(Controls& controls, bool isDisabled) {
-	glm::vec3 oldDir = m_moveDir;
-	m_moveDir = { 0, 0, 0 };
-	m_rotMat = glm::mat4(1);
+glm::mat4 InputState::getRotationDeltaMat() const {
+	return m_rotMat;
+}
 
+void InputState::pack(char*& buf) {
+	memcpy(buf, &m_switchMode, sizeof(m_switchMode)); buf += sizeof(m_switchMode);
+	memcpy(buf, &m_moveDir, sizeof(m_moveDir)); buf += sizeof(m_moveDir);
+	memcpy(buf, &m_rotMat, sizeof(m_rotMat)); buf += sizeof(m_rotMat);
+}
+
+void InputState::unpack(const char*& buf) {
+	memcpy(&m_switchMode, buf, sizeof(m_switchMode)); buf += sizeof(m_switchMode);
+	memcpy(&m_moveDir, buf, sizeof(m_moveDir)); buf += sizeof(m_moveDir);
+	memcpy(&m_rotMat, buf, sizeof(m_rotMat)); buf += sizeof(m_rotMat);
+}
+
+void Action::pack(char*& buf) {
+	m_inputState.pack(buf);
+	memcpy(buf, &m_timestamp, sizeof(m_timestamp)); buf += sizeof(m_timestamp);
+	memcpy(buf, &m_deltaTime, sizeof(m_deltaTime)); buf += sizeof(m_deltaTime);
+}
+
+void Action::unpack(const char*& buf) {
+	m_inputState.unpack(buf);
+	memcpy(&m_timestamp, buf, sizeof(m_timestamp)); buf += sizeof(m_timestamp);
+	memcpy(&m_deltaTime, buf, sizeof(m_deltaTime)); buf += sizeof(m_deltaTime);
+}
+
+const Action& ActionList::addAction(const InputState& inputState, float timestamp) {
+	float dTime = m_lastTimestamp >= 0.f ?
+		timestamp - m_lastTimestamp : 0.f;
+
+	m_list.push_back(Action(inputState, timestamp, dTime));
+	m_lastTimestamp = timestamp;
+	return m_list.back();
+}
+
+size_t ActionList::dataSize() {
+	return sizeof(uint32_t) + sizeof(Action) * m_list.size();
+}
+
+void ActionList::pack(char*& buf) {
+	uint32_t size = m_list.size();
+	memcpy(buf, &size, sizeof(size)); buf += sizeof(size);
+	for (auto& action : m_list) {
+		action.pack(buf);
+	}
+}
+
+void ActionList::unpack(const char*& buf) {
+	uint32_t size = 0;
+	memcpy(&size, buf, sizeof(size)); buf += sizeof(size);
+	m_list.resize(size);
+	for (auto& action : m_list) {
+		action.unpack(buf);
+	}
+}
+
+ActionList& InputHandler::getActions() {
+	return m_list;
+}
+
+void InputHandlerClient::takeInput(Controls& controls, bool isDisabled) {
+	InputState newState;
 	if (!isDisabled) {
 		// move
 		if (ImGui::IsKeyDown(controls.moveForward)) {
-			m_moveDir += glm::vec3(0, 0, 1);
+			newState.m_moveDir += glm::vec3(0, 0, 1);
 		}
 		if (ImGui::IsKeyDown(controls.moveBackward)) {
-			m_moveDir += -glm::vec3(0, 0, 1);
+			newState.m_moveDir += -glm::vec3(0, 0, 1);
 		}
 		if (ImGui::IsKeyDown(controls.moveLeft)) {
-			m_moveDir += -glm::vec3(1, 0, 0);
+			newState.m_moveDir += -glm::vec3(1, 0, 0);
 		}
 		if (ImGui::IsKeyDown(controls.moveRight)) {
-			m_moveDir += glm::vec3(1, 0, 0);
+			newState.m_moveDir += glm::vec3(1, 0, 0);
 		}
 		if (ImGui::IsKeyDown(controls.moveUp)) {
-			m_moveDir += glm::vec3(0, 1, 0);
+			newState.m_moveDir += glm::vec3(0, 1, 0);
 		}
 		if (ImGui::IsKeyDown(controls.moveDown)) {
-			m_moveDir += -glm::vec3(0, 1, 0);
+			newState.m_moveDir += -glm::vec3(0, 1, 0);
 		}
-		if (m_moveDir != glm::vec3(0, 0, 0))
-			m_moveDir = glm::normalize(m_moveDir);
+		if (newState.m_moveDir != glm::vec3(0, 0, 0))
+			newState.m_moveDir = glm::normalize(newState.m_moveDir);
 
 		//rotate
 		glm::vec2 mouseDelta = ImGui::GetIO().MouseDelta;
 
-		m_rotMat = glm::rotate(m_rotMat, mouseDelta.x / 100.f, { 0, 1, 0 });
-		m_rotMat = glm::rotate(m_rotMat, mouseDelta.y / 100.f, { 1, 0, 0 });
+		newState.m_rotMat = glm::rotate(newState.m_rotMat, mouseDelta.x / 100.f, { 0, 1, 0 });
+		newState.m_rotMat = glm::rotate(newState.m_rotMat, mouseDelta.y / 100.f, { 1, 0, 0 });
 
 		// switch mode
-		m_switchMode = ImGui::IsMouseClicked(controls.switchMode);
-
+		newState.m_switchMode = ImGui::IsMouseClicked(controls.switchMode);
 	}
-	// detect changes
-	m_changedMoveDir = oldDir != m_moveDir;
+	m_state = newState;
 }
 
-bool InputHandlerClient::hasSwitchedMode() {
-	return m_switchMode;
+void InputHandlerClient::pushAction() {
+	float timestamp = std::chrono::time_point_cast<std::chrono::duration<float>>(std::chrono::high_resolution_clock::now()).time_since_epoch().count();
+	m_list.addAction(m_state, timestamp);
 }
 
-bool InputHandlerClient::hasMoveDirChanged() {
-	return m_changedMoveDir;
-}
-
-glm::mat4 InputHandlerClient::getRotationDeltaMat() {
-	return m_rotMat;
+const InputState& InputHandlerClient::getInput() {
+	return m_state;
 }

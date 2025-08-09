@@ -18,7 +18,7 @@ void SimulationHandlerClient::simulate(float dt, WorldDataClient& world, Control
 			spPlayer->update(dt);
 		}
 	if (std::shared_ptr<PlayerClient> spPlayer = world.wpPlayer.lock()) {
-		spPlayer->updateFocused(dt, controls, input);
+		spPlayer->updateFocused(dt, controls, input.getInput(), input);
 		if (world.status == eGAME)
 			spPlayer->updateMechanics(controls, dt);
 		else

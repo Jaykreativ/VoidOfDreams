@@ -1,6 +1,7 @@
 #pragma once
 
 #include "SockUitls.h"
+#include "Layers/InputHandler.h"
 
 #include "Zap/UUID.h"
 
@@ -16,6 +17,7 @@ enum PacketType {
 	eWelcome = 2,
 	eReplication = 3,
 	eDisconnect = 4,
+	eInput = 5
 };
 
 class Packet {
@@ -174,6 +176,23 @@ class DisconnectPacket : public Packet {
 public:
 	// data
 	Zap::UUID id;
+
+protected:
+	uint32_t dataSize();
+
+	// packs the data into the given buffer, buffer needs to have the same size as packet.fullSize()
+	void pack(char* buf);
+
+	// takes just the data part
+	void unpackData(const char* buf, uint32_t size);
+};
+
+class InputPacket : public Packet {
+	friend class Packet;
+public:
+	// data
+	Zap::UUID id;
+	ActionList& list;
 
 protected:
 	uint32_t dataSize();

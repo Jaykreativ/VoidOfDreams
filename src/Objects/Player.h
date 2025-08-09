@@ -124,7 +124,7 @@ public:
 	~PlayerClient();
 
 	// does all updates needed for the real player
-	void updateFocused(float dt, Controls& controls, InputHandlerClient& input);
+	void updateFocused(float dt, Controls& controls, const InputState& input, InputHandlerClient& inputHandler);
 
 	// general update function for all players
 	void update(float dt);

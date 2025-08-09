@@ -80,6 +80,10 @@ void createPacket(int type, std::shared_ptr<Packet>& spPacket) {
 		spPacket = std::make_shared<DisconnectPacket>();
 		break;
 	}
+	case eInput: {
+		spPacket = std::make_shared<InputPacket>();
+		break;
+	}
 	default:
 		break;
 	}
@@ -351,5 +355,20 @@ void DisconnectPacket::pack(char* buf) {
 }
 
 void DisconnectPacket::unpackData(const char* buf, uint32_t size) {
+	id = ntohll(reinterpret_cast<const uint64_t*>(buf)[0]); buf += sizeof(id);
+}
+
+// InputPacket
+uint32_t InputPacket::dataSize() {
+	return sizeof(uint64_t);
+}
+
+void InputPacket::pack(char* buf) {
+	packGeneralData(buf, eInput);
+	/* data */
+	reinterpret_cast<uint64_t*>(buf)[0] = htonll(id); buf += sizeof(id);
+}
+
+void InputPacket::unpackData(const char* buf, uint32_t size) {
 	id = ntohll(reinterpret_cast<const uint64_t*>(buf)[0]); buf += sizeof(id);
 }
