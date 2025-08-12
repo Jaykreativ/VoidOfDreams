@@ -9,6 +9,7 @@
 #define SERVER_BACKLOG 10
 
 #define CLIENT_HELLO_FREQUENCY_S 0.1f
+#define INPUT_SEND_FREQUENCY_S 0.01f
 
 NetworkHandler::NetworkHandler() {}
 
@@ -430,6 +431,20 @@ bool NetworkHandlerClient::isFullyConnected() {
 void NetworkHandlerClient::replicateWorldState(WorldDataClient& world) {
 	std::lock_guard<std::mutex> lk(m_mReplicationManager);
 	m_replicationManager.processReplication(world);
+}
+
+bool NetworkHandlerClient::sendInput(InputHandler& inputHandler) {
+	auto time = std::chrono::high_resolution_clock::now();
+	float deltaTime = std::chrono::duration_cast<std::chrono::duration<float>>(time - m_lastInputSent).count();
+	if (deltaTime > INPUT_SEND_FREQUENCY_S) {
+		InputPacket inputPacket;
+		inputPacket.id = m_id;
+		inputPacket.list = &inputHandler.getActions();
+		inputPacket.sendTo(m_serverSocket.stream);
+		m_lastInputSent = time;
+		return true;
+	}
+	return false;
 }
 
 void NetworkHandlerClient::setupServerSocket(int family, int protocol, sockaddr* addr, int addrlen) {

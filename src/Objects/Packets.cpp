@@ -366,9 +366,13 @@ uint32_t InputPacket::dataSize() {
 void InputPacket::pack(char* buf) {
 	packGeneralData(buf, eInput);
 	/* data */
-	reinterpret_cast<uint64_t*>(buf)[0] = htonll(id); buf += sizeof(id);
+	reinterpret_cast<uint64_t*>(buf)[0] = htonll(id); buf+= sizeof(id);
+	if(list)
+		list->pack(buf);
 }
 
 void InputPacket::unpackData(const char* buf, uint32_t size) {
 	id = ntohll(reinterpret_cast<const uint64_t*>(buf)[0]); buf += sizeof(id);
+	if(list)
+		list->unpack(buf);
 }

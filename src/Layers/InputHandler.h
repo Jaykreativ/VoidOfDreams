@@ -57,6 +57,8 @@ class ActionList {
 public:
 	const Action& addAction(const InputState& inputState, float timestamp);
 
+	void clear();
+
 	// network interface
 	size_t dataSize();
 
@@ -72,6 +74,8 @@ private:
 class InputHandler {
 public:
 	ActionList& getActions();
+
+	void reset();
 
 protected:
 	ActionList m_list;

@@ -49,6 +49,10 @@ const Action& ActionList::addAction(const InputState& inputState, float timestam
 	return m_list.back();
 }
 
+void ActionList::clear() {
+	m_list.clear();
+}
+
 size_t ActionList::dataSize() {
 	return sizeof(uint32_t) + sizeof(Action) * m_list.size();
 }
@@ -72,6 +76,10 @@ void ActionList::unpack(const char*& buf) {
 
 ActionList& InputHandler::getActions() {
 	return m_list;
+}
+
+void InputHandler::reset() {
+	m_list.clear();
 }
 
 void InputHandlerClient::takeInput(Controls& controls, bool isDisabled) {

@@ -142,6 +142,10 @@ public:
 	bool isFullyConnected();
 
 	void replicateWorldState(WorldDataClient& world);
+
+	// returns false if sending fails or is on cooldown
+	bool sendInput(InputHandler& inputHandler);
+
 private:
 	Zap::UUID m_id;
 	std::string m_username;
@@ -157,6 +161,8 @@ private:
 
 	std::mutex m_mReplicationManager;
 	ReplicationManagerClient m_replicationManager;
+
+	std::chrono::steady_clock::time_point m_lastInputSent;
 
 	void setupServerSocket(int family, int protocol, sockaddr* addr, int addrlen);
 

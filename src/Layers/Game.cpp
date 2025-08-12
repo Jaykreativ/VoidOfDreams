@@ -606,7 +606,17 @@ void gameLoop(RenderData& render, WorldDataClient& world, NetworkData& network, 
 		static SimulationHandlerClient simulationHandler;
 		static InputHandlerClient inputHandler;
 		inputHandler.takeInput(controls, !(gui.state & GuiData::eGAME));
+
 		simulationHandler.simulate(deltaTime, world, controls, inputHandler); // simulate player behaviour and physics
+
+		if (network.client && network.client->isFullyConnected() && network.client->isValid()) {
+			if (network.client->sendInput(inputHandler)) {
+				inputHandler.reset();
+			}
+		}
+		else {
+			inputHandler.reset();
+		}
 
 		switch (world.status) // update and draw gui
 		{
