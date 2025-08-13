@@ -70,6 +70,23 @@ protected:
 	virtual void recvLoop() = 0;
 };
 
+struct ClientProxy {
+public:
+	std::string username = "";
+	SocketData socket = {};
+	InputHandlerServer inputHandler;
+
+	bool isFullyConnected();
+
+	// counts the number of connections established to the client, tcp and udp
+	// when called two times the client is fully connected
+	void connectionMade(bool isDgram);
+private:
+	bool m_isDgramConnected = false;
+	bool m_isStreamConnected = false;
+};
+
+
 class NetworkHandlerServer : public NetworkHandler {
 public:
 	NetworkHandlerServer(uint16_t port);
@@ -85,20 +102,6 @@ private:
 
 	SocketData m_serverSocket = {};
 
-	struct ClientProxy {
-	public:
-		std::string username = "";
-		SocketData socket = {};
-
-		bool isFullyConnected();
-
-		// counts the number of connections established to the client, tcp and udp
-		// when called two times the client is fully connected
-		void connectionMade(bool isDgram);
-	private:
-		bool m_isDgramConnected = false;
-		bool m_isStreamConnected = false;
-	};
 	std::unordered_map<Zap::UUID, ClientProxy> m_clients = {};
 	WorldDataServer m_world = {};
 
@@ -116,6 +119,8 @@ private:
 	void handleHelloPacket(IncomingPacket& inPacket);
 
 	void handleDisconnectPacket(IncomingPacket& inPacket);
+
+	void handleInputPacket(IncomingPacket& inPacket);
 
 	void handleIncomingPackets();
 

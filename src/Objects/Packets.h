@@ -192,7 +192,7 @@ class InputPacket : public Packet {
 public:
 	// data
 	Zap::UUID id;
-	ActionList* list = nullptr;
+	std::shared_ptr<ActionList> list;
 
 protected:
 	uint32_t dataSize();

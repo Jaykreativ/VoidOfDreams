@@ -47,9 +47,10 @@ void NetworkHandler::assertSocket(int val, std::string msg) {
 void NetworkHandler::recvIncoming(int socketStream) {
 	int type;
 	auto spPacket = Packet::receiveFrom(type, socketStream);
-
-	std::lock_guard<std::mutex> lk(m_mIncomingPackets);
-	m_incomingPackets.push_back({ false, type, spPacket, socketStream });
+	if (spPacket) {
+		std::lock_guard<std::mutex> lk(m_mIncomingPackets);
+		m_incomingPackets.push_back({ false, type, spPacket, socketStream });
+	}
 }
 
 void NetworkHandler::recvIncomingDgram(int socketDgram) {
@@ -59,15 +60,17 @@ void NetworkHandler::recvIncomingDgram(int socketDgram) {
 	int type;
 	auto spPacket = Packet::receiveFromDgram(type, socketDgram, reinterpret_cast<sockaddr*>(&addr), &addrlen);
 
-	std::lock_guard<std::mutex> lk(m_mIncomingPackets);
-	m_incomingPackets.push_back({ true, type, spPacket, 0, addr });
+	if (spPacket) {
+		std::lock_guard<std::mutex> lk(m_mIncomingPackets);
+		m_incomingPackets.push_back({ true, type, spPacket, 0, addr });
+	}
 }
 
-bool NetworkHandlerServer::ClientProxy::isFullyConnected() {
+bool ClientProxy::isFullyConnected() {
 	return m_isDgramConnected && m_isStreamConnected;
 }
 
-void NetworkHandlerServer::ClientProxy::connectionMade(bool isDgram) {
+void ClientProxy::connectionMade(bool isDgram) {
 	m_isDgramConnected |= isDgram;
 	m_isStreamConnected |= !isDgram;
 }
@@ -157,6 +160,13 @@ void NetworkHandlerServer::handleDisconnectPacket(IncomingPacket& inPacket) {
 	sendToAll(*spPacket);
 }
 
+void NetworkHandlerServer::handleInputPacket(IncomingPacket& inPacket) {
+	InputPacket* packet = reinterpret_cast<InputPacket*>(inPacket.spPacket.get());
+	auto id = packet->id;
+	if (m_clients.count(id))
+		m_clients.at(id).inputHandler.takeActions(*packet->list);
+}
+
 void NetworkHandlerServer::handleIncomingPackets() {
 	std::lock_guard<std::mutex> lk(m_mIncomingPackets);
 	for (IncomingPacket& inPacket : m_incomingPackets) {
@@ -168,6 +178,10 @@ void NetworkHandlerServer::handleIncomingPackets() {
 		}
 		case PacketType::eDisconnect: {
 			handleDisconnectPacket(inPacket);
+			break;
+		}
+		case PacketType::eInput: {
+			handleInputPacket(inPacket);
 			break;
 		}
 		default:
@@ -196,7 +210,6 @@ void NetworkHandlerServer::loop() {
 					//spPlayer->getInventory().setItem(std::make_shared<Dash>(), 2);
 					//spPlayer->getInventory().setItem(std::make_shared<SimpleTrigger>(ImGuiKey_LeftShift), 3);
 					spPlayer->spawn();
-					spPlayer->getPhysicsActor().cmpRigidDynamic_addForce({0, 150, 0});
 					auto spPacket = m_replicationManager.replicateCreate(m_world.players.at(id).get());
 					sendToAll(*spPacket);
 				}
@@ -205,7 +218,7 @@ void NetworkHandlerServer::loop() {
 
 		// simulation
 		static SimulationHandlerServer simulationHandler;
-		simulationHandler.simulate(deltaTime, m_world);
+		simulationHandler.simulate(deltaTime, m_world, m_clients);
 
 		m_world.spScene->update();
 
@@ -439,7 +452,7 @@ bool NetworkHandlerClient::sendInput(InputHandler& inputHandler) {
 	if (deltaTime > INPUT_SEND_FREQUENCY_S) {
 		InputPacket inputPacket;
 		inputPacket.id = m_id;
-		inputPacket.list = &inputHandler.getActions();
+		inputPacket.list = std::make_shared<ActionList>(inputHandler.getActions());
 		inputPacket.sendTo(m_serverSocket.stream);
 		m_lastInputSent = time;
 		return true;

@@ -72,7 +72,7 @@ void PlayerClient::updateAnimations(float dt) {
 	}
 }
 
-void Player::updateMechanics(Controls& controls, float dt) {
+void Player::updateMechanics(float dt) {
 	if (m_active) {
 		m_energy = std::min<float>(m_energy, 100);
 
@@ -97,6 +97,35 @@ void Player::update(float dt) {
 		auto v = m_hull.cmpRigidDynamic_getLinearVelocity();
 		m_hull.cmpRigidDynamic_addTorque(v * dt * 0.1f);
 	}
+}
+
+void Player::updateFocused(float dt, const InputState& input) {
+	float speed = 25;
+	auto transform = m_base.cmpTransform_getTransform();
+	glm::vec3 moveVec = glm::vec3(transform * glm::vec4(input.getMoveDir(), 0)) * dt * speed;
+
+	if (m_active) {
+		m_hull.cmpRigidDynamic_addForce(moveVec);
+	}
+	else {
+		m_base.cmpTransform_setPos(m_base.cmpTransform_getPos() + moveVec);
+	}
+
+	m_base.cmpTransform_setTransform(transform * input.getRotationDeltaMat());
+
+	// switch mode
+	if (input.hasSwitchedMode()) {
+		spendEnergy(10);
+		m_energy = std::max<float>(m_energy, 0);
+		if (m_mode == eWEAPON)
+			m_mode = eABILITY;
+		else
+			m_mode = eWEAPON;
+	}
+}
+
+void PlayerServer::updateFocused(float dt, const InputState& input) {
+	Player::updateFocused(dt, input);
 }
 
 uint32_t Player::classId() { return 'PLYR'; }
@@ -162,30 +191,8 @@ void PlayerServer::update(float dt) {
 }
 
 void PlayerClient::updateFocused(float dt, Controls& controls, const InputState& input, InputHandlerClient& inputHandler) {
+	Player::updateFocused(dt, input);
 	updateCamera(controls);
-	float speed = 25;
-	auto transform = m_base.cmpTransform_getTransform();
-	glm::vec3 moveVec = glm::vec3(transform * glm::vec4(input.getMoveDir(), 0)) * dt * speed;
-
-	if (m_active) {
-		m_hull.cmpRigidDynamic_addForce(moveVec);
-	}
-	else {
-		m_base.cmpTransform_setPos(m_base.cmpTransform_getPos() + moveVec);
-	}
-
-	m_base.cmpTransform_setTransform(transform * input.getRotationDeltaMat());
-
-	// switch mode
-	if (input.hasSwitchedMode()) {
-		spendEnergy(10);
-		m_energy = std::max<float>(m_energy, 0);
-		if (m_mode == eWEAPON)
-			m_mode = eABILITY;
-		else
-			m_mode = eWEAPON;
-	}
-
 	inputHandler.pushAction();
 }
 

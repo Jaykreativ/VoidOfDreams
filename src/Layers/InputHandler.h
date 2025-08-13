@@ -38,9 +38,9 @@ public:
 		m_deltaTime(deltaTime)
 	{}
 
-	const InputState& GetInputState() const { return m_inputState; }
-	float GetTimestamp() const { return m_timestamp; }
-	float GetDeltaTime() const { return m_deltaTime; }
+	const InputState& getInputState() const { return m_inputState; }
+	float getTimestamp() const { return m_timestamp; }
+	float getDeltaTime() const { return m_deltaTime; }
 
 	// network interface
 	void pack(char*& buf);
@@ -58,6 +58,10 @@ public:
 	const Action& addAction(const InputState& inputState, float timestamp);
 
 	void clear();
+
+	std::vector<Action>::iterator begin();
+
+	std::vector<Action>::iterator end();
 
 	// network interface
 	size_t dataSize();
@@ -83,7 +87,7 @@ protected:
 
 class InputHandlerServer : public InputHandler {
 public:
-
+	void takeActions(const ActionList& actionList);
 };
 
 class InputHandlerClient : public InputHandler {

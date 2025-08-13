@@ -1,13 +1,22 @@
 #include "SimulationHandler.h"
 
 #include "Log.h"
+#include "Layers/NetworkHandler.h"
 #include "Objects/Player.h"
 
-void SimulationHandlerServer::simulate(float dt, WorldDataServer& world) {
+void SimulationHandlerServer::simulate(float dt, WorldDataServer& world, std::unordered_map<Zap::UUID, ClientProxy>& clients) {
 	for (auto& playerPair : world.players) {
 		auto id = playerPair.first;
 		auto spPlayer = playerPair.second;
-		spPlayer->update(dt);
+		if (clients.count(id)) {
+			auto& input = clients.at(id).inputHandler;
+			for (auto& action : input.getActions()) { // loop through all client actions received in the last input packet
+				spPlayer->updateFocused(action.getDeltaTime(), action.getInputState());
+				spPlayer->updateMechanics(action.getDeltaTime());
+				spPlayer->update(dt);
+			}
+			input.getActions().clear();
+		}
 	}
 	world.spScene->simulate(dt);
 }
@@ -20,7 +29,7 @@ void SimulationHandlerClient::simulate(float dt, WorldDataClient& world, Control
 	if (std::shared_ptr<PlayerClient> spPlayer = world.wpPlayer.lock()) {
 		spPlayer->updateFocused(dt, controls, input.getInput(), input);
 		if (world.status == eGAME)
-			spPlayer->updateMechanics(controls, dt);
+			spPlayer->updateMechanics(dt);
 		else
 			spPlayer->update(dt);
 	}

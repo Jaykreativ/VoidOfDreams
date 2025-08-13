@@ -112,8 +112,10 @@ std::shared_ptr<Packet> Packet::receiveFrom(int& type, int socket, int flags) {
 
 	std::shared_ptr<Packet> spPacket;
 	createPacket(type, spPacket);
-	spPacket->unpackGeneralData(constBuf);
-	spPacket->unpackData(constBuf, dataSize-spPacket->generalDataSize());
+	if (spPacket) {
+		spPacket->unpackGeneralData(constBuf);
+		spPacket->unpackData(constBuf, dataSize-spPacket->generalDataSize());
+	}
 	delete[] buf;
 
 	return spPacket;
@@ -360,7 +362,10 @@ void DisconnectPacket::unpackData(const char* buf, uint32_t size) {
 
 // InputPacket
 uint32_t InputPacket::dataSize() {
-	return sizeof(uint64_t);
+	size_t size = sizeof(uint64_t);
+	if(list)
+		size += list->dataSize();
+	return size;
 }
 
 void InputPacket::pack(char* buf) {
@@ -373,6 +378,6 @@ void InputPacket::pack(char* buf) {
 
 void InputPacket::unpackData(const char* buf, uint32_t size) {
 	id = ntohll(reinterpret_cast<const uint64_t*>(buf)[0]); buf += sizeof(id);
-	if(list)
-		list->unpack(buf);
+	list = std::make_shared<ActionList>();
+	list->unpack(buf);
 }

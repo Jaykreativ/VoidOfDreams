@@ -9,9 +9,10 @@ public:
 
 };
 
+struct ClientProxy;
 class SimulationHandlerServer : public SimulationHandler {
 public:
-	void simulate(float dt, WorldDataServer& world);
+	void simulate(float dt, WorldDataServer& world, std::unordered_map<Zap::UUID, ClientProxy>& clients);
 };
 
 class SimulationHandlerClient : public SimulationHandler {

@@ -89,32 +89,32 @@ namespace logger {
 	void frameTimeEnd(std::string region);
 
 	void beginRegion(std::string name) {
-		auto& data = _threads[std::this_thread::get_id()];
-
-#ifdef LOG_GLOBAL_TIMESTAMPS
-		data.pCurrentTimeProfile->childProfiles.push_back({ data.pCurrentTimeProfile}); // make a new time profile in the tree
-		data.pCurrentTimeProfile = &data.pCurrentTimeProfile->childProfiles.back();
-
-		data.pCurrentTimeProfile->region = name;
-		data.pCurrentTimeProfile->time.beginTime = std::chrono::high_resolution_clock::now(); // save the begin time
-#endif // LOG_GLOBAL_TIMESTAMPS
-
-		frameTimeBegin(name);
-
-		data.regionStack.push_back(name);
+//		auto& data = _threads[std::this_thread::get_id()]; // TODO fix memory leaks in logger
+//
+//#ifdef LOG_GLOBAL_TIMESTAMPS
+//		data.pCurrentTimeProfile->childProfiles.push_back({ data.pCurrentTimeProfile}); // make a new time profile in the tree
+//		data.pCurrentTimeProfile = &data.pCurrentTimeProfile->childProfiles.back();
+//
+//		data.pCurrentTimeProfile->region = name;
+//		data.pCurrentTimeProfile->time.beginTime = std::chrono::high_resolution_clock::now(); // save the begin time
+//#endif // LOG_GLOBAL_TIMESTAMPS
+//
+//		frameTimeBegin(name);
+//
+//		data.regionStack.push_back(name);
 	}
 
 	void endRegion() {
-		auto& data = _threads[std::this_thread::get_id()];
-
-		#ifdef LOG_GLOBAL_TIMESTAMPS
-		data.pCurrentTimeProfile->time.endTime = std::chrono::high_resolution_clock::now(); // save the end time
-		data.pCurrentTimeProfile = data.pCurrentTimeProfile->parentProfile; // go back to parent
-		#endif // LOG_GLOBAL_TIMESTAMPS
-
-		frameTimeEnd(data.regionStack.back());
-
-		data.regionStack.pop_back();
+//		auto& data = _threads[std::this_thread::get_id()]; // TODO fix memory leaks in logger
+//
+//		#ifdef LOG_GLOBAL_TIMESTAMPS
+//		data.pCurrentTimeProfile->time.endTime = std::chrono::high_resolution_clock::now(); // save the end time
+//		data.pCurrentTimeProfile = data.pCurrentTimeProfile->parentProfile; // go back to parent
+//		#endif // LOG_GLOBAL_TIMESTAMPS
+//
+//		frameTimeEnd(data.regionStack.back());
+//
+//		data.regionStack.pop_back();
 	}
 
 	void error(std::string msg) {
@@ -220,24 +220,24 @@ namespace logger {
 	}
 
 	void beginFrame() {
-		auto& data = _threads[std::this_thread::get_id()];
-
-		data.isInFrame = true;
-		data.rootFrameTime.parent = nullptr;
-		data.rootFrameTime.region = "root";
-		data.rootFrameTime.time.beginTime = std::chrono::high_resolution_clock::now();
-		data.pCurrentFrameTime = &data.rootFrameTime;
-
-		resetActive(data.rootFrameTime);
+		//auto& data = _threads[std::this_thread::get_id()];// TODO fix memory leaks in logger
+		//
+		//data.isInFrame = true;
+		//data.rootFrameTime.parent = nullptr;
+		//data.rootFrameTime.region = "root";
+		//data.rootFrameTime.time.beginTime = std::chrono::high_resolution_clock::now();
+		//data.pCurrentFrameTime = &data.rootFrameTime;
+		//
+		//resetActive(data.rootFrameTime);
 	}
 
 	void endFrame() {
-		auto& data = _threads[std::this_thread::get_id()];
-
-		data.isInFrame = false;
-		data.rootFrameTime.time.endTime = std::chrono::high_resolution_clock::now();
-		float duration = std::chrono::duration_cast<RegionDurationSFloat>(data.pCurrentFrameTime->time.endTime - data.pCurrentFrameTime->time.beginTime).count();
-		data.pCurrentFrameTime->shiftSamples(duration);
+		//auto& data = _threads[std::this_thread::get_id()]; // TODO fix memory leaks in logger
+		//
+		//data.isInFrame = false;
+		//data.rootFrameTime.time.endTime = std::chrono::high_resolution_clock::now();
+		//float duration = std::chrono::duration_cast<RegionDurationSFloat>(data.pCurrentFrameTime->time.endTime - data.pCurrentFrameTime->time.beginTime).count();
+		//data.pCurrentFrameTime->shiftSamples(duration);
 	}
 
 	struct TimelineGuiData {

@@ -53,6 +53,14 @@ void ActionList::clear() {
 	m_list.clear();
 }
 
+std::vector<Action>::iterator ActionList::begin() {
+	return m_list.begin();
+}
+
+std::vector<Action>::iterator ActionList::end() {
+	return m_list.end();
+}
+
 size_t ActionList::dataSize() {
 	return sizeof(uint32_t) + sizeof(Action) * m_list.size();
 }
@@ -80,6 +88,10 @@ ActionList& InputHandler::getActions() {
 
 void InputHandler::reset() {
 	m_list.clear();
+}
+
+void InputHandlerServer::takeActions(const ActionList& actionList) {
+	m_list = actionList;
 }
 
 void InputHandlerClient::takeInput(Controls& controls, bool isDisabled) {

@@ -19,7 +19,7 @@ public:
 	virtual ~Player();
 
 	// should only update mechanics in game, not in main menu
-	void updateMechanics(Controls& controls, float dt);
+	void updateMechanics(float dt);
 
 	void damage(float damage);
 	virtual void damage(float damage, const Player& damager);
@@ -102,6 +102,9 @@ protected:
 
 	virtual void update(float dt);
 
+	// does all updates needed for the real player
+	virtual void updateFocused(float dt, const InputState& input);
+
 	virtual uint32_t classId();
 
 	virtual void readFromReplication(std::shared_ptr<ReplicationPacket> spPacket, uint32_t status);
@@ -116,6 +119,8 @@ public:
 	~PlayerServer();
 
 	void update(float dt);
+
+	void updateFocused(float dt, const InputState& input);
 };
 
 class PlayerClient : public Player {
