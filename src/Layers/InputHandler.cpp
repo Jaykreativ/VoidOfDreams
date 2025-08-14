@@ -40,13 +40,17 @@ void Action::unpack(const char*& buf) {
 	memcpy(&m_deltaTime, buf, sizeof(m_deltaTime)); buf += sizeof(m_deltaTime);
 }
 
-const Action& ActionList::addAction(const InputState& inputState, float timestamp) {
+const Action& ActionList::addAction(const InputState& inputState, double timestamp) {
 	float dTime = m_lastTimestamp >= 0.f ?
 		timestamp - m_lastTimestamp : 0.f;
 
 	m_list.push_back(Action(inputState, timestamp, dTime));
 	m_lastTimestamp = timestamp;
 	return m_list.back();
+}
+
+size_t ActionList::size() {
+	return m_list.size();
 }
 
 void ActionList::clear() {
@@ -132,7 +136,7 @@ void InputHandlerClient::takeInput(Controls& controls, bool isDisabled) {
 }
 
 void InputHandlerClient::pushAction() {
-	float timestamp = std::chrono::time_point_cast<std::chrono::duration<float>>(std::chrono::high_resolution_clock::now()).time_since_epoch().count();
+	double timestamp = std::chrono::time_point_cast<std::chrono::duration<double>>(std::chrono::high_resolution_clock::now()).time_since_epoch().count();
 	m_list.addAction(m_state, timestamp);
 }
 

@@ -55,7 +55,9 @@ private:
 
 class ActionList {
 public:
-	const Action& addAction(const InputState& inputState, float timestamp);
+	const Action& addAction(const InputState& inputState, double timestamp);
+
+	size_t size();
 
 	void clear();
 
@@ -72,7 +74,7 @@ public:
 
 private:
 	std::vector<Action> m_list;
-	float m_lastTimestamp = 0;
+	double m_lastTimestamp = 0;
 };
 
 class InputHandler {

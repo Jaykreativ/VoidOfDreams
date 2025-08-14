@@ -232,27 +232,29 @@ void drawHud(GuiData& gui, PlayerClient& player, float dt) {
 }
 
 void drawNetworkInterface(NetworkData& network, WorldDataClient& world) {
-	//bool serverRunning = server::isRunning();
-	//bool clientRunning = client::isRunning();
-	//
-	//if (serverRunning || clientRunning)
-	//	ImGui::BeginDisabled();
-	//static char usernameBuf[50] = "";
-	//memcpy(usernameBuf, network.username.data(), std::min<int>(50, network.username.size()));
-	//ImGui::InputText("username", usernameBuf, 50);
-	//network.username = usernameBuf;
-	//
-	//static char ipBuf[50] = "";
-	//memcpy(ipBuf, network.ip.data(), std::min<int>(50, network.ip.size()));
-	//ImGui::InputText("ip", ipBuf, 50);
-	//network.ip = ipBuf;
-	//
-	//static char portBuf[6] = "";
-	//memcpy(portBuf, network.port.data(), std::min<int>(6, network.port.size()));
-	//ImGui::InputText("port", portBuf, 6);
-	//network.port = portBuf;
-	//if (serverRunning || clientRunning)
-	//	ImGui::EndDisabled();
+	bool serverRunning = (bool)network.server;
+	bool clientRunning = (bool)network.client;
+	
+	if (clientRunning)
+		ImGui::BeginDisabled();
+	static char usernameBuf[50] = "";
+	memcpy(usernameBuf, network.username.data(), std::min<int>(50, network.username.size()));
+	ImGui::InputText("username", usernameBuf, 50);
+	network.username = usernameBuf;
+	
+	static char ipBuf[50] = "";
+	memcpy(ipBuf, network.ip.data(), std::min<int>(50, network.ip.size()));
+	ImGui::InputText("ip", ipBuf, 50);
+	network.ip = ipBuf;
+	
+	if (!clientRunning && serverRunning)
+		ImGui::BeginDisabled();
+	static char portBuf[6] = "";
+	memcpy(portBuf, network.port.data(), std::min<int>(6, network.port.size()));
+	ImGui::InputText("port", portBuf, 6);
+	network.port = portBuf;
+	if (serverRunning || clientRunning)
+		ImGui::EndDisabled();
 }
 
 void drawServerInterface(NetworkData& network) {

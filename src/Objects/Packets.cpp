@@ -103,11 +103,15 @@ std::shared_ptr<Packet> Packet::receiveFrom(int& type, int socket, int flags) {
 
 	buf = new char[dataSize];
 	const char* constBuf = buf;
-	bytesRead = recv(socket, buf, dataSize, 0); // get just data
-	if (bytesRead == -1) {
-		sock::printLastError("Packet::recv data");
-		delete[] buf;
-		return nullptr;
+	size_t offset = 0;
+	while (offset < dataSize) {
+		bytesRead = recv(socket, buf+offset, dataSize-offset, 0); // get just data
+		if (bytesRead == -1) {
+			sock::printLastError("Packet::recv data");
+			delete[] buf;
+			return nullptr;
+		}
+		offset += bytesRead;
 	}
 
 	std::shared_ptr<Packet> spPacket;
@@ -369,14 +373,16 @@ uint32_t InputPacket::dataSize() {
 }
 
 void InputPacket::pack(char* buf) {
+	char* oldBuf = buf;
 	packGeneralData(buf, eInput);
 	/* data */
 	reinterpret_cast<uint64_t*>(buf)[0] = htonll(id); buf+= sizeof(id);
-	if(list)
+	if (list)
 		list->pack(buf);
 }
 
 void InputPacket::unpackData(const char* buf, uint32_t size) {
+	const char* oldBuf = buf;
 	id = ntohll(reinterpret_cast<const uint64_t*>(buf)[0]); buf += sizeof(id);
 	list = std::make_shared<ActionList>();
 	list->unpack(buf);
