@@ -127,28 +127,40 @@ protected:
 	void unpackData(const char* buf, uint32_t size);
 };
 
+class ReplicationObject;
+class ReplicationManager;
 class ReplicationPacket : public Packet {
 	friend class Packet;
 public:
+
 	enum Type {
 		eCREATE,
 		eUPDATE,
-		eDESTROY
+		eDESTROY,
+		eRPC
 	};
 
-	void write(bool data);
-	void write(float data);
-	void write(uint32_t data);
-	void write(glm::vec3 data);
-	void write(glm::vec4 data);
-	void write(glm::mat4 data);
+	void write(bool val);
+	void write(char val);
+	void write(float val);
+	void write(uint32_t val);
+	void write(uint64_t val);
+	void write(std::string val);
+	void write(glm::vec3 val);
+	void write(glm::vec4 val);
+	void write(glm::mat4 val);
+	void write(ReplicationObject* val, ReplicationManager& manager);
 
 	bool readb();
+	char readc();
 	float readf();
 	uint32_t readu32();
+	uint64_t readu64();
+	std::string readStr();
 	glm::vec3 readVec3();
 	glm::vec4 readVec4();
 	glm::mat4 readMat4();
+	ReplicationObject* readRef(ReplicationManager& manager);
 
 	//data
 	uint32_t type;

@@ -107,9 +107,9 @@ protected:
 
 	virtual uint32_t classId();
 
-	virtual void readFromReplication(std::shared_ptr<ReplicationPacket> spPacket, uint32_t status);
+	virtual void readFromReplication(std::shared_ptr<ReplicationPacket> spPacket, uint32_t status, ReplicationManager& manager) override;
 
-	virtual void writeToReplication(std::shared_ptr<ReplicationPacket> spPacket, uint32_t status);
+	virtual void writeToReplication(std::shared_ptr<ReplicationPacket> spPacket, uint32_t status, ReplicationManager& manager) override;
 
 };
 

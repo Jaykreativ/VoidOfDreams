@@ -86,6 +86,25 @@ private:
 	bool m_isStreamConnected = false;
 };
 
+// Remote Procedure Calls
+class PlayerIdentifyRPC : public RPCObject {
+public:
+	uint32_t classId() override;
+
+	void call(WorldDataClient& world) override;
+
+	void readFromReplication(std::shared_ptr<ReplicationPacket> spPacket, uint32_t status, ReplicationManager& manager) override;
+
+	void writeToReplication(std::shared_ptr<ReplicationPacket> spPacket, uint32_t status, ReplicationManager& manager) override;
+
+	Player* pPlayer = nullptr;
+};
+inline ReplicationObject* playerIdentifyRPCCreate(WorldDataClient& world) {
+	return new PlayerIdentifyRPC();
+}
+inline void playerIdentifyRPCDestroy(WorldDataClient& world, ReplicationObject* obj) {
+	delete obj;
+}
 
 class NetworkHandlerServer : public NetworkHandler {
 public:

@@ -13,10 +13,10 @@ protected:
 	virtual uint32_t classId() = 0;
 
 	// reads all members indicated by the status flag from the specified ReplicationPacket
-	virtual void readFromReplication(std::shared_ptr<ReplicationPacket> spPacket, uint32_t status) = 0;
+	virtual void readFromReplication(std::shared_ptr<ReplicationPacket> spPacket, uint32_t status, ReplicationManager& manager) = 0;
 
 	// writes all members indicated by the status flag to the specified ReplicationPacket
-	virtual void writeToReplication(std::shared_ptr<ReplicationPacket> spPacket, uint32_t status) = 0;
+	virtual void writeToReplication(std::shared_ptr<ReplicationPacket> spPacket, uint32_t status, ReplicationManager& manager) = 0;
 
 	friend class ReplicationManager;
 	friend class ReplicationManagerClient;
@@ -71,6 +71,14 @@ private:
 	std::unordered_map<ReplicationObject*, Zap::UUID> m_objectToIdMap = {};
 };
 
+class RPCObject : public ReplicationObject {
+public:
+	RPCObject(){}
+	virtual ~RPCObject(){}
+
+	virtual void call(WorldDataClient& world) = 0;
+};
+
 // replication packets fed by the network are stored, the main loop is activating the processing of those packets
 class ReplicationManager {
 public:
@@ -79,6 +87,8 @@ public:
 
 protected:
 	LinkingContext m_linkingContext;
+
+	friend class ReplicationPacket;
 };
 
 class ReplicationManagerClient : public ReplicationManager {
@@ -101,4 +111,6 @@ public:
 	std::shared_ptr<ReplicationPacket> replicateUpdate(ReplicationObject* object, uint32_t status);
 
 	std::shared_ptr<ReplicationPacket> replicateDestroy(ReplicationObject* object);
+
+	std::shared_ptr<ReplicationPacket> replicateRPC(RPCObject& args);
 };

@@ -75,6 +75,30 @@ void ClientProxy::connectionMade(bool isDgram) {
 	m_isStreamConnected |= !isDgram;
 }
 
+// Remote Procedure Calls
+uint32_t PlayerIdentifyRPC::classId() {
+	return 'PLID';
+}
+
+void PlayerIdentifyRPC::call(WorldDataClient& world) {
+	if (world.status == eGAME) {
+		for (auto& spPlayer : world.game.players) {
+			if (spPlayer.get() == pPlayer) {
+				world.wpPlayer = spPlayer;
+				return;
+			}
+		}
+	}
+}
+
+void PlayerIdentifyRPC::readFromReplication(std::shared_ptr<ReplicationPacket> spPacket, uint32_t status, ReplicationManager& manager) {
+	pPlayer = reinterpret_cast<Player*>(spPacket->readRef(manager));
+}
+
+void PlayerIdentifyRPC::writeToReplication(std::shared_ptr<ReplicationPacket> spPacket, uint32_t status, ReplicationManager& manager) {
+	spPacket->write(pPlayer, manager);
+}
+
 NetworkHandlerServer::NetworkHandlerServer(uint16_t port)
 	: NetworkHandler()
 {
@@ -210,8 +234,13 @@ void NetworkHandlerServer::loop() {
 					//spPlayer->getInventory().setItem(std::make_shared<Dash>(), 2);
 					//spPlayer->getInventory().setItem(std::make_shared<SimpleTrigger>(ImGuiKey_LeftShift), 3);
 					spPlayer->spawn();
-					auto spPacket = m_replicationManager.replicateCreate(m_world.players.at(id).get());
+					auto spPacket = m_replicationManager.replicateCreate(m_world.players.at(id).get()); // create and register the new player in the replication system
 					sendToAll(*spPacket);
+
+					PlayerIdentifyRPC rpc;
+					rpc.pPlayer = spPlayer.get();
+					spPacket = m_replicationManager.replicateRPC(rpc); // send a ref to the new client to set the local player to
+					spPacket->sendTo(client.socket.stream);
 				}
 			}
 		}

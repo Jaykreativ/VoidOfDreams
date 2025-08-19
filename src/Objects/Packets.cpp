@@ -1,5 +1,7 @@
 #include "Packets.h"
 
+#include "Layers/ReplicationManager.h"
+
 // takes a ptr to an already allocated chunk of memory and packs the string into it
 // the ptr will point to the end of the packed string
 void packString(char*& buf, std::string string) {
@@ -240,6 +242,11 @@ void ReplicationPacket::write(bool val) {
 	m_data.resize(oldSize + sizeof(val));
 	memcpy(&m_data[oldSize], &val, sizeof(val));
 }
+void ReplicationPacket::write(char val) {
+	auto oldSize = m_data.size();
+	m_data.resize(oldSize + sizeof(val));
+	memcpy(&m_data[oldSize], &val, sizeof(val));
+}
 void ReplicationPacket::write(float val) {
 	auto oldSize = m_data.size();
 	uint32_t nval = htonf(val);
@@ -251,6 +258,18 @@ void ReplicationPacket::write(uint32_t val) {
 	uint32_t nval = htonl(val);
 	m_data.resize(oldSize + sizeof(nval));
 	memcpy(&m_data[oldSize], &nval, sizeof(nval));
+}
+void ReplicationPacket::write(uint64_t val) {
+	auto oldSize = m_data.size();
+	uint64_t nval = htonll(val);
+	m_data.resize(oldSize + sizeof(nval));
+	memcpy(&m_data[oldSize], &nval, sizeof(nval));
+}
+void ReplicationPacket::write(std::string val) {
+	write(val.size());
+	auto oldSize = m_data.size();
+	m_data.resize(oldSize + val.size());
+	memcpy(&m_data[oldSize], val.data(), val.size());
 }
 void ReplicationPacket::write(glm::vec3 val) {
 	write(val.x);
@@ -269,9 +288,23 @@ void ReplicationPacket::write(glm::mat4 val) {
 	write(val[2]);
 	write(val[3]);
 }
+void ReplicationPacket::write(ReplicationObject* val, ReplicationManager& manager) {
+	auto& link = manager.m_linkingContext;
+	if (link.hasObject(val)) {
+		write(link.getId(val));
+	}
+}
 
 bool ReplicationPacket::readb() {
 	bool val;
+	size_t readSize = m_readOffset + sizeof(val);
+	assert(m_data.size() >= readSize);
+	memcpy(&val, &m_data[m_readOffset], sizeof(val));
+	m_readOffset += sizeof(val);
+	return val;
+}
+char ReplicationPacket::readc() {
+	char val;
 	size_t readSize = m_readOffset + sizeof(val);
 	assert(m_data.size() >= readSize);
 	memcpy(&val, &m_data[m_readOffset], sizeof(val));
@@ -296,6 +329,24 @@ uint32_t ReplicationPacket::readu32() {
 	uint32_t val = ntohl(nval);
 	return val;
 }
+uint64_t ReplicationPacket::readu64() {
+	uint64_t nval;
+	size_t readSize = m_readOffset + sizeof(nval);
+	assert(m_data.size() >= readSize);
+	memcpy(&nval, &m_data[m_readOffset], sizeof(nval));
+	m_readOffset += sizeof(nval);
+	uint64_t val = ntohll(nval);
+	return val;
+}
+std::string ReplicationPacket::readStr() {
+	size_t size = readu64();
+	std::string val = std::string(size, '\0');
+	size_t readSize = m_readOffset + size;
+	assert(m_data.size() >= readSize);
+	memcpy(val.data(), &m_data[m_readOffset], size);
+	m_readOffset += size;
+	return val;
+}
 glm::vec3 ReplicationPacket::readVec3() {
 	glm::vec3 val;
 	val.x = readf();
@@ -318,6 +369,14 @@ glm::mat4 ReplicationPacket::readMat4() {
 	val[2] = readVec4();
 	val[3] = readVec4();
 	return val;
+}
+ReplicationObject* ReplicationPacket::readRef(ReplicationManager& manager) {
+	Zap::UUID id = readu64();
+	auto& link = manager.m_linkingContext;
+	if (link.hasObject(id)) {
+		return link.getObject(id);
+	}
+	return nullptr;
 }
 
 void ReplicationPacket::pack(char* buf) {

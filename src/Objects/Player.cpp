@@ -130,7 +130,7 @@ void PlayerServer::updateFocused(float dt, const InputState& input) {
 
 uint32_t Player::classId() { return 'PLYR'; }
 
-void Player::readFromReplication(std::shared_ptr<ReplicationPacket> spPacket, uint32_t status) {
+void Player::readFromReplication(std::shared_ptr<ReplicationPacket> spPacket, uint32_t status, ReplicationManager& manager) {
 	bool oldActive = m_active;
 	m_active = spPacket->readb();
 	if (oldActive != m_active) {
@@ -160,7 +160,7 @@ void Player::readFromReplication(std::shared_ptr<ReplicationPacket> spPacket, ui
 	m_damage = spPacket->readf();
 }
 
-void Player::writeToReplication(std::shared_ptr<ReplicationPacket> spPacket, uint32_t status) {
+void Player::writeToReplication(std::shared_ptr<ReplicationPacket> spPacket, uint32_t status, ReplicationManager& manager) {
 	spPacket->write(m_active);
 	spPacket->write(m_mode);
 

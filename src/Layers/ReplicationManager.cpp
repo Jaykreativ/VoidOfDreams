@@ -1,10 +1,13 @@
 #include "ReplicationManager.h"
 
+#include "NetworkHandler.h"
 #include "Objects/Player.h"
 #include "Log.h"
 
+// all replication objects need to be registered here
 void ObjectCreationRegistry::initCreationRegistry() {
 	ObjectCreationRegistry::get().addFunctions('PLYR', { playerCreate, playerDestroy });
+	ObjectCreationRegistry::get().addFunctions('PLID', { playerIdentifyRPCCreate, playerIdentifyRPCDestroy });
 }
 
 ObjectCreationRegistry& ObjectCreationRegistry::get() {
@@ -89,19 +92,25 @@ void ReplicationManagerClient::processReplication(WorldDataClient& world) {
 		case ReplicationPacket::eCREATE: {
 			auto* pObject = ObjectCreationRegistry::get().create(replication->classId, world);
 			m_linkingContext.addObject(pObject, replication->objectId);
-			pObject->readFromReplication(replication, replication->status);
+			pObject->readFromReplication(replication, replication->status, *this);
 			break;
 		}
 		case ReplicationPacket::eUPDATE: {
 			auto* pObject = m_linkingContext.getObject(replication->objectId);
 			if(pObject)
-				pObject->readFromReplication(replication, replication->status);
+				pObject->readFromReplication(replication, replication->status, *this);
 			break;
 		}
 		case ReplicationPacket::eDESTROY: {
 			auto* pObject = m_linkingContext.getObject(replication->objectId);
 			if (pObject)
 				ObjectCreationRegistry::get().destroy(replication->classId, world, pObject);
+			break;
+		}
+		case ReplicationPacket::eRPC: {
+			auto* pObject = ObjectCreationRegistry::get().create(replication->classId, world);
+			pObject->readFromReplication(replication, 0, *this);
+			reinterpret_cast<RPCObject*>(pObject)->call(world);
 			break;
 		}
 		}
@@ -115,7 +124,7 @@ std::shared_ptr<ReplicationPacket> ReplicationManagerServer::replicateCreate(Rep
 	spPacket->classId = object->classId();
 	spPacket->status = UINT32_MAX;
 	spPacket->objectId = m_linkingContext.getId(object, true);
-	object->writeToReplication(spPacket, UINT32_MAX); // every bit is enabled
+	object->writeToReplication(spPacket, UINT32_MAX, *this); // every bit is enabled
 	return spPacket;
 }
 
@@ -125,7 +134,7 @@ std::shared_ptr<ReplicationPacket> ReplicationManagerServer::replicateUpdate(Rep
 	spPacket->classId = object->classId();
 	spPacket->status = status;
 	spPacket->objectId = m_linkingContext.getId(object);
-	object->writeToReplication(spPacket, status);
+	object->writeToReplication(spPacket, status, *this);
 	return spPacket;
 }
 
@@ -134,5 +143,13 @@ std::shared_ptr<ReplicationPacket> ReplicationManagerServer::replicateDestroy(Re
 	spPacket->type = ReplicationPacket::eDESTROY;
 	spPacket->classId = object->classId();
 	spPacket->objectId = m_linkingContext.getId(object); // for destruction member data doesn't matter
+	return spPacket;
+}
+
+std::shared_ptr<ReplicationPacket> ReplicationManagerServer::replicateRPC(RPCObject& object) {
+	auto spPacket = std::make_shared<ReplicationPacket>();
+	spPacket->type = ReplicationPacket::eRPC;
+	spPacket->classId = object.classId();
+	object.writeToReplication(spPacket, 0, *this);
 	return spPacket;
 }
