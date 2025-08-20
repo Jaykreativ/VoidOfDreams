@@ -10,7 +10,7 @@ public:
 
 	glm::vec3 getMoveDir() const;
 
-	glm::mat4 getRotationDeltaMat() const;
+	glm::mat4 getRotationMat() const;
 
 	// network interface
 	void pack(char*& buf);
@@ -101,5 +101,6 @@ public:
 	const InputState& getInput();
 
 private:
+	glm::mat4 m_currentRotMat = glm::mat4(1);
 	InputState m_state;
 };

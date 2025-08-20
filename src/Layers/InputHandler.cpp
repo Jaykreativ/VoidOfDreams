@@ -12,7 +12,7 @@ glm::vec3 InputState::getMoveDir() const {
 	return m_moveDir;
 }
 
-glm::mat4 InputState::getRotationDeltaMat() const {
+glm::mat4 InputState::getRotationMat() const {
 	return m_rotMat;
 }
 
@@ -126,12 +126,13 @@ void InputHandlerClient::takeInput(Controls& controls, bool isDisabled) {
 		//rotate
 		glm::vec2 mouseDelta = ImGui::GetIO().MouseDelta;
 
-		newState.m_rotMat = glm::rotate(newState.m_rotMat, mouseDelta.x / 100.f, { 0, 1, 0 });
-		newState.m_rotMat = glm::rotate(newState.m_rotMat, mouseDelta.y / 100.f, { 1, 0, 0 });
+		m_currentRotMat = glm::rotate(m_currentRotMat, mouseDelta.x / 100.f, { 0, 1, 0 });
+		m_currentRotMat = glm::rotate(m_currentRotMat, mouseDelta.y / 100.f, { 1, 0, 0 });
 
 		// switch mode
 		newState.m_switchMode = ImGui::IsMouseClicked(controls.switchMode);
 	}
+	newState.m_rotMat = m_currentRotMat; // set rotation
 	m_state = newState;
 }
 

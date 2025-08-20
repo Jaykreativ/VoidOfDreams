@@ -111,7 +111,10 @@ void Player::updateFocused(float dt, const InputState& input) {
 		m_base.cmpTransform_setPos(m_base.cmpTransform_getPos() + moveVec);
 	}
 
-	m_base.cmpTransform_setTransform(transform * input.getRotationDeltaMat());
+	glm::vec4 pos = transform[3]; // set rotation
+	transform = input.getRotationMat();
+	transform[3] = pos;
+	m_base.cmpTransform_setTransform(transform);
 
 	// switch mode
 	if (input.hasSwitchedMode()) {
