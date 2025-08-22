@@ -3,31 +3,18 @@
 #include "Objects/Player.h"
 
 SimpleTrigger::SimpleTrigger(ImGuiKey key)
-	: m_isKey(true), m_key(key), m_mouseButton(0)
+	: m_key(key)
 {}
 
-SimpleTrigger::SimpleTrigger(ImGuiMouseButton_ mouseButton)
-	: m_isKey(false), m_mouseButton(mouseButton), m_key(ImGuiKey_None)
-{}
+void SimpleTrigger::update(Player& player, PlayerInventory::iterator iterator, const InputState& input) {
+	bool trigger = false; input.isKeyDown(m_key);
 
-void SimpleTrigger::update(Player& player, PlayerInventory::iterator iterator) {
-	//if (!player.receivesInput())
-	//	return;
-
-	bool trigger = false;
-	if (m_isKey) {
-		if (ImGui::IsKeyPressed(m_key, false)) {
-			trigger = true;
-		}
+	// simple triggers only trigger on press
+	if ((m_lastTriggered != trigger) && trigger) {
+		if((*(iterator - 1))->isTriggerable())
+			(*(iterator - 1))->trigger();
 	}
-	else {
-		if (ImGui::IsMouseClicked(m_mouseButton, false)) {
-			trigger = true;
-		}
-	}
-
-	if(trigger && (*(iterator - 1))->isTriggerable())
-		(*(iterator - 1))->trigger();
+	m_lastTriggered = trigger;
 }
 
 bool SimpleTrigger::isTriggerable() {

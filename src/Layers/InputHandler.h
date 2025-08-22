@@ -4,6 +4,7 @@
 
 #include "glm.hpp"
 
+
 class InputState {
 public:
 	bool hasSwitchedMode() const;
@@ -12,13 +13,19 @@ public:
 
 	glm::mat4 getRotationMat() const;
 
+	bool isKeyDown(ImGuiKey key) const;
+
 	// network interface
+	size_t dataSize();
+
 	void pack(char*& buf);
 
 	void unpack(const char*& buf);
 
 private:
 	bool m_switchMode = false;
+
+	std::vector<int> m_keysPressed = {};
 
 	glm::vec3 m_moveDir = glm::vec3(0, 0, 0);
 	glm::mat4 m_rotMat = glm::mat4(1);
@@ -43,6 +50,8 @@ public:
 	float getDeltaTime() const { return m_deltaTime; }
 
 	// network interface
+	size_t dataSize();
+
 	void pack(char*& buf);
 
 	void unpack(const char*& buf);

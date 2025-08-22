@@ -16,16 +16,42 @@ glm::mat4 InputState::getRotationMat() const {
 	return m_rotMat;
 }
 
+bool InputState::isKeyDown(ImGuiKey key) const {
+	for (int refKey : m_keysPressed)
+		if (refKey == key)
+			return true;
+	return false;
+}
+
+size_t InputState::dataSize() {
+	return sizeof(m_switchMode) + sizeof(uint32_t) + m_keysPressed.size() * sizeof(int) + sizeof(m_moveDir) + sizeof(m_rotMat);
+}
+
 void InputState::pack(char*& buf) {
 	memcpy(buf, &m_switchMode, sizeof(m_switchMode)); buf += sizeof(m_switchMode);
+
+	uint32_t size = m_keysPressed.size();
+	memcpy(buf, &size, sizeof(size)); buf += sizeof(size);
+	memcpy(buf, m_keysPressed.data(), m_keysPressed.size() * sizeof(int)); buf += m_keysPressed.size() * sizeof(int);
+
 	memcpy(buf, &m_moveDir, sizeof(m_moveDir)); buf += sizeof(m_moveDir);
 	memcpy(buf, &m_rotMat, sizeof(m_rotMat)); buf += sizeof(m_rotMat);
 }
 
 void InputState::unpack(const char*& buf) {
 	memcpy(&m_switchMode, buf, sizeof(m_switchMode)); buf += sizeof(m_switchMode);
+
+	uint32_t size = 0;
+	memcpy(&size, buf, sizeof(size)); buf += sizeof(size);
+	m_keysPressed.resize(size);
+	memcpy(m_keysPressed.data(), buf, m_keysPressed.size() * sizeof(int)); buf += m_keysPressed.size() * sizeof(int);
+
 	memcpy(&m_moveDir, buf, sizeof(m_moveDir)); buf += sizeof(m_moveDir);
 	memcpy(&m_rotMat, buf, sizeof(m_rotMat)); buf += sizeof(m_rotMat);
+}
+
+size_t Action::dataSize() {
+	return m_inputState.dataSize() + sizeof(m_timestamp) + sizeof(m_deltaTime);
 }
 
 void Action::pack(char*& buf) {
@@ -66,7 +92,10 @@ std::vector<Action>::iterator ActionList::end() {
 }
 
 size_t ActionList::dataSize() {
-	return sizeof(uint32_t) + sizeof(Action) * m_list.size();
+	size_t result = sizeof(uint32_t);
+	for (auto& action : m_list)
+		result += action.dataSize();
+	return result;
 }
 
 void ActionList::pack(char*& buf) {
@@ -131,6 +160,14 @@ void InputHandlerClient::takeInput(Controls& controls, bool isDisabled) {
 
 		// switch mode
 		newState.m_switchMode = ImGui::IsMouseClicked(controls.switchMode);
+
+		// search all pressed keys
+		ImGuiKey startKey = (ImGuiKey)ImGuiKey_NamedKey_BEGIN;
+		for (ImGuiKey key = startKey; key < ImGuiKey_NamedKey_END; key = (ImGuiKey)(key + 1)) { // iterate through all keys
+			if (ImGui::IsKeyDown(key)) {
+				newState.m_keysPressed.push_back(key);
+			}
+		}
 	}
 	newState.m_rotMat = m_currentRotMat; // set rotation
 	m_state = newState;

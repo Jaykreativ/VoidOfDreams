@@ -135,6 +135,8 @@ private:
 
 	void setupNewClient(ClientProxy& client);
 
+	std::shared_ptr<PlayerServer> setupNewPlayer(Zap::UUID id);
+
 	void handleHelloPacket(IncomingPacket& inPacket);
 
 	void handleDisconnectPacket(IncomingPacket& inPacket);

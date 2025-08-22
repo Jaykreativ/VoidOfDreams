@@ -72,11 +72,9 @@ void PlayerClient::updateAnimations(float dt) {
 	}
 }
 
-void Player::updateMechanics(float dt) {
+void Player::updateMechanics(float dt, const InputState& input) {
 	if (m_active) {
 		m_energy = std::min<float>(m_energy, 100);
-
-		m_inventory.update(*this); // update all items in inventory
 
 		m_energy += (m_energy * 0.1 + 5) * dt;
 		m_energy = std::min<float>(m_energy, 100.f);
@@ -126,6 +124,14 @@ void Player::updateFocused(float dt, const InputState& input) {
 			m_mode = eWEAPON;
 	}
 }
+
+void PlayerServer::updateMechanics(float dt, const InputState& input) {
+	Player::updateMechanics(dt, input);
+	if (m_active) {
+		m_inventory.update(*this, input); // update all items in inventory
+	}
+}
+
 
 void PlayerServer::updateFocused(float dt, const InputState& input) {
 	Player::updateFocused(dt, input);
@@ -191,6 +197,10 @@ PlayerServer::~PlayerServer() {}
 
 void PlayerServer::update(float dt) {
 	Player::update(dt);
+}
+
+void PlayerClient::updateMechanics(float dt, const InputState& input) {
+	Player::updateMechanics(dt, input);
 }
 
 void PlayerClient::updateFocused(float dt, Controls& controls, const InputState& input, InputHandlerClient& inputHandler) {
@@ -363,10 +373,6 @@ float Player::getSpawProtectionTimeout() {
 	return m_spawnProtection;
 }
 
-PlayerInventory& Player::getInventory() {
-	return m_inventory;
-}
-
 std::string Player::getUsername() {
 	return m_username;
 }
@@ -390,6 +396,10 @@ void Player::setTransform(glm::mat4 transform) {
 
 glm::mat4 Player::getTransform() {
 	return m_hull.cmpTransform_getTransform();
+}
+
+PlayerInventory& PlayerServer::getInventory() {
+	return m_inventory;
 }
 
 bool PlayerClient::hasTakenDamage() { return ZP_IS_FLAG_ENABLED(m_events, eDAMAGE_TAKEN); }

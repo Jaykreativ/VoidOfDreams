@@ -18,9 +18,6 @@ public:
 	Player(Zap::Scene& scene);
 	virtual ~Player();
 
-	// should only update mechanics in game, not in main menu
-	void updateMechanics(float dt);
-
 	void damage(float damage);
 	virtual void damage(float damage, const Player& damager);
 
@@ -61,8 +58,6 @@ public:
 
 	float getSpawProtectionTimeout();
 
-	PlayerInventory& getInventory();
-
 	std::string getUsername();
 
 	Zap::Actor getPhysicsActor();
@@ -93,17 +88,19 @@ protected:
 
 	Zap::Scene& m_scene;
 
-	PlayerInventory m_inventory;
-
 	std::string m_username;
 
 	float m_spawnProtection = 5;
 	float m_spawnTimeout = 5;
 
-	virtual void update(float dt);
+	// general update function for all players
+	void update(float dt);
+
+	// should only update mechanics in game, not in main menu
+	void updateMechanics(float dt, const InputState& input);
 
 	// does all updates needed for the real player
-	virtual void updateFocused(float dt, const InputState& input);
+	void updateFocused(float dt, const InputState& input);
 
 	virtual uint32_t classId();
 
@@ -120,7 +117,14 @@ public:
 
 	void update(float dt);
 
+	void updateMechanics(float dt, const InputState& input);
+
 	void updateFocused(float dt, const InputState& input);
+
+	PlayerInventory& getInventory();
+
+private:
+	PlayerInventory m_inventory; // TODO synchronize inventory with clients
 };
 
 class PlayerClient : public Player {
@@ -128,11 +132,12 @@ public:
 	PlayerClient(Zap::Scene& scene);
 	~PlayerClient();
 
+	void update(float dt);
+
+	void updateMechanics(float dt, const InputState& input);
+
 	// does all updates needed for the real player
 	void updateFocused(float dt, Controls& controls, const InputState& input, InputHandlerClient& inputHandler);
-
-	// general update function for all players
-	void update(float dt);
 
 	void damage(float damage, const Player& damager);
 

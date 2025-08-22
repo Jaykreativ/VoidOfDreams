@@ -7,14 +7,12 @@
 class SimpleTrigger : public Trigger {
 public:
 	SimpleTrigger(ImGuiKey key);
-	SimpleTrigger(ImGuiMouseButton_ mouseButton);
 
-	void update(Player& player, PlayerInventory::iterator iterator) override;
+	void update(Player& player, PlayerInventory::iterator iterator, const InputState& input) override;
 
 	bool isTriggerable() override;
 
 private:
-	bool m_isKey;
+	bool m_lastTriggered = false;
 	ImGuiKey m_key;
-	ImGuiMouseButton m_mouseButton;
 };

@@ -3,6 +3,9 @@
 #include "Layers/SimulationHandler.h"
 #include "Shares/World.h"
 #include "Objects/Player.h"
+#include "Objects/Weapons/Ray.h"
+#include "Objects/PermaAbilities/Dash.h"
+#include "Objects/Triggers/SimpleTrigger.h"
 
 #include <chrono>
 
@@ -144,6 +147,17 @@ void NetworkHandlerServer::setupNewClient(ClientProxy& client) {
 	}
 }
 
+std::shared_ptr<PlayerServer> NetworkHandlerServer::setupNewPlayer(Zap::UUID id) {
+	auto spPlayer = std::make_shared<PlayerServer>(*m_world.spScene);
+	m_world.players[id] = spPlayer;
+	spPlayer->getInventory().setItem(std::make_shared<Ray>(m_world), 0);
+	spPlayer->getInventory().setItem(std::make_shared<SimpleTrigger>(ImGuiMouseButton_Left), 1);
+	spPlayer->getInventory().setItem(std::make_shared<Dash>(), 2);
+	spPlayer->getInventory().setItem(std::make_shared<SimpleTrigger>(ImGuiKey_LeftShift), 3);
+	spPlayer->spawn();
+	return spPlayer;
+}
+
 void NetworkHandlerServer::handleHelloPacket(IncomingPacket& inPacket) {
 	HelloPacket* packet = reinterpret_cast<HelloPacket*>(inPacket.spPacket.get());
 	auto id = packet->id;
@@ -227,16 +241,9 @@ void NetworkHandlerServer::loop() {
 			auto& client = clientPair.second;
 			if (client.isFullyConnected()) {
 				if (!m_world.players.count(id)) { // when the client has no corresponding player, create a new player
-					auto spPlayer = std::make_shared<PlayerServer>(*m_world.spScene);
-					m_world.players[id] = spPlayer;
-					//spPlayer->getInventory().setItem(std::make_shared<Ray>(m_world), 0);
-					//spPlayer->getInventory().setItem(std::make_shared<SimpleTrigger>(ImGuiMouseButton_Left), 1);
-					//spPlayer->getInventory().setItem(std::make_shared<Dash>(), 2);
-					//spPlayer->getInventory().setItem(std::make_shared<SimpleTrigger>(ImGuiKey_LeftShift), 3);
-					spPlayer->spawn();
-					auto spPacket = m_replicationManager.replicateCreate(m_world.players.at(id).get()); // create and register the new player in the replication system
+					auto spPlayer = setupNewPlayer(id);
+					auto spPacket = m_replicationManager.replicateCreate(spPlayer.get()); // create and register the new player in the replication system
 					sendToAll(*spPacket);
-
 					PlayerIdentifyRPC rpc;
 					rpc.pPlayer = spPlayer.get();
 					spPacket = m_replicationManager.replicateRPC(rpc); // send a ref to the new client to set the local player to

@@ -12,7 +12,7 @@ void SimulationHandlerServer::simulate(float dt, WorldDataServer& world, std::un
 			auto& input = clients.at(id).inputHandler;
 			for (auto& action : input.getActions()) { // loop through all client actions received in the last input packet
 				spPlayer->updateFocused(action.getDeltaTime(), action.getInputState());
-				spPlayer->updateMechanics(action.getDeltaTime());
+				spPlayer->updateMechanics(action.getDeltaTime(), action.getInputState());
 				spPlayer->update(action.getDeltaTime());
 			}
 			input.getActions().clear();
@@ -29,7 +29,7 @@ void SimulationHandlerClient::simulate(float dt, WorldDataClient& world, Control
 	if (std::shared_ptr<PlayerClient> spPlayer = world.wpPlayer.lock()) {
 		spPlayer->updateFocused(dt, controls, input.getInput(), input);
 		if (world.status == eGAME)
-			spPlayer->updateMechanics(dt);
+			spPlayer->updateMechanics(dt, input.getInput());
 		else
 			spPlayer->update(dt);
 	}

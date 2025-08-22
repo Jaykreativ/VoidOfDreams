@@ -13,7 +13,7 @@ class Ray : public Weapon{
 public:
 	Ray(WorldDataClient& world);
 
-	void update(Player& player, PlayerInventory::iterator iterator) override;
+	void update(Player& player, PlayerInventory::iterator iterator, const InputState& input) override;
 
 	static void processRay(glm::vec3 origin, glm::vec3 direction, WorldDataClient& world, Player& checkPlayer, Player& senderPlayer);
 

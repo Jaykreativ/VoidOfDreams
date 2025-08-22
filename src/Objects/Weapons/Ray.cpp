@@ -77,7 +77,7 @@ public:
 	}
 };
 
-void Ray::update(Player& player, PlayerInventory::iterator iterator) {
+void Ray::update(Player& player, PlayerInventory::iterator iterator, const InputState& input) {
 	if (m_isTriggered && player.isWeaponMode() && (player.getEnergy() >= _energyCost)) {
 		//glm::vec3 origin = player.getTransform()[3] + (m_alternateSide-.5f)*2*player.getTransform()[0];
 		//glm::vec3 direction = player.getCameraTransform()[2];
@@ -98,6 +98,7 @@ void Ray::update(Player& player, PlayerInventory::iterator iterator) {
 		//else
 		//	m_world.game.rayBeams.push_back(std::make_unique<Beam>(m_world, origin, glm::normalize(direction), 1000));
 		//m_alternateSide = !m_alternateSide;
+		printf("Ray\n");
 	}
 	m_isTriggered = false; // one time trigger
 }
