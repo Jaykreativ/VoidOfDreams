@@ -77,26 +77,30 @@ public:
 
 void Ray::update(Player& player, PlayerInventory::iterator iterator, const InputState& input, WorldDataServer& world) {
 	if (m_isTriggered && player.isWeaponMode() && (player.getEnergy() >= _energyCost)) {
-		//glm::vec3 origin = player.getTransform()[3] + (m_alternateSide-.5f)*2*player.getTransform()[0];
-		//glm::vec3 direction = player.getCameraTransform()[2];
-		////client::sendRay(origin, direction, player.getUsername());
-		//player.spendEnergy(_energyCost);
-		//
-		//// shoot beam
-		//Zap::Scene::RaycastOutput out = {};
-		//RayFilter filter;
-		//filter.excludedActor = player.getPhysicsActor();
-		//bool hit = false;
-		//{
-		//	std::lock_guard<std::mutex> lk(m_world.mScene);
-		//	hit = m_world.game.spScene->raycast(origin, glm::normalize(direction), 1000, &out, &filter);
-		//}
-		//if (hit)
-		//	m_world.game.rayBeams.push_back(std::make_unique<Beam>(m_world, origin, glm::normalize(direction), out.distance));
+		glm::vec3 origin = player.getTransform()[3] + (m_alternateSide-.5f)*2*input.getRotationMat()[0];
+		glm::vec3 direction = input.getRotationMat()[2];
+		player.spendEnergy(_energyCost);
+		
+		// shoot beam
+		Zap::Scene::RaycastOutput out = {};
+		RayFilter filter;
+		filter.excludedActor = player.getPhysicsActor();
+		bool hit = false;
+		hit = world.spScene->raycast(origin, glm::normalize(direction), 1000, &out, &filter);
+
+		// damage
+		if (hit) {
+			for(auto& checkPlayer : world.players)
+			if (out.actor == checkPlayer.second->getPhysicsActor()) {
+				checkPlayer.second->damage(_damage, player);
+			}
+		}
+
+		//if (hit) // create ray beam effect
+		//	world.game.rayBeams.push_back(std::make_unique<Beam>(m_world, origin, glm::normalize(direction), out.distance));
 		//else
-		//	m_world.game.rayBeams.push_back(std::make_unique<Beam>(m_world, origin, glm::normalize(direction), 1000));
-		//m_alternateSide = !m_alternateSide;
-		printf("Ray\n");
+		//	world.game.rayBeams.push_back(std::make_unique<Beam>(m_world, origin, glm::normalize(direction), 1000));
+		m_alternateSide = !m_alternateSide;
 	}
 	m_isTriggered = false; // one time trigger
 }
