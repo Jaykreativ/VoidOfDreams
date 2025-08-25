@@ -82,8 +82,6 @@ void Player::updateMechanics(float dt, const InputState& input) {
 	}
 	else {
 		m_spawnTimeout -= dt;
-		if (m_spawnTimeout < 0)
-			spawn();
 	}
 }
 
@@ -130,6 +128,10 @@ void PlayerServer::updateMechanics(float dt, const InputState& input, WorldDataS
 	if (m_active) {
 		m_inventory.update(*this, input, world); // update all items in inventory
 	}
+	else {
+		if (m_spawnTimeout <= 0)
+			spawn();
+	}
 }
 
 
@@ -140,10 +142,9 @@ void PlayerServer::updateFocused(float dt, const InputState& input) {
 uint32_t Player::classId() { return 'PLYR'; }
 
 void Player::readFromReplication(std::shared_ptr<ReplicationPacket> spPacket, uint32_t status, ReplicationManager& manager) {
-	bool oldActive = m_active;
-	m_active = spPacket->readb();
-	if (oldActive != m_active) {
-		if (m_active) { // detect spawn/kill
+	bool newActive = spPacket->readb();
+	if (newActive != m_active) {
+		if (newActive) { // detect spawn/kill
 			spawn();
 		}
 		else {
@@ -275,23 +276,22 @@ void Player::localKill() {
 }
 
 void PlayerClient::localKill() {
-	Player::localKill();
 	if (m_active) {
 		m_core.destroy();
 		m_recordEvents |= eDEATH;
 	}
+	Player::localKill();
 }
 
 void Player::spawn() {
 	localSpawn();
 	m_spawnProtection = 5;
-	//client::sendPlayerSpawn(m_username);
+	m_spawnTimeout = 0;
 }
 
 void Player::kill() {
 	if (m_active) {
 		m_spawnTimeout = 5;
-		//client::sendPlayerDeath(m_username, "");
 	}
 	localKill();
 }
@@ -299,7 +299,6 @@ void Player::kill() {
 void Player::kill(const Player& killer) {
 	if (m_active) {
 		m_spawnTimeout = 5;
-		//client::sendPlayerDeath(m_username, killer.m_username);
 	}
 	localKill();
 }
