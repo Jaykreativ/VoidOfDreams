@@ -125,10 +125,10 @@ void Player::updateFocused(float dt, const InputState& input) {
 	}
 }
 
-void PlayerServer::updateMechanics(float dt, const InputState& input) {
+void PlayerServer::updateMechanics(float dt, const InputState& input, WorldDataServer& world) {
 	Player::updateMechanics(dt, input);
 	if (m_active) {
-		m_inventory.update(*this, input); // update all items in inventory
+		m_inventory.update(*this, input, world); // update all items in inventory
 	}
 }
 

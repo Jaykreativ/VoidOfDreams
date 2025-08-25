@@ -7,23 +7,23 @@
 
 #include "glm.hpp"
 
-struct WorldDataClient;
+struct WorldDataServer;
 
-class Ray : public Weapon{
+class Ray : public Weapon {
 public:
-	Ray(WorldDataClient& world);
+	Ray();
 
-	void update(Player& player, PlayerInventory::iterator iterator, const InputState& input) override;
+	void update(Player& player, PlayerInventory::iterator iterator, const InputState& input, WorldDataServer& world) override;
 
-	static void processRay(glm::vec3 origin, glm::vec3 direction, WorldDataClient& world, Player& checkPlayer, Player& senderPlayer);
+	static void processRay(glm::vec3 origin, glm::vec3 direction, WorldDataServer& world, Player& checkPlayer, Player& senderPlayer);
 
 	class Beam {
 	public:
-		Beam(WorldDataClient& world, glm::vec3 origin, glm::vec3 direction, float length);
+		Beam(WorldDataServer& world, glm::vec3 origin, glm::vec3 direction, float length);
 		~Beam();
 
 	private:
-		WorldDataClient& m_world;
+		WorldDataServer& m_world;
 		Zap::Actor m_actor;
 
 		class BeamAnimation : public Animation {
@@ -41,7 +41,5 @@ public:
 	};
 
 private:
-	WorldDataClient& m_world;
-
 	int m_alternateSide = 0;
 };

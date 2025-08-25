@@ -117,7 +117,7 @@ public:
 
 	void update(float dt);
 
-	void updateMechanics(float dt, const InputState& input);
+	void updateMechanics(float dt, const InputState& input, WorldDataServer& world);
 
 	void updateFocused(float dt, const InputState& input);
 

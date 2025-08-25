@@ -10,6 +10,7 @@
 class Item;
 class Player;
 class InputState;
+struct WorldDataServer;
 
 template<size_t _size>
 class Inventory {
@@ -42,5 +43,5 @@ private:
 
 class PlayerInventory : public Inventory<PLAYER_INVENTORY_SIZE> {
 public:
-	void update(Player& player, const InputState& input);
+	void update(Player& player, const InputState& input, WorldDataServer& world);
 };

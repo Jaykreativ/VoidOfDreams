@@ -6,8 +6,8 @@ SimpleTrigger::SimpleTrigger(ImGuiKey key)
 	: m_key(key)
 {}
 
-void SimpleTrigger::update(Player& player, PlayerInventory::iterator iterator, const InputState& input) {
-	bool trigger = false; input.isKeyDown(m_key);
+void SimpleTrigger::update(Player& player, PlayerInventory::iterator iterator, const InputState& input, WorldDataServer& world) {
+	bool trigger = input.isKeyDown(m_key);
 
 	// simple triggers only trigger on press
 	if ((m_lastTriggered != trigger) && trigger) {

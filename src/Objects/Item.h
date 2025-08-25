@@ -2,10 +2,12 @@
 
 #include "Inventory.h"
 
+
 class Player;
+struct WorldDataServer;
 class Item {
 public:
-	virtual void update(Player& player, PlayerInventory::iterator iterator, const InputState& input) = 0;
+	virtual void update(Player& player, PlayerInventory::iterator iterator, const InputState& input, WorldDataServer& world) = 0;
 
 	void trigger();
 

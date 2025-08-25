@@ -11,27 +11,27 @@ const float _damage = 10;
 
 const std::filesystem::path _beamModel = "Models/Cube.obj";
 
-Ray::Beam::Beam(WorldDataClient& world, glm::vec3 origin, glm::vec3 direction, float length)
+Ray::Beam::Beam(WorldDataServer& world, glm::vec3 origin, glm::vec3 direction, float length)
 	: m_world(world)
 {
-	Zap::ModelLoader loader;
-	auto model = loader.load(_beamModel);
-	world.game.spScene->attachActor(m_actor);
-	m_actor.addTransform();
-	m_actor.addModel(model);
-	{
-		Zap::Material mat;
-		mat.setEmissive({1, 1, 1, 10});
-		m_actor.cmpModel_setMaterial(mat);
-	}
-	m_actor.cmpTransform_setPos(origin + direction*(length/2.f));
-	float angle = acos(glm::dot(direction, glm::vec3(1, 0, 0))/glm::length(direction));
-	glm::vec3 cross = glm::cross(direction, glm::vec3(1, 0, 0));
-	m_actor.cmpTransform_rotate(glm::degrees(-angle), cross);
-	m_actor.cmpTransform_setScale(length /2.f, .025, .025);
-
-	m_animation = std::make_shared<BeamAnimation>(*this);
-	world.animations.push_back(m_animation);
+	//Zap::ModelLoader loader;
+	//auto model = loader.load(_beamModel);
+	//world.game.spScene->attachActor(m_actor);
+	//m_actor.addTransform();
+	//m_actor.addModel(model);
+	//{
+	//	Zap::Material mat;
+	//	mat.setEmissive({1, 1, 1, 10});
+	//	m_actor.cmpModel_setMaterial(mat);
+	//}
+	//m_actor.cmpTransform_setPos(origin + direction*(length/2.f));
+	//float angle = acos(glm::dot(direction, glm::vec3(1, 0, 0))/glm::length(direction));
+	//glm::vec3 cross = glm::cross(direction, glm::vec3(1, 0, 0));
+	//m_actor.cmpTransform_rotate(glm::degrees(-angle), cross);
+	//m_actor.cmpTransform_setScale(length /2.f, .025, .025);
+	//
+	//m_animation = std::make_shared<BeamAnimation>(*this);
+	//world.animations.push_back(m_animation);
 }
 
 Ray::Beam::~Beam() {
@@ -39,11 +39,11 @@ Ray::Beam::~Beam() {
 }
 
 void Ray::Beam::BeamAnimation::removeFromWorld() {
-	for (auto it = m_beam.m_world.game.rayBeams.begin(); it != m_beam.m_world.game.rayBeams.end(); ++it)
-		if (it->get() == &m_beam) {
-			m_beam.m_world.game.rayBeams.erase(it);
-			break;
-		}
+	//for (auto it = m_beam.m_world.game.rayBeams.begin(); it != m_beam.m_world.game.rayBeams.end(); ++it)
+	//	if (it->get() == &m_beam) {
+	//		m_beam.m_world.game.rayBeams.erase(it);
+	//		break;
+	//	}
 }
 
 Ray::Beam::BeamAnimation::BeamAnimation(Ray::Beam& beam)
@@ -56,9 +56,7 @@ void Ray::Beam::BeamAnimation::update(float dt) {
 	addDeltaTime(dt);
 }
 
-Ray::Ray(WorldDataClient& world)
-	: m_world(world)
-{}
+Ray::Ray() {}
 
 class RayFilter : public physx::PxQueryFilterCallback {
 public:
@@ -77,7 +75,7 @@ public:
 	}
 };
 
-void Ray::update(Player& player, PlayerInventory::iterator iterator, const InputState& input) {
+void Ray::update(Player& player, PlayerInventory::iterator iterator, const InputState& input, WorldDataServer& world) {
 	if (m_isTriggered && player.isWeaponMode() && (player.getEnergy() >= _energyCost)) {
 		//glm::vec3 origin = player.getTransform()[3] + (m_alternateSide-.5f)*2*player.getTransform()[0];
 		//glm::vec3 direction = player.getCameraTransform()[2];
@@ -103,18 +101,18 @@ void Ray::update(Player& player, PlayerInventory::iterator iterator, const Input
 	m_isTriggered = false; // one time trigger
 }
 
-void Ray::processRay(glm::vec3 origin, glm::vec3 direction, WorldDataClient& world, Player& checkPlayer, Player& senderPlayer) {
-	Zap::Scene::RaycastOutput out = {};
-	RayFilter filter;
-	filter.excludedActor = senderPlayer.getPhysicsActor();
-	bool hit = false;
-	hit = world.game.spScene->raycast(origin, glm::normalize(direction), 1000, &out, &filter);
-	if (hit) {
-		if (out.actor == checkPlayer.getPhysicsActor()) {
-			checkPlayer.damage(_damage, senderPlayer);
-		}
-		world.game.rayBeams.push_back(std::make_unique<Beam>(world, origin, direction, out.distance));
-	}
-	else
-		world.game.rayBeams.push_back(std::make_unique<Beam>(world, origin, direction, 1000));
+void Ray::processRay(glm::vec3 origin, glm::vec3 direction, WorldDataServer& world, Player& checkPlayer, Player& senderPlayer) {
+	//Zap::Scene::RaycastOutput out = {};
+	//RayFilter filter;
+	//filter.excludedActor = senderPlayer.getPhysicsActor();
+	//bool hit = false;
+	//hit = world.game.spScene->raycast(origin, glm::normalize(direction), 1000, &out, &filter);
+	//if (hit) {
+	//	if (out.actor == checkPlayer.getPhysicsActor()) {
+	//		checkPlayer.damage(_damage, senderPlayer);
+	//	}
+	//	world.game.rayBeams.push_back(std::make_unique<Beam>(world, origin, direction, out.distance));
+	//}
+	//else
+	//	world.game.rayBeams.push_back(std::make_unique<Beam>(world, origin, direction, 1000));
 }

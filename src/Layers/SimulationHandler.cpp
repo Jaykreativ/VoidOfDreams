@@ -12,7 +12,7 @@ void SimulationHandlerServer::simulate(float dt, WorldDataServer& world, std::un
 			auto& input = clients.at(id).inputHandler;
 			for (auto& action : input.getActions()) { // loop through all client actions received in the last input packet
 				spPlayer->updateFocused(action.getDeltaTime(), action.getInputState());
-				spPlayer->updateMechanics(action.getDeltaTime(), action.getInputState());
+				spPlayer->updateMechanics(action.getDeltaTime(), action.getInputState(), world);
 				spPlayer->update(action.getDeltaTime());
 			}
 			input.getActions().clear();

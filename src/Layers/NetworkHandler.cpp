@@ -150,8 +150,8 @@ void NetworkHandlerServer::setupNewClient(ClientProxy& client) {
 std::shared_ptr<PlayerServer> NetworkHandlerServer::setupNewPlayer(Zap::UUID id) {
 	auto spPlayer = std::make_shared<PlayerServer>(*m_world.spScene);
 	m_world.players[id] = spPlayer;
-	spPlayer->getInventory().setItem(std::make_shared<Ray>(m_world), 0);
-	spPlayer->getInventory().setItem(std::make_shared<SimpleTrigger>(ImGuiMouseButton_Left), 1);
+	spPlayer->getInventory().setItem(std::make_shared<Ray>(), 0);
+	spPlayer->getInventory().setItem(std::make_shared<SimpleTrigger>(ImGuiKey_MouseLeft), 1);
 	spPlayer->getInventory().setItem(std::make_shared<Dash>(), 2);
 	spPlayer->getInventory().setItem(std::make_shared<SimpleTrigger>(ImGuiKey_LeftShift), 3);
 	spPlayer->spawn();
