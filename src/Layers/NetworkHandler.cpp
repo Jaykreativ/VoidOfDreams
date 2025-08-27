@@ -12,7 +12,8 @@
 #define SERVER_BACKLOG 10
 
 #define CLIENT_HELLO_FREQUENCY_S 0.1f
-#define INPUT_SEND_FREQUENCY_S 0.01f
+#define INPUT_SEND_FREQUENCY_S 1/30.f
+#define SERVER_TICK_DURATION_S 1/30.f
 
 NetworkHandler::NetworkHandler() {}
 
@@ -278,7 +279,7 @@ void NetworkHandlerServer::loop() {
 
 		auto endTick = std::chrono::high_resolution_clock::now();
 		deltaCompute = std::chrono::duration_cast<std::chrono::duration<float>>(endTick - startTick).count();
-		Sleep(20 - deltaCompute); // lock to tickrate
+		Sleep(SERVER_TICK_DURATION_S*1000 - deltaCompute); // lock to tickrate
 		endTick = std::chrono::high_resolution_clock::now();
 		deltaTime = std::chrono::duration_cast<std::chrono::duration<float>>(endTick - startTick).count();
 	}
