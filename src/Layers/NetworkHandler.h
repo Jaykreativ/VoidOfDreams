@@ -3,6 +3,7 @@
 #include "SockUitls.h"
 #include "Layers/ReplicationManager.h"
 #include "Objects/Packets.h"
+#include "Shares/World.h"
 
 #include "Zap/UUID.h"
 
@@ -10,6 +11,8 @@
 #include <string>
 #include <mutex>
 #include <thread>
+
+class Player;
 
 struct SocketData { // combine the socket and its address into one type, cause they're always needed when using both tcp and udp.
 	int stream = -1;

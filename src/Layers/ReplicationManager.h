@@ -1,11 +1,13 @@
 #pragma once
 
 #include "Objects/Packets.h"
-#include "Shares/World.h"
 
 #include "Zap/UUID.h"
 
 #include <memory>
+
+struct WorldDataClient;
+struct WorldDataServer;
 
 // interface class required for object replication
 class ReplicationObject {

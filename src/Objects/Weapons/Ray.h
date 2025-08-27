@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Layers/ReplicationManager.h"
 #include "Objects/Item.h"
 #include "Objects/Animation.h"
 
@@ -9,21 +10,46 @@
 
 struct WorldDataServer;
 
+// can be sent over the network to trigger the effect
+class BeamEffectRPC : public RPCObject {
+public:
+	BeamEffectRPC() = default;
+	BeamEffectRPC(glm::vec3 origin,	glm::vec3 direction,float length)
+		: origin(origin), direction(direction), length(length)
+	{}
+
+	uint32_t classId() override;
+
+	void call(WorldDataClient& world) override;
+
+	void readFromReplication(std::shared_ptr<ReplicationPacket> spPacket, uint32_t status, ReplicationManager& manager) override;
+
+	void writeToReplication(std::shared_ptr<ReplicationPacket> spPacket, uint32_t status, ReplicationManager& manager) override;
+
+	glm::vec3 origin;
+	glm::vec3 direction;
+	float length;
+};
+inline ReplicationObject* beamEffectRPCCreate(WorldDataClient& world) {
+	return new BeamEffectRPC();
+}
+inline void beamEffectRPCDestroy(WorldDataClient& world, ReplicationObject* obj) {
+	delete obj;
+}
+
 class Ray : public Weapon {
 public:
 	Ray();
 
 	void update(Player& player, PlayerInventory::iterator iterator, const InputState& input, WorldDataServer& world) override;
 
-	static void processRay(glm::vec3 origin, glm::vec3 direction, WorldDataServer& world, Player& checkPlayer, Player& senderPlayer);
-
 	class Beam {
 	public:
-		Beam(WorldDataServer& world, glm::vec3 origin, glm::vec3 direction, float length);
+		Beam(WorldDataClient& world, glm::vec3 origin, glm::vec3 direction, float length);
 		~Beam();
 
 	private:
-		WorldDataServer& m_world;
+		WorldDataClient& m_world;
 		Zap::Actor m_actor;
 
 		class BeamAnimation : public Animation {

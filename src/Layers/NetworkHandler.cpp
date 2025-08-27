@@ -270,6 +270,12 @@ void NetworkHandlerServer::loop() {
 			}
 		}
 
+		for (auto& rayBeamRPC : m_world.rayBeamRPCs) {
+			auto spPacket = m_replicationManager.replicateRPC(rayBeamRPC);
+			sendToAll(*spPacket);
+		}
+		m_world.rayBeamRPCs.clear();
+
 		auto endTick = std::chrono::high_resolution_clock::now();
 		deltaCompute = std::chrono::duration_cast<std::chrono::duration<float>>(endTick - startTick).count();
 		Sleep(20 - deltaCompute); // lock to tickrate

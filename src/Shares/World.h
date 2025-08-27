@@ -24,6 +24,8 @@ enum WorldStatus {
 struct WorldDataServer {
 	std::shared_ptr<Zap::Scene> spScene;
 	std::unordered_map<Zap::UUID, std::shared_ptr<PlayerServer>> players = {};
+
+	std::vector<BeamEffectRPC> rayBeamRPCs = {}; // TODO create a dedicated effect system
 };
 
 struct MainMenuWorldData {

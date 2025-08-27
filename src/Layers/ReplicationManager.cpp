@@ -8,6 +8,7 @@
 void ObjectCreationRegistry::initCreationRegistry() {
 	ObjectCreationRegistry::get().addFunctions('PLYR', { playerCreate, playerDestroy });
 	ObjectCreationRegistry::get().addFunctions('PLID', { playerIdentifyRPCCreate, playerIdentifyRPCDestroy });
+	ObjectCreationRegistry::get().addFunctions('BMFX', { beamEffectRPCCreate, beamEffectRPCDestroy });
 }
 
 ObjectCreationRegistry& ObjectCreationRegistry::get() {
