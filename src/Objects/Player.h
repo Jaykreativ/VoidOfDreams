@@ -19,7 +19,7 @@ public:
 	virtual ~Player();
 
 	void damage(float damage);
-	virtual void damage(float damage, const Player& damager);
+	virtual void damage(float damage, Player& damager);
 
 	// spawn player without network sync
 	virtual void localSpawn();
@@ -30,7 +30,7 @@ public:
 	void spawn();
 
 	void kill();
-	void kill(const Player& killer);
+	void kill(Player& killer);
 
 	virtual void spendEnergy(float energy);
 
@@ -139,7 +139,7 @@ public:
 	// does all updates needed for the real player
 	void updateFocused(float dt, Controls& controls, const InputState& input, InputHandlerClient& inputHandler);
 
-	void damage(float damage, const Player& damager);
+	void damage(float damage, Player& damager);
 
 	void localSpawn();
 

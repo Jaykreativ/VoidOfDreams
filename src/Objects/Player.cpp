@@ -233,17 +233,17 @@ void Player::damage(float damage) {
 	//client::sendPlayerDamage(damage, m_health, m_username, "");
 }
 
-void Player::damage(float damage, const Player& damager) {
+void Player::damage(float damage, Player& damager) {
 	if (m_spawnProtection > 0)
 		return;
 	m_health -= damage;
 	if (m_health <= 0) {
 		kill(damager);
 	}
-	//client::sendPlayerDamage(damage, m_health, m_username, damager.m_username);
+	damager.m_damage += damage;
 }
 
-void PlayerClient::damage(float damage, const Player& damager) {
+void PlayerClient::damage(float damage, Player& damager) {
 	Player::damage(damage, damager);
 	m_recordEvents |= eDAMAGE_TAKEN;
 }
@@ -296,11 +296,12 @@ void Player::kill() {
 	localKill();
 }
 
-void Player::kill(const Player& killer) {
+void Player::kill(Player& killer) {
 	if (m_active) {
 		m_spawnTimeout = 5;
 	}
 	localKill();
+	killer.m_kills++;
 }
 
 void Player::spendEnergy(float energy) {
