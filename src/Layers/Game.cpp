@@ -181,6 +181,7 @@ void drawHud(GuiData& gui, PlayerClient& player, float dt) {
 	}
 	ImGui::PopFont();
 
+	// push animations
 	if(player.hasKilled())
 		gui.hud.animations.push_back(std::make_unique<HudCrosshairKillAnimation>(gui.hud));
 	if (player.hasDoneDamage())

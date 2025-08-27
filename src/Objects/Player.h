@@ -66,6 +66,14 @@ public:
 
 	glm::mat4 getTransform();
 
+	// events
+	bool hasTakenDamage();
+	bool hasSpentEnergy();
+	bool hasDied();
+	bool hasSpawned();
+	bool hasDoneDamage();
+	bool hasKilled();
+
 protected:
 	// synchronized
 	Zap::Actor m_base; // this is the actual transform of the player
@@ -92,6 +100,21 @@ protected:
 
 	float m_spawnProtection = 5;
 	float m_spawnTimeout = 5;
+
+	// events
+	enum Events {
+		eNONE = 0x0,
+		eDAMAGE_TAKEN = 0x1,
+		eENERGY_SPENT = 0x2,
+		eDEATH = 0x4,
+		eSPAWN = 0x8,
+		eDAMAGE_DONE = 0x10,
+		eKILL = 0x20
+	};
+	// records all events during a frame
+	uint32_t m_recordEvents = eNONE;
+	// contains all events that happened the last frame
+	uint32_t m_events = eNONE;
 
 	// general update function for all players
 	void update(float dt);
@@ -157,34 +180,11 @@ public:
 
 	glm::mat4 getCameraTransform();
 
-	// events
-	bool hasTakenDamage();
-	bool hasSpentEnergy();
-	bool hasDied();
-	bool hasSpawned();
-	bool hasDoneDamage();
-	bool hasKilled();
-
 private:
 	bool m_recvInput = false; // UI can block input
 
 	Zap::Actor m_core; // the bright core in the centre
 	Zap::Actor m_camera;
-
-	// events
-	enum Events {
-		eNONE = 0x0,
-		eDAMAGE_TAKEN = 0x1,
-		eENERGY_SPENT = 0x2,
-		eDEATH = 0x4,
-		eSPAWN = 0x8,
-		eDAMAGE_DONE = 0x10,
-		eKILL = 0x20
-	};
-	// records all events during a frame
-	uint32_t m_recordEvents = eNONE;
-	// contains all events that happened the last frame
-	uint32_t m_events = eNONE;
 
 	void updateCamera(Controls& controls);
 

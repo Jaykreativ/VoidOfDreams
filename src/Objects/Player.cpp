@@ -146,9 +146,11 @@ void Player::readFromReplication(std::shared_ptr<ReplicationPacket> spPacket, ui
 	if (newActive != m_active) {
 		if (newActive) { // detect spawn/kill
 			spawn();
+			m_recordEvents |= eSPAWN;
 		}
 		else {
 			kill();
+			m_recordEvents |= eDEATH;
 		}
 	}
 	m_mode = spPacket->readu32();
@@ -162,12 +164,24 @@ void Player::readFromReplication(std::shared_ptr<ReplicationPacket> spPacket, ui
 		m_hull.cmpRigidDynamic_updatePose();
 	}
 
-	m_health = spPacket->readf();
-	m_energy = spPacket->readf();
+	float newHealth = spPacket->readf();
+	if (newHealth < m_health)
+		m_recordEvents |= eDAMAGE_TAKEN;
+	m_health = newHealth;
+	float newEnergy = spPacket->readf();
+	if (newEnergy < m_energy)
+		m_recordEvents |= eENERGY_SPENT;
+	m_energy = newEnergy;
 	
-	m_kills = spPacket->readu32();
+	uint32_t newKills = spPacket->readu32();
+	if(newKills > m_kills)
+		m_recordEvents |= eKILL;
+	m_kills = newKills;
 	m_deaths = spPacket->readu32();
-	m_damage = spPacket->readf();
+	float newDamage = spPacket->readf();
+	if (newDamage > m_damage)
+		m_recordEvents |= eDAMAGE_DONE;
+	m_damage = newDamage;
 }
 
 void Player::writeToReplication(std::shared_ptr<ReplicationPacket> spPacket, uint32_t status, ReplicationManager& manager) {
@@ -227,10 +241,8 @@ void Player::damage(float damage) {
 		return;
 	m_health -= damage;
 	if (m_health <= 0) {
-		//client::sendPlayerDamage(damage + m_health, m_health, m_username, "");
 		kill();
 	}
-	//client::sendPlayerDamage(damage, m_health, m_username, "");
 }
 
 void Player::damage(float damage, Player& damager) {
@@ -402,12 +414,12 @@ PlayerInventory& PlayerServer::getInventory() {
 	return m_inventory;
 }
 
-bool PlayerClient::hasTakenDamage() { return ZP_IS_FLAG_ENABLED(m_events, eDAMAGE_TAKEN); }
-bool PlayerClient::hasSpentEnergy() { return ZP_IS_FLAG_ENABLED(m_events, eENERGY_SPENT); }
-bool PlayerClient::hasDied()        { return ZP_IS_FLAG_ENABLED(m_events, eDEATH); }
-bool PlayerClient::hasSpawned()     { return ZP_IS_FLAG_ENABLED(m_events, eSPAWN); }
-bool PlayerClient::hasDoneDamage()  { return ZP_IS_FLAG_ENABLED(m_events, eDAMAGE_DONE); }
-bool PlayerClient::hasKilled()      { return ZP_IS_FLAG_ENABLED(m_events, eKILL); }
+bool Player::hasTakenDamage() { return ZP_IS_FLAG_ENABLED(m_events, eDAMAGE_TAKEN); }
+bool Player::hasSpentEnergy() { return ZP_IS_FLAG_ENABLED(m_events, eENERGY_SPENT); }
+bool Player::hasDied()        { return ZP_IS_FLAG_ENABLED(m_events, eDEATH); }
+bool Player::hasSpawned()     { return ZP_IS_FLAG_ENABLED(m_events, eSPAWN); }
+bool Player::hasDoneDamage()  { return ZP_IS_FLAG_ENABLED(m_events, eDAMAGE_DONE); }
+bool Player::hasKilled()      { return ZP_IS_FLAG_ENABLED(m_events, eKILL); }
 
 PlayerClient::PlayerClient(Zap::Scene& scene)
 	: Player(scene)
