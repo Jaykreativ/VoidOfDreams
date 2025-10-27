@@ -5,6 +5,7 @@
 #include "Objects/Player.h"
 
 void SimulationHandlerServer::simulate(float dt, WorldDataServer& world, std::unordered_map<Zap::UUID, ClientProxy>& clients) {
+	world.spScene->simulate(dt);
 	for (auto& playerPair : world.players) {
 		auto id = playerPair.first;
 		auto spPlayer = playerPair.second;
@@ -18,10 +19,15 @@ void SimulationHandlerServer::simulate(float dt, WorldDataServer& world, std::un
 			input.getActions().clear();
 		}
 	}
-	world.spScene->simulate(dt);
 }
 
 void SimulationHandlerClient::simulate(float dt, WorldDataClient& world, Controls& controls, InputHandlerClient& input) {
+	logger::beginRegion("physics");
+	if (std::shared_ptr<Zap::Scene> spScene = world.wpScene.lock()) {
+		spScene->simulate(dt);
+	}
+	logger::endRegion();
+
 	if (world.status == eGAME)
 		for (auto spPlayer : world.game.players) {
 			spPlayer->update(dt);
@@ -43,10 +49,4 @@ void SimulationHandlerClient::simulate(float dt, WorldDataClient& world, Control
 			i--;
 		}
 	}
-
-	logger::beginRegion("physics");
-	if (std::shared_ptr<Zap::Scene> spScene = world.wpScene.lock()) {
-		spScene->simulate(dt);
-	}
-	logger::endRegion();
 }
