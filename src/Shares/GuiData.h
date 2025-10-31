@@ -69,5 +69,7 @@ struct GuiData {
 	float pauseOuterAlpha = 0.2;
 	float pauseAlpha = 0.5;
 
+	glm::vec2 inventoryMarginRelative = { 0.1, 0.1 };
+
 	int matchmakingSelectedRoomIndex = -1;
 };

@@ -41,7 +41,27 @@ private:
 	std::array<std::shared_ptr<Item>, _size> m_items = {};
 };
 
+class InventorySlot {
+	friend class PlayerInventory;
+public:
+	InventorySlot(uint32_t index);
+
+	std::shared_ptr<InventorySlot> getNeighbour(uint32_t index);
+
+private:
+
+	void addNeighbour(std::shared_ptr<InventorySlot> neighbour, uint32_t neighbourIndex);
+
+	uint32_t m_index;
+	std::array<std::shared_ptr<InventorySlot>, 5> m_neighbours;
+};
+
 class PlayerInventory : public Inventory<PLAYER_INVENTORY_SIZE> {
 public:
+	PlayerInventory();
+
 	void update(Player& player, const InputState& input, WorldDataServer& world);
+
+private:
+	std::shared_ptr<InventorySlot> m_rootSlot;
 };

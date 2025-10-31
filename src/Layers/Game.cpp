@@ -128,7 +128,7 @@ private:
 void host(NetworkData& network, WorldDataClient& world, RenderData& render) {
 	network.server = std::make_unique<NetworkHandlerServer>(std::stoi(network.port));
 	Sleep(10);
-	network.client = std::make_unique<NetworkHandlerClient>(network.ip, std::stoi(network.port), network.username);
+	network.client = std::make_unique<NetworkHandlerClient>("127.0.0.1", std::stoi(network.port), network.username);
 	switchToGame(world, network, render);
 }
 
@@ -457,25 +457,83 @@ void drawStats(GuiData& gui, std::shared_ptr<Player> spPlayer) {
 
 }
 
+bool drawInventorySlot(glm::vec2 mid, float offsetAngle, float radius/*, PlayerInventory& inventory, InventorySlot& slot*/) {
+	glm::vec2 mousePos = ImGui::GetMousePos();
+
+	auto draw = ImGui::GetForegroundDrawList();
+
+	glm::vec2 winPos = ImGui::GetWindowPos();
+	glm::vec2 winSize = ImGui::GetWindowSize();
+
+	bool hovered = glm::length(mousePos - winPos - mid) < radius;
+
+	std::vector<glm::vec2> points = {};
+	float corners = 5;
+	float outerLength = radius+5*hovered;
+	float innerLength = outerLength*0.85;
+	for (float angle = 0; angle < 360; angle += 360 / corners) {
+		glm::vec2 direction = { cos(glm::radians(angle + offsetAngle)), sin(glm::radians(angle + offsetAngle)) };
+		points.push_back(direction*innerLength);
+		points.push_back(direction*outerLength);
+	}
+
+	auto getMod = [&](uint32_t index) {
+		return points[index%points.size()]+winPos+mid;
+	};
+	for (uint32_t i = 0; i < points.size(); i += 2) {
+		ImVec2 quadList[4] = { getMod(i), getMod(i+2), getMod(i+3), getMod(i+1) };
+		draw->AddConvexPolyFilled(quadList, 4, 0xFFFFFFFF);
+	}
+
+	return hovered;
+}
+
+void drawInventory(GuiData& gui, std::shared_ptr<Player> spPlayer) {
+	glm::vec2 displaySize = ImGui::GetIO().DisplaySize;
+
+	glm::vec2 boundMin = glm::vec2(gui.pauseSize.x, 0) + gui.inventoryMarginRelative * displaySize;
+	glm::vec2 boundMax = boundMin + displaySize - (glm::vec2(gui.pauseSize.x, 0) + 2.f * gui.inventoryMarginRelative * displaySize);
+
+	float sideLength = std::min(boundMax.x - boundMin.x, boundMax.y - boundMin.y);
+	glm::vec2 squareMid = (boundMin + boundMax) / 2.f;
+
+	ImGui::SetNextWindowPos(squareMid-(sideLength/2.f));
+	ImGui::SetNextWindowSize({sideLength, sideLength});
+
+	ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
+	ImGui::PushStyleColor(ImGuiCol_WindowBg, ImGui::GetColorU32({ 0, 0, 0, gui.pauseAlpha }));
+
+	ImGui::Begin("Inventory", nullptr, ImGuiWindowFlags_NoDecoration);
+
+	glm::vec2 contentSize = ImGui::GetContentRegionAvail(); // draw inventory graphic
+	float contentScale = std::min(contentSize.x, contentSize.y);
+	drawInventorySlot(glm::vec2(0.5f, 0.5f)*contentScale, 90, 0.175f * contentScale);
+	for (float angle = 0; angle < 360; angle += 360 / 5) {
+		glm::vec2 offsetDirection = glm::vec2(cos(glm::radians(angle - 90)), sin(glm::radians(angle - 90)));
+		drawInventorySlot((glm::vec2(0.5f, 0.5f) + offsetDirection * 0.325f) * contentScale, angle - 90, 0.125f * contentScale);
+	}
+
+	ImGui::End();
+
+	ImGui::PopStyleColor();
+	ImGui::PopStyleVar(1);
+}
+
 void drawPauseMenuClient(WorldDataClient& world, RenderData& render, NetworkData& network, GuiData& gui, Zap::Window& window) {
 	glm::vec2 displaySize = ImGui::GetIO().DisplaySize;
 	
-	ImGui::SetNextWindowPos({ 0, 0 }); // Outer Window
-	ImGui::SetNextWindowSize(displaySize);
+	ImGui::GetBackgroundDrawList()->AddRectFilled({ 0, 0 }, displaySize, ImGui::GetColorU32({ 0, 0, 0, gui.pauseOuterAlpha }));
 
-	ImGuiWindowFlags windowFlags = ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove;
-	ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
-	ImGui::PushStyleColor(ImGuiCol_WindowBg, { 0, 0, 0, gui.pauseOuterAlpha });
-	ImGui::Begin("Pause Menu", 0, windowFlags);
+	ImGui::SetNextWindowPos({ 0, 0 }); // Top Left
+	ImGui::SetNextWindowSize({ 0, 0 }); // Auto resize
 
-	ImGui::SetNextWindowPos(gui.pauseMidRelative * displaySize - gui.pauseSize / 2.f); // Inner Window
-
-	ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, gui.pauseRoundingRelative * glm::length(gui.pauseButtonSize));
+	ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 0);
 	ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, gui.pausePaddingRelative * glm::length(gui.pauseButtonSize));
 	ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, gui.pausePaddingRelative * glm::length(gui.pauseButtonSize) * 0.5f);
-	ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, gui.pauseRoundingRelative * glm::length(gui.pauseButtonSize));
-	ImGui::PushStyleColor(ImGuiCol_ChildBg, { 0, 0, 0, gui.pauseAlpha });
-	ImGui::BeginChild("Inner Menu", { 0, 0 }, ImGuiChildFlags_AlwaysUseWindowPadding | ImGuiChildFlags_AutoResizeX | ImGuiChildFlags_AutoResizeY);
+	ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 0);
+	ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
+	ImGui::PushStyleColor(ImGuiCol_WindowBg, ImGui::GetColorU32({0, 0, 0, gui.pauseAlpha}));
+	ImGui::Begin("Pause Menu", nullptr, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoDecoration);
 
 	ImGui::PushFont(gui.headerFont);
 	if (ImGui::Button("Continue", gui.pauseButtonSize) || ImGui::IsKeyPressed(ImGuiKey_Escape)) { // use imgui to capture mouse because there is no menu implemented yet
@@ -489,13 +547,9 @@ void drawPauseMenuClient(WorldDataClient& world, RenderData& render, NetworkData
 	ImGui::PopFont();
 
 	gui.pauseSize = ImGui::GetWindowSize();
-	ImGui::EndChild();
-	ImGui::PopStyleColor();
-	ImGui::PopStyleVar(4); // End Inner
-
 	ImGui::End();
 	ImGui::PopStyleColor();
-	ImGui::PopStyleVar(); // End Outer
+	ImGui::PopStyleVar(5);
 }
 
 void pushErrorPopup(GuiData& gui, std::string msg) {
@@ -564,6 +618,10 @@ void updateGui(WorldDataClient& world, RenderData& render, NetworkData& network,
 		}
 
 		drawHud(gui, *spPlayer, dt);
+
+		if (oldState & GuiData::ePAUSE) {
+			drawInventory(gui, spPlayer);
+		}
 	}
 
 	if (oldState & GuiData::ePAUSE) {
